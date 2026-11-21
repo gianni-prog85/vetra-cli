@@ -8,7 +8,7 @@
  *   - apply the same file twice → reactor's per-action.id dedup makes pass #2 a no-op
  *   - round-trip with `syncSpecsToFs` (the drive→FS direction) → no infinite loop
  */
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import crypto from "node:crypto";
 
 import {
@@ -96,10 +96,10 @@ describe("findPreviewByName", () => {
     { id: "doc-3", slug: "gamma", name: "Gamma", documentType: "x", revisionsList: [] },
   ];
 
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
-    fetchSpy = jest
+    fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(() =>
         Promise.resolve(
@@ -162,14 +162,14 @@ describe("findPreviewByName", () => {
 
 describe("gqlRequest error paths (via findPreviewByName)", () => {
   const driveId = "preview-abcd1234";
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   afterEach(() => {
     fetchSpy?.mockRestore();
   });
 
   it("surfaces GraphQL errors with the joined messages", async () => {
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({ errors: [{ message: "boom" }, { message: "kaboom" }] }),
@@ -183,7 +183,7 @@ describe("gqlRequest error paths (via findPreviewByName)", () => {
   });
 
   it("surfaces HTTP failures with status code and body", async () => {
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response("server exploded", { status: 502, statusText: "Bad Gateway" }),
       ),
@@ -200,10 +200,10 @@ describe("findPreviewDriveByPreferredEditor", () => {
     { id: "drive-2", slug: "b", name: "Beta Preview", documentType: "powerhouse/document-drive", preferredEditor: "beta-app", revisionsList: [] },
   ];
 
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({ data: { findDocuments: { items: drives } } }),
@@ -241,12 +241,12 @@ describe("findPreviewDriveByPreferredEditor", () => {
 });
 
 describe("createPreviewDrive (mutation ordering)", () => {
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
   let ops: string[];
 
   beforeEach(() => {
     ops = [];
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
       const q = JSON.parse((init as RequestInit).body as string).query as string;
       let data: Record<string, unknown>;
       if (q.includes("createEmptyDocument")) {
@@ -291,10 +291,10 @@ describe("gqlRequest auth header", () => {
     return headers.Authorization ?? headers.authorization ?? null;
   }
 
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   function mockOk(data: Record<string, unknown>) {
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(JSON.stringify({ data }), {
           status: 200,
@@ -343,10 +343,10 @@ describe("gqlRequest auth header", () => {
 });
 
 describe("gqlRequest auth-failure guidance", () => {
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   function mockGraphqlError(message: string) {
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(JSON.stringify({ errors: [{ message }] }), {
           status: 200,

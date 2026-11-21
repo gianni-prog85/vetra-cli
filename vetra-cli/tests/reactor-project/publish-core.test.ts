@@ -1,17 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 type NpmPublish = (opts: { args?: string[]; cwd: string }) => Promise<{ stdout: string }>;
-const npmPublish = jest.fn<NpmPublish>(async () => ({ stdout: "" }));
-jest.unstable_mockModule("@powerhousedao/shared/registry", () => ({ npmPublish }));
-jest.unstable_mockModule("../../src/auth/renown.js", () => ({
+const npmPublish = vi.fn<NpmPublish>(async () => ({ stdout: "" }));
+vi.doMock("@powerhousedao/shared/registry", () => ({ npmPublish }));
+vi.doMock("../../src/auth/renown.js", () => ({
   getRegistryToken: async () => "registry-token",
 }));
 type RunBuild = (projectPath: string) => Promise<{ success: boolean; output: string }>;
-const runBuild = jest.fn<RunBuild>(async () => ({ success: true, output: "" }));
-jest.unstable_mockModule("../../src/commands/reactor-project/build.js", () => ({ runBuild }));
+const runBuild = vi.fn<RunBuild>(async () => ({ success: true, output: "" }));
+vi.doMock("../../src/commands/reactor-project/build.js", () => ({ runBuild }));
 
 const { publishReactorProject } = await import(
   "../../src/commands/reactor-project/publish-core.js"

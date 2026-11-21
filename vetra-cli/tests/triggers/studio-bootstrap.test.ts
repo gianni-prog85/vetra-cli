@@ -3,7 +3,7 @@
  * daemon booted before the agent was authorized, the Studio drive is created
  * the moment writes become possible, and the Connect bundle is pointed at it.
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   mkdtempSync,
   mkdirSync,
@@ -19,10 +19,10 @@ import { studioBootstrapTrigger } from "../../src/triggers/studio-bootstrap.js";
 let workdir: string;
 let vetraAppDir: string;
 const log = {
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
 };
 
 beforeEach(() => {
@@ -45,8 +45,8 @@ afterEach(() => {
 
 function fakeReactor(options: { ready: boolean } = { ready: true }) {
   const client = {
-    get: jest.fn(() => Promise.reject(new Error("not found"))),
-    getDocumentModelModule: jest.fn(() =>
+    get: vi.fn(() => Promise.reject(new Error("not found"))),
+    getDocumentModelModule: vi.fn(() =>
       Promise.resolve({
         utils: {
           createDocument: () => ({
@@ -60,14 +60,14 @@ function fakeReactor(options: { ready: boolean } = { ready: true }) {
         },
       }),
     ),
-    create: jest.fn((doc: { header: { id: string } }) =>
+    create: vi.fn((doc: { header: { id: string } }) =>
       Promise.resolve({ header: { ...doc.header, id: "drive-new" } }),
     ),
-    rename: jest.fn(() => Promise.resolve()),
+    rename: vi.fn(() => Promise.resolve()),
   };
   const reactor = {
     client,
-    _module: { reactor: { findByType: jest.fn(() => Promise.resolve({ results: [] })) } },
+    _module: { reactor: { findByType: vi.fn(() => Promise.resolve({ results: [] })) } },
     driveId: "",
     personalDriveId: undefined as string | undefined,
     drives: [] as Array<{ id: string; name: string; role: string }>,
@@ -105,7 +105,7 @@ describe("studio-bootstrap", () => {
     const { reactor, client } = fakeReactor();
     const { ctx } = triggerContext(reactor, { environmentId: "env-1" });
     const printed: string[] = [];
-    const logSpy = jest.spyOn(console, "log").mockImplementation((line: unknown) => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
       printed.push(String(line));
     });
 

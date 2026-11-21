@@ -1,18 +1,18 @@
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import type { SpecMirrorIo } from '../../src/triggers/spec-sync.js';
 import { documentModelDocumentModelModule, actions, Operation } from 'document-model';
 
 // Only needed so the module imports (listSpecTypes runs at load; realSpecMirrorIo
 // is built from these). Tests inject their own io, so these are never exercised.
-jest.unstable_mockModule('../../src/commands/spec/registry.js', () => ({
-  saveSpec: jest.fn(),
+vi.doMock('../../src/commands/spec/registry.js', () => ({
+  saveSpec: vi.fn(),
   listSpecTypes: () => ['powerhouse/app'],
 }));
-jest.unstable_mockModule('../../src/commands/spec/_helpers.js', () => ({
-  loadByName: jest.fn(),
+vi.doMock('../../src/commands/spec/_helpers.js', () => ({
+  loadByName: vi.fn(),
 }));
-jest.unstable_mockModule('../../src/helpers/project-lock.js', () => ({
+vi.doMock('../../src/helpers/project-lock.js', () => ({
   withProjectCodegenLock: (_base: string, fn: () => Promise<unknown>) => fn(),
 }));
 
@@ -27,14 +27,14 @@ type Save = (doc: unknown, projectDir: string) => Promise<string>;
 type WithLock = (base: string, fn: () => Promise<unknown>) => Promise<unknown>;
 
 function makeIo(over?: { loadExisting?: LoadExisting; save?: Save }) {
-  const loadExisting = jest.fn<LoadExisting>(
+  const loadExisting = vi.fn<LoadExisting>(
     over?.loadExisting ??
       (async () => {
         throw new Error('ENOENT');
       }),
   );
-  const save = jest.fn<Save>(over?.save ?? (async () => '/p/specs/x.phd'));
-  const withLock = jest.fn<WithLock>((_b, fn) => fn());
+  const save = vi.fn<Save>(over?.save ?? (async () => '/p/specs/x.phd'));
+  const withLock = vi.fn<WithLock>((_b, fn) => fn());
   const io = { loadExisting, save, withLock } as unknown as SpecMirrorIo;
   return { io, loadExisting, save, withLock };
 }
@@ -98,7 +98,7 @@ describe('mirrorSpecDoc', () => {
 describe('resolveDriveNodes', () => {
   const nodes = [{ id: 'a', kind: 'file', name: 'foo', parentFolder: null }];
   const makeReactor = (over: Record<string, unknown>) => ({
-    client: { get: jest.fn<(id: string) => Promise<unknown>>() },
+    client: { get: vi.fn<(id: string) => Promise<unknown>>() },
     ...over,
   });
 
@@ -141,8 +141,8 @@ describe('resolveDriveNodes', () => {
 
 describe('syncSpecsToFs', () => {
   const log = {
-    debug: jest.fn<(msg: string) => void>(),
-    warn: jest.fn<(msg: string) => void>(),
+    debug: vi.fn<(msg: string) => void>(),
+    warn: vi.fn<(msg: string) => void>(),
   };
 
   beforeEach(() => {
@@ -171,7 +171,7 @@ describe('syncSpecsToFs', () => {
     doc = documentModelDocumentModelModule.reducer(doc, actions.setModelName({name: "Test Model"}));
     doc = documentModelDocumentModelModule.reducer(doc, actions.setModelDescription({description: "A test model"}));
 
-    const getOperations = jest.fn<(docId: string) => Promise<unknown>>();
+    const getOperations = vi.fn<(docId: string) => Promise<unknown>>();
     getOperations.mockResolvedValueOnce({
       results: [
        ...doc.operations.global.slice(0, -1),
@@ -223,7 +223,7 @@ describe('syncSpecsToFs', () => {
 
   it('uses the real IO adapter (saveSpec) when none is injected', async () => {
     const registry = await import('../../src/commands/spec/registry.js');
-    const saveSpec = jest.mocked(registry.saveSpec);
+    const saveSpec = vi.mocked(registry.saveSpec);
     saveSpec.mockClear();
     await syncSpecsToFs(
       [{ header: { id: 'z', documentType: 'powerhouse/app', name: 'z' } }],

@@ -5,7 +5,7 @@
  * one, so the agent's auto-launch gate and the page's Make it live bar never
  * disagree.
  */
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { StudioProductState } from "vetra-app/document-models/studio-product";

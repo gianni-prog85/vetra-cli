@@ -1,7 +1,7 @@
 /**
  * The cloud-Studio signal and the sticky v2 marker (Task 5.SIG, ruling X39).
  */
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";

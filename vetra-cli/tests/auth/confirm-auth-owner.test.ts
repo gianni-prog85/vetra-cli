@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A cloud Studio's agent may only hold the owner's delegation: a console login
 // approved with any other wallet is logged straight back out.
@@ -7,7 +7,7 @@ const OWNER = "0x00000000000000000000000000000000000000aa";
 const ATTACKER = "0x00000000000000000000000000000000000000bb";
 
 let approver = OWNER;
-const logout = jest.fn(async () => {
+const logout = vi.fn(async () => {
   fakeRenown.user = undefined;
 });
 const fakeRenown: {
@@ -17,19 +17,19 @@ const fakeRenown: {
   signer: object;
 } = { logout, getBearerToken: async () => "agent-token", signer: {} };
 
-jest.unstable_mockModule("@renown/sdk/node", () => ({
+vi.doMock("@renown/sdk/node", () => ({
   RenownBuilder: class {
     build() {
       return Promise.resolve(fakeRenown);
     }
   },
-  generateAccessToken: jest.fn(),
-  getAuthStatus: jest.fn(),
+  generateAccessToken: vi.fn(),
+  getAuthStatus: vi.fn(),
 }));
 
-jest.unstable_mockModule("../../src/auth/login-flow.js", () => ({
+vi.doMock("../../src/auth/login-flow.js", () => ({
   startLogin: () => ({ url: "https://renown.example/console?session=s1", sessionId: "s1" }),
-  pollLogin: jest.fn(async () => {
+  pollLogin: vi.fn(async () => {
     fakeRenown.user = { address: approver };
     return { status: "ready", user: fakeRenown.user };
   }),

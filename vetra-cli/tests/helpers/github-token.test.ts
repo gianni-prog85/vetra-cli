@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { LaunchError } from "../../src/launch/errors.js";
 import type { CloudContext, PushToken } from "../../src/launch/cloud-launch.js";
 import { legacyPushToken, productPushToken } from "../../src/helpers/github.js";

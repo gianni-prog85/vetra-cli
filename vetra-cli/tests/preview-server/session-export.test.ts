@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { unzipSync, strFromU8 } from "fflate";
 
 import { buildSessionExport, listSessions } from "../../src/preview-server/session-export.js";

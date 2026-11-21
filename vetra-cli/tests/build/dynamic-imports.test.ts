@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { findBareDynamicImports } from "../../scripts/dynamic-imports.js";
 import { VENDOR } from "../../scripts/vendor-list.js";
 

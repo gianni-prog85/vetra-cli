@@ -1,9 +1,9 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Once an OpenRouter key exists, no path may build an Anthropic model: not the
 // main agent, the sub-agents, nor observational memory. Anthropic providers are
 // mocked to throw on construction; Agent is mocked to record the model it gets.
-const anthropicBuilt = jest.fn();
+const anthropicBuilt = vi.fn();
 const agentModels: Array<{ id: string; model: unknown }> = [];
 let memoryModel: unknown;
 
@@ -16,10 +16,10 @@ class FakeAgent {
   __setLogger() {}
 }
 
-jest.unstable_mockModule("@mastra/core/agent", () => ({ Agent: FakeAgent }));
-jest.unstable_mockModule("@mastra/core/processors", () => ({ TokenLimiterProcessor: class {} }));
-jest.unstable_mockModule("@mastra/mcp", () => ({ MCPClient: class {} }));
-jest.unstable_mockModule("@ai-sdk/anthropic", () => ({
+vi.doMock("@mastra/core/agent", () => ({ Agent: FakeAgent }));
+vi.doMock("@mastra/core/processors", () => ({ TokenLimiterProcessor: class {} }));
+vi.doMock("@mastra/mcp", () => ({ MCPClient: class {} }));
+vi.doMock("@ai-sdk/anthropic", () => ({
   createAnthropic: (...a: unknown[]) => {
     anthropicBuilt("createAnthropic", a);
     throw new Error("anthropic must not be built");
@@ -29,7 +29,7 @@ jest.unstable_mockModule("@ai-sdk/anthropic", () => ({
     throw new Error("anthropic must not be built");
   },
 }));
-jest.unstable_mockModule("@powerhousedao/ph-clint-claude-subscription", () => ({
+vi.doMock("@powerhousedao/ph-clint-claude-subscription", () => ({
   createClaudeSubscriptionModel: (...a: unknown[]) => {
     anthropicBuilt("createClaudeSubscriptionModel", a);
     throw new Error("claude subscription must not be read");
@@ -44,7 +44,7 @@ jest.unstable_mockModule("@powerhousedao/ph-clint-claude-subscription", () => ({
   },
 }));
 let wrapOpts: { maxSteps?: number } | undefined;
-jest.unstable_mockModule("@powerhousedao/ph-clint/mastra", () => ({
+vi.doMock("@powerhousedao/ph-clint/mastra", () => ({
   createMastraHelpers: () => ({
     createMemory: async (o: { observationalMemory: { model: unknown } }) => {
       memoryModel = o.observationalMemory.model;
@@ -68,7 +68,7 @@ function isOpenRouterModel(m: unknown): boolean {
 
 describe("agent models with an OpenRouter key", () => {
   const saved = { ...process.env };
-  let fetchSpy: ReturnType<typeof jest.spyOn>;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     agentModels.length = 0;
@@ -76,7 +76,7 @@ describe("agent models with an OpenRouter key", () => {
     anthropicBuilt.mockClear();
     delete process.env.VETRA_REPLAY_FIXTURE;
     process.env.ANTHROPIC_API_KEY = "sk-ant-ignored";
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       throw new Error("offline");
     });
   });
@@ -100,7 +100,7 @@ describe("agent models with an OpenRouter key", () => {
         anthropicApiKey: "sk-ant-also-ignored",
         ...extra,
       },
-      context: { log: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() } },
+      context: { log: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() } },
       workdir: "/tmp/vetra-no-anthropic-test",
     };
     await createAgent(ctx as never);

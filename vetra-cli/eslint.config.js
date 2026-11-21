@@ -1,7 +1,6 @@
 // @clint:begin eslint
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
-import jest from "eslint-plugin-jest";
 
 export default tseslint.config(
   { ignores: ["dist/", "gen/", "coverage/"] },
@@ -41,12 +40,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tests/**/*.ts"],
-    ...jest.configs["flat/recommended"],
-  },
-  {
     // Tests construct partial mocks of framework types (TriggerContext, services,
-    // DocumentModelModule, jest.mock factories) where matching the full upstream
+    // DocumentModelModule, vi.mock factories) where matching the full upstream
     // type is impractical. The unsafe-* rules fire on those mocks; disable them
     // here so the strictness still applies to production code.
     files: ["tests/**/*.ts"],

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolvePreview } from "../../src/preview-server/resolver.js";
 import { getPreviewDriveId } from "../../src/helpers/reactor-project-preview.js";

@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { StreamChunk } from "@powerhousedao/ph-clint";
 import { createAgent } from "../../src/agents/agent.js";
 import { NO_MODEL_MESSAGE, createNoModelAgent } from "../../src/agents/no-model-agent.js";
@@ -14,14 +14,14 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
 
 describe("no model connected", () => {
   const saved = { ...process.env };
-  let fetchSpy: ReturnType<typeof jest.spyOn>;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.VETRA_OPENROUTER_API_KEY;
     delete process.env.VETRA_REPLAY_FIXTURE;
     process.env.ANTHROPIC_API_KEY = "sk-ant-must-be-ignored";
-    fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       throw new Error("no network in this test");
     });
   });
@@ -39,7 +39,7 @@ describe("no model connected", () => {
   });
 
   it("createAgent serves it without an OpenRouter key (even with an Anthropic key set) and makes no LLM call", async () => {
-    const info = jest.fn();
+    const info = vi.fn();
     const ctx = {
       config: {
         model: "anthropic/claude-sonnet-4.6",
@@ -48,7 +48,7 @@ describe("no model connected", () => {
         agentLogging: false,
         anthropicApiKey: "sk-ant-also-ignored",
       },
-      context: { log: { info, debug: jest.fn(), warn: jest.fn(), error: jest.fn() } },
+      context: { log: { info, debug: vi.fn(), warn: vi.fn(), error: vi.fn() } },
       workdir: "/tmp/vetra-no-model-test",
     };
     const agent = await createAgent(ctx as never);

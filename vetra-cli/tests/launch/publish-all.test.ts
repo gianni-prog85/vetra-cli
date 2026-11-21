@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -45,7 +45,7 @@ type PublishFn = PublishDeps["publish"];
 type PublishOpts = Parameters<PublishFn>[0];
 
 function fakeDeps(packuments: Record<string, PackumentResult>) {
-  const publish = jest.fn<PublishFn>(async (opts: PublishOpts) => {
+  const publish = vi.fn<PublishFn>(async (opts: PublishOpts) => {
     // The real publish rewrites package.json before building.
     fs.writeFileSync(
       path.join(opts.projectPath, "package.json"),
@@ -56,7 +56,7 @@ function fakeDeps(packuments: Record<string, PackumentResult>) {
   });
   const deps: PublishDeps = {
     publish,
-    fetchPackument: jest.fn(async (_r: string, name: string) => packuments[name] ?? { kind: "not-found" }),
+    fetchPackument: vi.fn(async (_r: string, name: string) => packuments[name] ?? { kind: "not-found" }),
     registryToken: async () => "registry-token",
   };
   return { deps, publish };

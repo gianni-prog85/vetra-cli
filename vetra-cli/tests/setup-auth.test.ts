@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { isBareLaunchArgs, resolveWorkdir } from "../src/setup-auth.js";
 
 // isBareLaunchArgs takes full argv (it slices the node + script tokens).

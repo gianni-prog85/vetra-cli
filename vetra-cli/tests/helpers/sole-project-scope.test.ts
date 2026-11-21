@@ -4,7 +4,7 @@
  * publishing from the preview server or the publish commands name their
  * project: an empty one is refused, never resolved to the only project.
  */
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -56,8 +56,8 @@ describe("one-project default scope", () => {
   });
 
   it("the preview server's /start and /restart refuse an empty project", async () => {
-    const start = jest.fn(() => Promise.resolve("i1"));
-    const stop = jest.fn(() => Promise.resolve());
+    const start = vi.fn(() => Promise.resolve("i1"));
+    const stop = vi.fn(() => Promise.resolve());
     const services = { list: () => [], start, stop } as never;
     await expect(startPreview({ services, workdir, project: "" })).resolves.toMatchObject({
       kind: "unknown-project",

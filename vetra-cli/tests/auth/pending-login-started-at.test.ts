@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 
 // The Studio reopens a pending Renown login whose tab was closed, and starts a
 // fresh one once Renown has dropped the session: it needs to know when the
@@ -8,18 +8,18 @@ const fakeRenown: { user?: { address: string }; baseUrl: string } = {
   baseUrl: "https://renown.example",
 };
 
-jest.unstable_mockModule("@renown/sdk/node", () => ({
+vi.doMock("@renown/sdk/node", () => ({
   RenownBuilder: class {
     build() {
       return Promise.resolve(fakeRenown);
     }
   },
-  generateAccessToken: jest.fn(),
-  getAuthStatus: jest.fn(),
+  generateAccessToken: vi.fn(),
+  getAuthStatus: vi.fn(),
 }));
 
 let session = 0;
-jest.unstable_mockModule("../../src/auth/login-flow.js", () => ({
+vi.doMock("../../src/auth/login-flow.js", () => ({
   startLogin: () => {
     session += 1;
     return {
@@ -27,7 +27,7 @@ jest.unstable_mockModule("../../src/auth/login-flow.js", () => ({
       sessionId: `s${session}`,
     };
   },
-  pollLogin: jest.fn(async () => ({ status: "pending" })),
+  pollLogin: vi.fn(async () => ({ status: "pending" })),
 }));
 
 const { startAuth, getAuthState, confirmAuth } = await import("../../src/auth/renown.js");
@@ -49,7 +49,7 @@ describe("pending Renown login", () => {
 
     // The age is the daemon's own measure, so a browser with a skewed clock
     // can compare it with the Renown lifetime.
-    const now = jest.spyOn(Date, "now").mockReturnValue(startedAt + 90_000);
+    const now = vi.spyOn(Date, "now").mockReturnValue(startedAt + 90_000);
     try {
       expect(await getAuthState(workdir, url)).toEqual({
         authenticated: false,

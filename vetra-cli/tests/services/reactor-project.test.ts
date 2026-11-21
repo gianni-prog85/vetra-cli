@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import type { LifecycleInitContext } from '@powerhousedao/ph-clint';
 import {
   deployBasePath,

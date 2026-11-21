@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchMyEnvironments } from "@powerhousedao/vetra-cloud-client";
 
@@ -22,7 +22,7 @@ describe("fetchMyEnvironments", () => {
         createdBy: null,
       },
     ];
-    const fetchMock = jest.fn(async () => ({
+    const fetchMock = vi.fn(async () => ({
       ok: true,
       status: 200,
       statusText: "OK",

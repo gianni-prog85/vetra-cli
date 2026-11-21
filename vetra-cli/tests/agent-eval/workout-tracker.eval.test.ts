@@ -35,7 +35,7 @@
  * fail loudly with a clear next-step if someone flips the env vars
  * before the driver exists.
  */
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

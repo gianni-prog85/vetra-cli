@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "@powerhousedao/reactor";
 import { addFile, driveDocumentModelModule, setDriveName } from "@powerhousedao/shared/document-drive";
 import { ChatSession } from "@powerhousedao/clint-common/document-models/chat-session";
@@ -407,7 +407,7 @@ describe("adoptExisting", () => {
     expect((await h.state()).liveBeforeVersions).toBeNull();
 
     // The launch can't tell which env to adopt yet: it stops instead of making a second address.
-    const ensure = jest.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
+    const ensure = vi.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
     await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).rejects.toMatchObject({
       code: "CLOUD_UNAVAILABLE",
     });
@@ -453,7 +453,7 @@ describe("before an explicit launch", () => {
     await h.module.client.execute(id, "main", [
       a.startChange({ id: "c1", kind: "CHANGE", request: "add due dates", startedAt: NOW }),
     ]);
-    const ensure = jest.fn(async () => ({
+    const ensure = vi.fn(async () => ({
       appId: "app-1",
       productionEnvironmentId: "env-old",
       slug: "bold-crow",
@@ -500,7 +500,7 @@ describe("before an explicit launch", () => {
     await h.session(["build a todo app"]);
     h.live = new Error(NOT_AUTHENTICATED);
     await adoptExisting(h.ctx);
-    const ensure = jest.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
+    const ensure = vi.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
     await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).rejects.toMatchObject({
       code: "DELEGATION_MISSING",
     });

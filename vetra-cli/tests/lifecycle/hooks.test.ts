@@ -6,7 +6,7 @@
  * first argument (flat or createTool-style `{ context: { path } }`) and
  * forward every invocation argument to the inner execute.
  */
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, vi } from "vitest";
 import { genGuard, extractPath, isCodegenPath } from "../../src/lifecycle/gen-guard.js";
 import { tsCheck } from "../../src/lifecycle/ts-check.js";
 import type { LifecycleHook } from "@powerhousedao/ph-clint";
@@ -19,7 +19,7 @@ const initCtx = {
   config: {},
   cliName: "vetra",
   cliVersion: "0.0.0",
-  log: { warn: jest.fn(), debug: jest.fn(), info: jest.fn(), error: jest.fn() },
+  log: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
   eventBus: {},
   userStoreFolder: "/tmp/vetra-test-store",
   isInteractive: false,
@@ -58,13 +58,13 @@ describe("extractPath", () => {
 describe("genGuard tool wrap", () => {
   it("leaves non-write tools untouched", async () => {
     const wrap = await toolWrapOf(genGuard());
-    const tool = { execute: jest.fn() };
+    const tool = { execute: vi.fn() };
     expect(wrap("mastra_workspace_read_file", tool)).toBe(tool);
   });
 
   it("blocks gen/ writes before the inner execute runs (flat args)", async () => {
     const wrap = await toolWrapOf(genGuard());
-    const inner = jest.fn();
+    const inner = vi.fn();
     const wrapped = wrap("mastra_workspace_write_file", { execute: inner });
     expect(() =>
       wrapped.execute({ path: "document-models/todo/v1/gen/schema.ts", content: "x" }, {}),
@@ -74,7 +74,7 @@ describe("genGuard tool wrap", () => {
 
   it("blocks gen/ writes given the nested context shape", async () => {
     const wrap = await toolWrapOf(genGuard());
-    const inner = jest.fn();
+    const inner = vi.fn();
     const wrapped = wrap("mastra_workspace_edit_file", { execute: inner });
     expect(() =>
       wrapped.execute({ context: { path: "document-models/todo/gen/types.ts" } }, {}),
@@ -84,7 +84,7 @@ describe("genGuard tool wrap", () => {
 
   it("forwards all invocation arguments for allowed paths", async () => {
     const wrap = await toolWrapOf(genGuard());
-    const inner = jest.fn(() => "ok");
+    const inner = vi.fn(() => "ok");
     const wrapped = wrap("mastra_workspace_write_file", { execute: inner });
     const args = { path: "editors/todo/editor.tsx", content: "x" };
     const toolContext = { workspace: {}, requestContext: {} };
@@ -96,13 +96,13 @@ describe("genGuard tool wrap", () => {
 describe("tsCheck tool wrap", () => {
   it("leaves non-write tools untouched", async () => {
     const wrap = await toolWrapOf(tsCheck());
-    const tool = { execute: jest.fn() };
+    const tool = { execute: vi.fn() };
     expect(wrap("mastra_workspace_list_files", tool)).toBe(tool);
   });
 
   it("forwards all invocation arguments and returns the inner result", async () => {
     const wrap = await toolWrapOf(tsCheck());
-    const inner = jest.fn(async () => ({ success: true }));
+    const inner = vi.fn(async () => ({ success: true }));
     const wrapped = wrap("mastra_workspace_write_file", { execute: inner });
     const args = { path: "README.md", content: "# hi" };
     const toolContext = { workspace: {}, requestContext: {} };
@@ -112,7 +112,7 @@ describe("tsCheck tool wrap", () => {
 
   it("skips checking for .ts files that do not exist on disk", async () => {
     const wrap = await toolWrapOf(tsCheck());
-    const inner = jest.fn(async () => "written");
+    const inner = vi.fn(async () => "written");
     const wrapped = wrap("mastra_workspace_edit_file", { execute: inner });
     await expect(
       wrapped.execute({ context: { path: "no/such/dir/file.ts" } }, {}),

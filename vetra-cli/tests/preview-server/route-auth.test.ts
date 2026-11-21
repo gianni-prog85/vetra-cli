@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { createRequestAuthorizer } from "../../src/preview-server/request-auth.js";
 import { startPreviewServer } from "../../src/preview-server/server.js";
@@ -39,8 +39,8 @@ describe("preview-server route gate", () => {
   let workdir: string;
   let cleanup: () => void;
   let server: Awaited<ReturnType<typeof startPreviewServer>>;
-  let start: jest.Mock<() => Promise<string>>;
-  let delegation: jest.Mock<(jwt: string, audience: string) => Promise<boolean>>;
+  let start: Mock<() => Promise<string>>;
+  let delegation: Mock<(jwt: string, audience: string) => Promise<boolean>>;
   let publicUrl: string | undefined;
   let audiences: string[];
   const saved = {
@@ -53,11 +53,11 @@ describe("preview-server route gate", () => {
     mkdirSync(join(workdir, "demo"));
     writeFileSync(join(workdir, "demo", "powerhouse.config.json"), "{}\n");
     writeFileSync(join(workdir, "README.md"), "hello\n");
-    start = jest.fn(async () => "i-1");
-    delegation = jest.fn(async () => true);
+    start = vi.fn(async () => "i-1");
+    delegation = vi.fn(async () => true);
     audiences = [];
     server = await startPreviewServer({
-      services: { list: () => [], start, stop: jest.fn(async () => {}) } as never,
+      services: { list: () => [], start, stop: vi.fn(async () => {}) } as never,
       subscribe: () => {},
       workdir,
       renownUrl: "http://renown.invalid",

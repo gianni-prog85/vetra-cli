@@ -1,11 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  jest,
-} from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -15,14 +8,14 @@ const ENV_ID = "env-1";
 const SLUG = "vetra-studio";
 const REPO = "alice/widget";
 
-const getBearerToken = jest.fn<
+const getBearerToken = vi.fn<
   (workdir: string, renownUrl: string) => Promise<string | null>
 >(async () => "user_bearer");
 
-jest.unstable_mockModule("../../src/auth/renown.js", () => ({
+vi.doMock("../../src/auth/renown.js", () => ({
   getBearerToken,
 }));
-jest.unstable_mockModule("../../src/cloud/config.js", () => ({
+vi.doMock("../../src/cloud/config.js", () => ({
   resolveCloudConfig: () => ({ renownUrl: "http://localhost:5555/renown" }),
   resolveCloudGraphqlEndpoint: () => "http://localhost:5555/graphql",
 }));
@@ -37,7 +30,7 @@ type RunProcessFn = (
 ) => Promise<{ success: boolean; output: string }>;
 
 function fakeRun(result: { success: boolean; output: string }) {
-  return jest.fn<RunProcessFn>(async () => result);
+  return vi.fn<RunProcessFn>(async () => result);
 }
 
 function ctx(workdir: string, runProcess: unknown) {
@@ -59,7 +52,7 @@ function ctx(workdir: string, runProcess: unknown) {
  * makes.
  */
 function mockGithub(
-  fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>,
+  fetchSpy: MockInstance<typeof globalThis.fetch>,
   opts: {
     connected?: boolean;
     repoFullName?: string;
@@ -138,11 +131,11 @@ describe("github command shapes", () => {
 describe("github commands", () => {
   let workdir: string;
   let cleanup: () => void;
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
     ({ workdir, cleanup } = makeWorkdir());
-    fetchSpy = jest.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch");
     getBearerToken.mockReset();
     getBearerToken.mockImplementation(async () => "user_bearer");
   });

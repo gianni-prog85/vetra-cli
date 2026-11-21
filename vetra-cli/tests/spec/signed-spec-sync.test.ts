@@ -4,7 +4,7 @@
  * the agent's client (signed) — a legacy file gets a new signed document from
  * its state — and the `.phd` is rewritten from the signed document.
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -23,15 +23,15 @@ const TYPE = "powerhouse/document-model";
 
 let workdir: string;
 const log = {
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
 };
 
 beforeEach(() => {
   workdir = mkdtempSync(path.join(tmpdir(), "signed-spec-"));
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 afterEach(() => {
   rmSync(workdir, { recursive: true, force: true });
@@ -39,28 +39,28 @@ afterEach(() => {
 
 interface FakeReactor {
   client: {
-    get: jest.Mock;
-    create: jest.Mock;
-    execute: jest.Mock;
-    addRelationship: jest.Mock;
+    get: Mock;
+    create: Mock;
+    execute: Mock;
+    addRelationship: Mock;
   };
 }
 
 function fakeReactor(docs = new Map<string, unknown>()): FakeReactor {
   const client = {
-    get: jest.fn((id: string) => {
+    get: vi.fn((id: string) => {
       if (id === "drive-1") {
         return Promise.resolve({ state: { global: { nodes: [] } } });
       }
       if (docs.has(id)) return Promise.resolve(docs.get(id));
       return Promise.reject(new Error(`no document ${id}`));
     }),
-    create: jest.fn((doc: { header: { id: string } }) => {
+    create: vi.fn((doc: { header: { id: string } }) => {
       docs.set(doc.header.id, doc);
       return Promise.resolve(doc);
     }),
-    execute: jest.fn(() => Promise.resolve({})),
-    addRelationship: jest.fn(() => Promise.resolve({})),
+    execute: vi.fn(() => Promise.resolve({})),
+    addRelationship: vi.fn(() => Promise.resolve({})),
   };
   return { client };
 }
@@ -122,7 +122,7 @@ describe("applyFsChangesToReactor in a v2 Studio", () => {
         : Promise.reject(new Error("missing"));
     });
     // The reactor already has every global action in the file.
-    (client as unknown as { getOperations: jest.Mock }).getOperations = jest.fn(() =>
+    (client as unknown as { getOperations: Mock }).getOperations = vi.fn(() =>
       Promise.resolve({
         results: (onDisk.operations.global ?? []).map((op: unknown) => op),
       }),
@@ -187,7 +187,7 @@ describe("mirrorSignedSpec", () => {
     const { client } = fakeReactor(
       new Map([[doc.header.id, { ...doc, state: doc.state }]]),
     );
-    (client as unknown as { getOperations: jest.Mock }).getOperations = jest.fn(() =>
+    (client as unknown as { getOperations: Mock }).getOperations = vi.fn(() =>
       Promise.resolve({ results: doc.operations.global ?? [] }),
     );
 

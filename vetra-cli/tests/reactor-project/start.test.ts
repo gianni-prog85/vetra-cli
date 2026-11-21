@@ -3,7 +3,7 @@
  * preview pane can show that project as soon as it is up — also when the
  * agent left `workdir` out (the workspace's only project).
  */
-import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -1,4 +1,4 @@
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, vi } from "vitest";
 import type { LifecycleHook } from "@powerhousedao/ph-clint";
 import {
   CHECKS_REFUSAL,
@@ -86,13 +86,13 @@ describe("refuseCommand", () => {
 describe("shellGuard tool wrap", () => {
   it("leaves other tools untouched", async () => {
     const wrap = await toolWrap();
-    const tool = { execute: jest.fn() };
+    const tool = { execute: vi.fn() };
     expect(wrap("mastra_workspace_write_file", tool)).toBe(tool);
   });
 
   it("refuses before the inner execute runs and points at the recorded tools", async () => {
     const wrap = await toolWrap();
-    const inner = jest.fn();
+    const inner = vi.fn();
     const wrapped = wrap("mastra_workspace_execute_command", { execute: inner });
     expect(() => wrapped.execute({ command: "cd p && npx vitest run" }, {})).toThrow(
       /reactor-project-check.*tests: true.*reactor-project-build/,
@@ -103,7 +103,7 @@ describe("shellGuard tool wrap", () => {
 
   it("forwards installs with every argument", async () => {
     const wrap = await toolWrap();
-    const inner = jest.fn(() => "ok");
+    const inner = vi.fn(() => "ok");
     const wrapped = wrap("mastra_workspace_execute_command", { execute: inner });
     const args = { command: "pnpm add zod" };
     const ctx = { workspace: {} };

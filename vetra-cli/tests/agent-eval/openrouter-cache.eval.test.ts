@@ -4,7 +4,7 @@
  * models. Opt in with:
  *   RUN_AGENT_EVALS=1 OPENROUTER_API_KEY=sk-or-... pnpm --filter vetra-cli test -- tests/agent-eval/openrouter-cache.eval.test.ts
  */
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { createLlmModels, resolveLlmSettings } from "../../src/agents/llm.js";
 
 const optedIn = process.env.RUN_AGENT_EVALS === "1";

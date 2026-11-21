@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { specPreviewCreate } from "../../src/commands/spec-preview/create.js";
 import { specPreviewDelete } from "../../src/commands/spec-preview/delete.js";
@@ -25,7 +25,7 @@ function withLiveReactorProject(workdir: string) {
 }
 
 function mockGqlResponses(
-  fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>,
+  fetchSpy: MockInstance<typeof globalThis.fetch>,
   responses: ReadonlyArray<Record<string, unknown>>,
 ) {
   let i = 0;
@@ -46,7 +46,7 @@ function mockGqlResponses(
 }
 
 /** The switchboard GraphQL calls, without Renown's discovery probe. */
-function gqlCalls(fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>) {
+function gqlCalls(fetchSpy: MockInstance<typeof globalThis.fetch>) {
   return fetchSpy.mock.calls.filter(([input]) => String(input) === SWITCHBOARD_URL);
 }
 
@@ -121,11 +121,11 @@ describe("spec-preview commands without a running reactor-project", () => {
 describe("spec-preview commands against a live (mocked) reactor-project", () => {
   let workdir: string;
   let cleanup: () => void;
-  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
     ({ workdir, cleanup } = makeWorkdir());
-    fetchSpy = jest.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch");
   });
   afterEach(() => {
     fetchSpy.mockRestore();

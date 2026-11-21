@@ -8,7 +8,7 @@
  * The product/chat documents are then created through that reactor, and every
  * one of them is `v2-required` and signed by the owner.
  */
-import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { rm } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

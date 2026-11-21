@@ -3,7 +3,7 @@
  * (Task 5.SIG, ruling X39): the browser can never create a legacy document in
  * a v2 Studio by guessing wrong.
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   mkdtempSync,
   mkdirSync,
@@ -24,10 +24,10 @@ import {
 let root: string;
 let bundleDir: string;
 const log = {
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
 };
 
 beforeEach(() => {

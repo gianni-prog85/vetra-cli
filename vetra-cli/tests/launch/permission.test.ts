@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@jest/globals";
+import { afterEach, describe, expect, it } from "vitest";
 import { LaunchError } from "../../src/launch/errors.js";
 import {
   LAUNCH_TRIGGER,

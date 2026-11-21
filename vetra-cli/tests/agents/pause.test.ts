@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { mapMastraStream } from '@powerhousedao/ph-clint/mastra';
@@ -135,7 +135,7 @@ describe('PauseProcessor', () => {
   it('a paused turn is not reported as a failed turn', async () => {
     h = await productHarness();
     const model = scriptedModel(['work', 'done']);
-    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     let raw: Awaited<ReturnType<typeof runTurn>>['raw'];
     let mapped: Awaited<ReturnType<typeof runTurn>>['mapped'];
     try {

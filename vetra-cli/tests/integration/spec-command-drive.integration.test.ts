@@ -12,7 +12,7 @@
  *   - delete  → drive node + document removed
  *   - folders absent → FS only, drive untouched, reactor never booted
  */
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

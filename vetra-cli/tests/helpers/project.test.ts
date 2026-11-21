@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "@jest/globals";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

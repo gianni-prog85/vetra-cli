@@ -3,7 +3,7 @@
  * browser bundle reads must carry the cloud switchboard the agent is pointed
  * at, so a prod studio's Deploy view doesn't fall back to staging (401).
  */
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -28,10 +28,10 @@ async function studioConfigAfterReady(config: Record<string, unknown>) {
   const ctx = {
     config,
     log: {
-      warn: jest.fn(),
-      debug: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
     },
     eventBus: {
       on: (_: string, h: (e: unknown) => void) => handlers.push(h),
@@ -94,10 +94,10 @@ async function runtimeConfigAfterReady(
   );
   const handlers: Array<(e: unknown) => void> = [];
   const log = {
-    warn: jest.fn(),
-    debug: jest.fn(),
-    info: jest.fn(),
-    error: jest.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
   };
   const ctx = {
     config,

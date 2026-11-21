@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { restartPreview, startPreview } from "../../src/preview-server/starter.js";
 import { getPreviewDriveId } from "../../src/helpers/reactor-project-preview.js";
@@ -16,11 +16,11 @@ function makeServices(args: {
   initial?: FakeInstance[];
   startImpl?: (id: string, opts: { workdir: string }) => Promise<string>;
 }) {
-  const list = jest.fn(() => args.initial ?? []);
-  const stop = jest.fn<(id: string, instanceId?: string) => Promise<void>>(
+  const list = vi.fn(() => args.initial ?? []);
+  const stop = vi.fn<(id: string, instanceId?: string) => Promise<void>>(
     async () => {},
   );
-  const start = jest.fn(
+  const start = vi.fn(
     args.startImpl ??
       (async () => {
         return "instance-1";

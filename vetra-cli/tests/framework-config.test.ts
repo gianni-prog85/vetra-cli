@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { configSchema, secretsSchema } from "../src/framework.js";
 
 describe("OpenRouter config", () => {

@@ -5,7 +5,7 @@
  * and Continue (RESUME_CHANGE + `continue`) answers it — it leads the
  * `continue` turn's prompt, once.
  */
-import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';

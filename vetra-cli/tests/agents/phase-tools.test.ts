@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ProcessInputStepArgs } from '@mastra/core/processors';
 import {
   ADVANCED_ONLY,
@@ -174,7 +174,7 @@ describe('phase tool sets', () => {
   });
 
   it('a failed product read falls back to every tool and logs', async () => {
-    const warn = jest.fn<(msg: string) => void>();
+    const warn = vi.fn<(msg: string) => void>();
     const read = (async () => {
       throw new Error('reactor down');
     }) as unknown as typeof getProductDoc;
@@ -185,7 +185,7 @@ describe('phase tool sets', () => {
 
   it('reads once per turn and again after a product-progress step', async () => {
     let status = 'WORKING';
-    const read = jest.fn(async () => ({
+    const read = vi.fn(async () => ({
       id: 'p',
       state: {
         activeChangeId: 'c',
@@ -222,7 +222,7 @@ describe('phase tool sets', () => {
   // the tool set stayed on PLAN after `start DATA`).
   it('re-reads after product-progress when the call is only in response.messages', async () => {
     let steps = [{ kind: 'PLAN', status: 'WORKING' }];
-    const read = jest.fn(async () => ({
+    const read = vi.fn(async () => ({
       id: 'p',
       state: { activeChangeId: 'c', changes: [{ id: 'c', status: 'BUILDING', steps }] },
     })) as unknown as typeof getProductDoc;

@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 
 // Two studio hooks (Deploy view + agent panel) poll POST /auth/confirm at the
 // same time. When one confirm lands the login it clears the pending session;
@@ -14,19 +14,19 @@ const fakeRenown: { user?: { address: string }; baseUrl: string } = {
 
 let releaseLoser: (() => void) | undefined;
 
-jest.unstable_mockModule("@renown/sdk/node", () => ({
+vi.doMock("@renown/sdk/node", () => ({
   RenownBuilder: class {
     build() {
       return Promise.resolve(fakeRenown);
     }
   },
-  generateAccessToken: jest.fn(),
-  getAuthStatus: jest.fn(),
+  generateAccessToken: vi.fn(),
+  getAuthStatus: vi.fn(),
 }));
 
-jest.unstable_mockModule("../../src/auth/login-flow.js", () => ({
+vi.doMock("../../src/auth/login-flow.js", () => ({
   startLogin: () => ({ url: "https://renown.example/console?session=s1", sessionId: "s1" }),
-  pollLogin: jest.fn(async () => {
+  pollLogin: vi.fn(async () => {
     if (!releaseLoser) {
       // Loser: still waiting when the winner completes the login.
       await new Promise<void>((resolve) => {

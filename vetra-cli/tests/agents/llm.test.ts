@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "@jest/globals";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   CONTEXT_LIMIT_RATIO,
   DEFAULT_CONTEXT_LENGTH,

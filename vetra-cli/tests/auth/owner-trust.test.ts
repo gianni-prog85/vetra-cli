@@ -1,7 +1,7 @@
 /**
  * The owner-only trust policy of a new cloud Studio (Task 5.SIG, ruling X39).
  */
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, vi, type Mock } from "vitest";
 import {
   createOwnerTrustPolicy,
   type SignatureTrustPolicyLike,
@@ -11,11 +11,11 @@ const OWNER = "0xAbC0000000000000000000000000000000000001";
 const OTHER = "0xdef0000000000000000000000000000000000002";
 
 function delegatedPolicy(accept: boolean): SignatureTrustPolicyLike & {
-  authorizeSigner: jest.Mock;
+  authorizeSigner: Mock;
 } {
   return {
-    authorizeSigner: jest.fn(() => Promise.resolve(accept)),
-  } as unknown as SignatureTrustPolicyLike & { authorizeSigner: jest.Mock };
+    authorizeSigner: vi.fn(() => Promise.resolve(accept)),
+  } as unknown as SignatureTrustPolicyLike & { authorizeSigner: Mock };
 }
 
 const signerFor = (address?: string) => ({

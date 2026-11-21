@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { createRequestAuthorizer } from "../../src/preview-server/request-auth.js";
 import { startPreviewServer } from "../../src/preview-server/server.js";
@@ -24,8 +24,8 @@ describe("POST /restart", () => {
   let cleanup: () => void;
   let projectPath: string;
   let server: Awaited<ReturnType<typeof startPreviewServer>>;
-  let stop: jest.Mock<(id: string, instanceId?: string) => Promise<void>>;
-  let start: jest.Mock<() => Promise<string>>;
+  let stop: Mock<(id: string, instanceId?: string) => Promise<void>>;
+  let start: Mock<() => Promise<string>>;
   const secret = process.env.VETRA_SESSION_EXPORT_SECRET;
   const admins = process.env.ADMINS;
 
@@ -36,9 +36,9 @@ describe("POST /restart", () => {
     projectPath = join(workdir, PROJECT);
     mkdirSync(projectPath);
     writeFileSync(join(projectPath, "powerhouse.config.json"), "{}\n");
-    stop = jest.fn(async () => {});
-    start = jest.fn(async () => "fresh");
-    const list = jest.fn(() => [
+    stop = vi.fn(async () => {});
+    start = vi.fn(async () => "fresh");
+    const list = vi.fn(() => [
       { workdir: projectPath, status: "starting", instanceId: "stuck" },
     ]);
     server = await startPreviewServer({

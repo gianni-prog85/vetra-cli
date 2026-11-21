@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import { isModulePath } from "../../src/helpers/project-checks.js";
 

@@ -3,9 +3,9 @@
  * owner's environments are read, never written; the Studio itself, other
  * Studios and environments that are gone never count.
  */
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 
-const listMyEnvironments = jest.fn(async () => [
+const listMyEnvironments = vi.fn(async () => [
   { id: "studio-env", status: "READY" },
   { id: "env-old", status: "READY" },
   { id: "env-other-studio", status: "READY" },
@@ -58,17 +58,17 @@ const STATES: Record<string, unknown> = {
   },
 };
 let failure = "";
-const loadEnvironmentState = jest.fn(async (_ctx: unknown, id: string) => {
+const loadEnvironmentState = vi.fn(async (_ctx: unknown, id: string) => {
   if (id === "env-broken") throw new Error("Document not found: env-broken");
   if (id === "env-flaky") throw new Error(failure);
   return STATES[id];
 });
 
-jest.unstable_mockModule("../../src/cloud/environments-read.js", () => ({
+vi.doMock("../../src/cloud/environments-read.js", () => ({
   listMyEnvironments,
   NOT_AUTHENTICATED: "Not authorized",
 }));
-jest.unstable_mockModule("../../src/cloud/environments-write.js", () => ({ loadEnvironmentState }));
+vi.doMock("../../src/cloud/environments-write.js", () => ({ loadEnvironmentState }));
 
 const { findOwnerEnvironmentsRunning, isGoneError } = await import("../../src/product/upgrade-existing.js");
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,7 +23,7 @@ import { newRequestsMemory, requestsPass } from "../../src/triggers/product-requ
 import { AT, a, launchHarness, makeReady, readyChange, type LaunchHarness } from "./orchestrator-helpers.js";
 
 // Real git: three snapshots per test.
-jest.setTimeout(30_000);
+vi.setConfig({ testTimeout: 30_000 });
 
 const BY = "did:key:owner";
 const MODEL = "todo-app/document-models/todo/todo.json";
@@ -293,7 +293,7 @@ describe("go back when the cloud is slow or the record fails (I1)", () => {
   let h: LaunchHarness | undefined;
   afterEach(async () => {
     awaitRollbackSettle(null);
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     await h?.cleanup();
     h = undefined;
   });
@@ -380,7 +380,7 @@ describe("go back when the cloud is slow or the record fails (I1)", () => {
     const client = h.module.client as unknown as { execute: (...args: unknown[]) => Promise<unknown> };
     const real = client.execute.bind(client);
     let refused = 0;
-    jest.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
+    vi.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
       const actions = (args[2] as { type: string }[] | undefined) ?? [];
       if (refused < 1 && actions.some((x) => x.type === "SET_LIVE_VERSION")) {
         refused += 1;
@@ -404,7 +404,7 @@ describe("go back when the cloud is slow or the record fails (I1)", () => {
     await twoVersions(h);
     const client = h.module.client as unknown as { execute: (...args: unknown[]) => Promise<unknown> };
     const real = client.execute.bind(client);
-    const spy = jest.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
+    const spy = vi.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
       const actions = (args[2] as { type: string }[] | undefined) ?? [];
       if (actions.some((x) => x.type === "SET_LIVE_VERSION")) throw new Error("reactor busy");
       return real(...args);
@@ -427,7 +427,7 @@ describe("go back when the cloud is slow or the record fails (I1)", () => {
     const client = harness.module.client as unknown as { execute: (...args: unknown[]) => Promise<unknown> };
     const real = client.execute.bind(client);
     let refused = 0;
-    jest.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
+    vi.spyOn(client, "execute").mockImplementation(async (...args: unknown[]) => {
       const actions = (args[2] as { type: string }[] | undefined) ?? [];
       if (refused < times && actions.some((x) => x.type === "SET_LIVE_VERSION")) {
         refused += 1;

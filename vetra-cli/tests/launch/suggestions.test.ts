@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { BUDGET_EXHAUSTED, budgetFailedLast, hasSuggestionsFor, versionChatSession } from "../../src/launch/suggestions.js";
 
 const NOW = new Date("2026-10-21T09:00:00.000Z");

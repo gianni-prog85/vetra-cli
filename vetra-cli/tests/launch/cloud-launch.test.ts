@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import {
   cloudLaunch,
@@ -30,7 +30,7 @@ function harness(respond: (c: Captured) => { status?: number; json: unknown }) {
   const logLine = (msg: string) => {
     lines.push(msg);
   };
-  const fetchFn = jest.fn(async (url: string | URL | Request, init?: RequestInit) => {
+  const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const c: Captured = {
       url: String(url),
       headers: init?.headers as Record<string, string>,
@@ -283,7 +283,7 @@ describe("studio endpoint", () => {
   ];
 
   it.each([SWITCHBOARD, `${SWITCHBOARD}/`, `${SWITCHBOARD}/graphql`, `${SWITCHBOARD}/graphql/`])(
-    "every Studio call posts to /graphql/vetra-apps with the secret (config %p)",
+    "every Studio call posts to /graphql/vetra-apps with the secret (config %j)",
     async (configured) => {
       const h = harness(() => ({ json: { data: { ok: true } } }));
       h.ctx.config = { ...h.ctx.config, cloudSwitchboardUrl: configured };

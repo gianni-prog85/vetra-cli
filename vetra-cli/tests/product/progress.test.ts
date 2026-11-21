@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@jest/globals";
+import { afterEach, describe, expect, it } from "vitest";
 import { StudioProductV1 } from "vetra-app/document-models";
 import { runProgress } from "../../src/commands/product/progress.js";
 import { dispatchProduct } from "../../src/product/product-doc.js";

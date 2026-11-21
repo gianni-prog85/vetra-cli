@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { runProgress } from "../../src/commands/product/progress.js";
@@ -153,7 +153,7 @@ describe("launch orchestrator", () => {
   });
 
   it("budget exhausted during launch: version goes live, suggestions skipped", async () => {
-    const afterLaunch = jest.fn(async () => {});
+    const afterLaunch = vi.fn(async () => {});
     h = await launchHarness({ afterLaunch, budgetUsedUp: async () => true });
     await makeReady(h);
 
@@ -166,7 +166,7 @@ describe("launch orchestrator", () => {
   });
 
   it("suggestions run after a launch while budget is left", async () => {
-    const afterLaunch = jest.fn(async () => {});
+    const afterLaunch = vi.fn(async () => {});
     h = await launchHarness({ afterLaunch, budgetUsedUp: async () => false });
     await makeReady(h);
     await launch(h.octx, { changeId: "change-1", trigger: LAUNCH_TRIGGER });
@@ -174,8 +174,8 @@ describe("launch orchestrator", () => {
   });
 
   it("suggestions written in the Tests step: no extra turn after the launch", async () => {
-    const afterLaunch = jest.fn(async () => {});
-    const budgetUsedUp = jest.fn(async () => false);
+    const afterLaunch = vi.fn(async () => {});
+    const budgetUsedUp = vi.fn(async () => false);
     h = await launchHarness({ afterLaunch, budgetUsedUp });
     await makeReady(h);
     await dispatchProduct(h.ctx, [
@@ -567,7 +567,7 @@ describe("live address when the plan is done (D8)", () => {
 
   it("a refused request is logged at error and tried again at the next step change", async () => {
     let refuse = true;
-    const ensure = jest.fn(async () => {
+    const ensure = vi.fn(async () => {
       if (refuse) throw new LaunchError("STUDIO_SECRET_PENDING", "your Studio is still getting ready to publish");
       return TARGET;
     });

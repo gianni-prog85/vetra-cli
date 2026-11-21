@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LAUNCH_REASONS,
   LAUNCH_TRIGGER,
@@ -53,7 +53,7 @@ function countHealthWrites(h: LaunchHarness): () => number {
   const client = h.module.client as unknown as {
     execute: (...args: unknown[]) => Promise<unknown>;
   };
-  const spy = jest.spyOn(client, "execute");
+  const spy = vi.spyOn(client, "execute");
   return () =>
     spy.mock.calls
       .flatMap((call) => (call[2] as { type: string }[] | undefined) ?? [])

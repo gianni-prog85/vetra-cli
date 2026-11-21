@@ -2,7 +2,7 @@
  * No cloud fallbacks: an unconfigured switchboard or registry fails loudly
  * instead of silently using staging / the dev registry.
  */
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -34,7 +34,7 @@ describe("vetra-apps endpoint", () => {
     "https://switchboard.vetra.io/graphql",
     "https://switchboard.vetra.io/graphql/",
     " https://switchboard.vetra.io/graphql ",
-  ])("targets the subgraph directly from %p", (url) => {
+  ])("targets the subgraph directly from %j", (url) => {
     expect(resolveVetraAppsEndpoint({ cloudSwitchboardUrl: url })).toBe(
       "https://switchboard.vetra.io/graphql/vetra-apps",
     );

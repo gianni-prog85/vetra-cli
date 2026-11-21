@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -44,7 +44,7 @@ import { AT, a, launchHarness, makeReady, type LaunchHarness } from "./orchestra
 const BY = "did:pkh:eip155:1:0xowner";
 
 // Real git against repositories on disk.
-jest.setTimeout(30_000);
+vi.setConfig({ testTimeout: 30_000 });
 
 function write(root: string, rel: string, content: string): void {
   const file = path.join(root, rel);

@@ -2,7 +2,7 @@
  * The signing wiring of a new cloud Studio (Task 5.SIG, ruling X39): the live
  * Renown signer, the v2 create policy, the refusal rule, the drive pointer.
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,11 +22,11 @@ function fakeRenown(address?: string) {
   const signer: {
     user?: { address: string };
     app: { key: string };
-    signAction: jest.Mock;
+    signAction: Mock;
   } = {
     user: address ? { address } : undefined,
     app: { key: "did:key:z6MkAgent" },
-    signAction: jest.fn(() => Promise.resolve([])),
+    signAction: vi.fn(() => Promise.resolve([])),
   };
   const renown = {
     signer,
@@ -75,7 +75,7 @@ describe("studioReactorSigning", () => {
       adminsEnv: OWNER,
       renown: renown as unknown as IRenown,
     });
-    const ready = jest.fn();
+    const ready = vi.fn();
     const off = signing.onSignerChange?.(ready);
     renown.setAddress(OWNER);
     expect(ready).toHaveBeenCalledTimes(1);
@@ -109,7 +109,7 @@ describe("cloudStudioDriveConfig", () => {
   it("resolves through the pointer and records a created drive", async () => {
     const config = cloudStudioDriveConfig(workdir);
     const client = {
-      get: jest.fn(() => Promise.resolve({ header: { id: "drive-1" } })),
+      get: vi.fn(() => Promise.resolve({ header: { id: "drive-1" } })),
     };
     await expect(config.resolveId?.(client as never)).resolves.toBeUndefined();
 
@@ -121,7 +121,7 @@ describe("cloudStudioDriveConfig", () => {
   it("ignores a pointer to a drive that no longer exists", async () => {
     writeStudioDrivePointer(workdir, "gone");
     const config = cloudStudioDriveConfig(workdir);
-    const client = { get: jest.fn(() => Promise.reject(new Error("not found"))) };
+    const client = { get: vi.fn(() => Promise.reject(new Error("not found"))) };
     await expect(config.resolveId?.(client as never)).resolves.toBeUndefined();
   });
 });

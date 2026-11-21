@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryKeyStorage, RenownCryptoBuilder } from "@renown/sdk/node";
 
 import { createRequestAuthorizer, isLocalRequest } from "../../src/preview-server/request-auth.js";
@@ -44,12 +44,12 @@ function authorizer(verifyDelegation: (jwt: string, aud: string) => Promise<bool
 
 describe("createRequestAuthorizer with the real Renown token check", () => {
   const saved = { admins: process.env.ADMINS, secret: process.env.VETRA_SESSION_EXPORT_SECRET };
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
     delete process.env.VETRA_SESSION_EXPORT_SECRET;
     // The SDK logs every rejected token; keep the run quiet.
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
@@ -62,7 +62,7 @@ describe("createRequestAuthorizer with the real Renown token check", () => {
   it("a self-signed token claiming the owner's wallet is refused without the delegation", async () => {
     // Anyone can mint this: a fresh did:key signing a claim to OWNER's address.
     const forged = await mintToken(OWNER);
-    const verifyDelegation = jest.fn(async () => false);
+    const verifyDelegation = vi.fn(async () => false);
     const authorize = authorizer(verifyDelegation);
     const check = await authorize(req({ authorization: `Bearer ${forged}` }), null);
     expect(check).toMatchObject({ ok: false, status: 401 });
@@ -71,7 +71,7 @@ describe("createRequestAuthorizer with the real Renown token check", () => {
 
   it("accepts the owner's token once the delegation verifies; caches the verdict", async () => {
     const token = await mintToken(OWNER);
-    const verifyDelegation = jest.fn(async () => true);
+    const verifyDelegation = vi.fn(async () => true);
     const authorize = authorizer(verifyDelegation);
     const r = req({ authorization: `Bearer ${token}` });
     expect(await authorize(r, null)).toMatchObject({ ok: true, via: "owner" });
@@ -111,10 +111,10 @@ describe("createRequestAuthorizer with the real Renown token check", () => {
 
 describe("bearer is bound to this Studio (aud)", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
@@ -123,7 +123,7 @@ describe("bearer is bound to this Studio (aud)", () => {
   });
 
   it("refuses a token minted for another Studio, or with no aud at all", async () => {
-    const delegation = jest.fn(async () => true);
+    const delegation = vi.fn(async () => true);
     const authorize = authorizer(delegation);
     const other = await mintToken(OWNER, { aud: "https://evil-studio.vetra.example" });
     const none = await mintToken(OWNER, { aud: null });
@@ -142,7 +142,7 @@ describe("bearer is bound to this Studio (aud)", () => {
 
   it("caps Renown lookups per minute; a flood of fresh tokens is refused", async () => {
     let t = 1_000_000;
-    const delegation = jest.fn(async () => true);
+    const delegation = vi.fn(async () => true);
     const authorize = authorizer(delegation, {
       lookupsPerMinute: 2,
       lookupsPerClientPerMinute: 2,
@@ -160,10 +160,10 @@ describe("bearer is bound to this Studio (aud)", () => {
 
 describe("Renown lookups: cached per (app key, wallet), capped only for unknown keys", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
@@ -181,7 +181,7 @@ describe("Renown lookups: cached per (app key, wallet), capped only for unknown 
   it("owner polling at 100 req/min, a fresh token each time, stays authorized with one lookup", async () => {
     let t = 1_000_000;
     const owner = await keyFor(OWNER);
-    const delegation = jest.fn(async () => true);
+    const delegation = vi.fn(async () => true);
     const authorize = authorizer(delegation, { now: () => t });
     for (let i = 0; i < 100; i++) {
       const tok = await owner.mint();
@@ -195,7 +195,7 @@ describe("Renown lookups: cached per (app key, wallet), capped only for unknown 
     let t = 1_000_000;
     const owner = await keyFor(OWNER);
     const ownerTokens = new Set<string>();
-    const delegation = jest.fn(async (jwt: string) => ownerTokens.has(jwt));
+    const delegation = vi.fn(async (jwt: string) => ownerTokens.has(jwt));
     const authorize = authorizer(delegation, { now: () => t });
     const first = await owner.mint();
     ownerTokens.add(first);
@@ -228,7 +228,7 @@ describe("Renown lookups: cached per (app key, wallet), capped only for unknown 
   it("one unknown key gets at most 3 lookups a minute", async () => {
     const t = 1_000_000;
     const attacker = await keyFor(OWNER);
-    const delegation = jest.fn(async () => false);
+    const delegation = vi.fn(async () => false);
     const authorize = authorizer(delegation, { now: () => t });
     // Failures are cached 30 s per key anyway; the per-key cap is the backstop.
     for (let i = 0; i < 10; i++) {
@@ -264,12 +264,12 @@ describe("isLocalRequest", () => {
 
 describe("trusted keys: kept across restarts, per-client lookup shares, evicted on refusal", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   let dir: string;
   let store: string;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     dir = mkdtempSync(join(tmpdir(), "vetra-trusted-"));
     store = join(dir, ".ph", "preview-trusted-keys.json");
   });
@@ -306,7 +306,7 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
     let t = 1_000_000;
     const owner = await keyFor(OWNER);
     const ownerTokens = new Set<string>();
-    const delegation = jest.fn(async (jwt: string) => ownerTokens.has(jwt));
+    const delegation = vi.fn(async (jwt: string) => ownerTokens.has(jwt));
     const first = await owner.mint();
     ownerTokens.add(first);
     const before = authorizer(delegation, { now: () => t, trustedStorePath: store });
@@ -337,7 +337,7 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
       ownerTokens.add(tok);
       return tok;
     };
-    const delegation = jest.fn(async (jwt: string) => ownerTokens.has(jwt));
+    const delegation = vi.fn(async (jwt: string) => ownerTokens.has(jwt));
     const a = authorizer(delegation, { now: () => t, trustedStorePath: store });
     expect((await a(from("198.51.100.7", await mint()), null)).ok).toBe(true);
 
@@ -354,7 +354,7 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
 
   it("one client can't spend the whole lookup cap; spoofed forwarded hops don't add shares", async () => {
     const t = 1_000_000;
-    const delegation = jest.fn(async () => false);
+    const delegation = vi.fn(async () => false);
     const authorize = authorizer(delegation, { now: () => t });
     for (let i = 0; i < 40; i++) {
       const forged = await (await keyFor(OWNER)).mint();
@@ -373,7 +373,7 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
     let t = 1_000_000;
     const owner = await keyFor(OWNER);
     let answer: boolean | Error = true;
-    const delegation = jest.fn(async () => {
+    const delegation = vi.fn(async () => {
       if (answer instanceof Error) throw answer;
       return answer;
     });
@@ -412,10 +412,10 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
 
 describe("Renown unreachable: a trusted key passes only within 1 h of its last OK check", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
@@ -428,7 +428,7 @@ describe("Renown unreachable: a trusted key passes only within 1 h of its last O
     const crypto = await new RenownCryptoBuilder().withKeyPairStorage(new MemoryKeyStorage()).build();
     const mint = () => crypto.getBearerToken(OWNER, { expiresIn: 600, aud: STUDIO });
     let down = false;
-    const delegation = jest.fn(async () => {
+    const delegation = vi.fn(async () => {
       if (down) throw new Error("fetch failed");
       return true;
     });
@@ -456,10 +456,10 @@ describe("Renown unreachable: a trusted key passes only within 1 h of its last O
 
 describe("lookup shares: IPv6 clients by /64, a reserve for clients new to the window", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
@@ -476,7 +476,7 @@ describe("lookup shares: IPv6 clients by /64, a reserve for clients new to the w
 
   it("charges every address of one IPv6 /64 to one client", async () => {
     const t = 1_000_000;
-    const delegation = jest.fn(async () => false);
+    const delegation = vi.fn(async () => false);
     const authorize = authorizer(delegation, { now: () => t });
     for (let i = 0; i < 15; i++) {
       await authorize(via(`2001:db8:1:2:${i.toString(16)}::${i + 1}`, await forged()), null);
@@ -488,7 +488,7 @@ describe("lookup shares: IPv6 clients by /64, a reserve for clients new to the w
 
   it("keeps a share of the cap for a client new to the window", async () => {
     const t = 1_000_000;
-    const delegation = jest.fn(async () => false);
+    const delegation = vi.fn(async () => false);
     const authorize = authorizer(delegation, { now: () => t });
     for (const c of ["203.0.113.1", "203.0.113.2", "203.0.113.3"]) {
       for (let i = 0; i < 12; i++) await authorize(via(c, await forged()), null);
@@ -506,7 +506,7 @@ describe("lookup shares: IPv6 clients by /64, a reserve for clients new to the w
 
 describe("the default delegation lookup tells 'no credential' from 'couldn't ask'", () => {
   const saved = process.env.ADMINS;
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   let dir: string;
   let store: string;
   let server: Server;
@@ -515,7 +515,7 @@ describe("the default delegation lookup tells 'no credential' from 'couldn't ask
   const hits: string[] = [];
   beforeEach(async () => {
     process.env.ADMINS = OWNER;
-    errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     dir = mkdtempSync(join(tmpdir(), "vetra-renown-"));
     store = join(dir, ".ph", "preview-trusted-keys.json");
     hits.length = 0;

@@ -2,7 +2,7 @@
  * agent-required-inputs: the agent's tool schemas mark the defaulted spec
  * inputs required; the command's own schema (the CLI's) is untouched.
  */
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 import type { LifecycleHook } from "@powerhousedao/ph-clint";
 import { commandsToMastraTools } from "@powerhousedao/ph-clint/mastra";
 import { z } from "zod";
@@ -77,7 +77,7 @@ describe("agentRequiredInputs", () => {
     const wrap = await wrapOf();
     const tool = await agentTool(specCreate);
     expect(wrap("spec-list", tool)).toBe(tool);
-    const bare = { execute: jest.fn() };
+    const bare = { execute: vi.fn() };
     expect(wrap("spec-create", bare)).toBe(bare);
     expect(requireFields(z.string(), ["type"])).toBeInstanceOf(z.ZodString);
   });

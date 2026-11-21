@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import { STUDIO_SECRET_ENV, type CloudContext } from "../../src/launch/cloud-launch.js";
 import { checkLive, DEPLOY_FAILED_REASON, waitForDeployment } from "../../src/launch/verify.js";
@@ -6,7 +6,7 @@ import { checkLive, DEPLOY_FAILED_REASON, waitForDeployment } from "../../src/la
 function cloud(responses: Array<{ status?: number; json: unknown } | Error>) {
   let i = 0;
   const queries: string[] = [];
-  const fetchFn = jest.fn(async (url: unknown, init?: RequestInit) => {
+  const fetchFn = vi.fn(async (url: unknown, init?: RequestInit) => {
     void url;
     queries.push((JSON.parse(String(init?.body)) as { query: string }).query);
     const r = responses[Math.min(i++, responses.length - 1)];
@@ -93,7 +93,7 @@ describe("waitForDeployment refusals", () => {
 describe("checkLive", () => {
   it("is true on HTTP 200, retrying up to 3 times 10 s apart", async () => {
     const sleeps: number[] = [];
-    const fetchFn = jest
+    const fetchFn = vi
       .fn<typeof fetch>()
       .mockRejectedValueOnce(new Error("ENOTFOUND"))
       .mockResolvedValueOnce(new Response("", { status: 503 }))
@@ -107,7 +107,7 @@ describe("checkLive", () => {
   });
 
   it("is false when the address never answers 200", async () => {
-    const fetchFn = jest.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 502 }));
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 502 }));
     expect(await checkLive("https://x.vetra.io", { fetch: fetchFn, sleep: async () => {} })).toBe(false);
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
