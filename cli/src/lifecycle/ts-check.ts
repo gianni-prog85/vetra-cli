@@ -26,7 +26,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import { extractPath, isCodegenPath } from "./gen-guard.js";
 
 /** Minimal slice of ph-clint's Logger the hook uses (not re-exported). */

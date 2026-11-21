@@ -4,8 +4,8 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
-import { createWorkdirStore } from "@powerhousedao/ph-clint";
-import { getMastraPaths } from "@powerhousedao/ph-clint/mastra";
+import { createWorkdirStore } from "@powerhousedao/clint";
+import { getMastraPaths } from "@powerhousedao/clint/mastra";
 import { CLI_NAME } from "../config.js";
 import type { EmbeddedDrive } from "../helpers/embedded-drive.js";
 

@@ -1,8 +1,8 @@
 import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "@powerhousedao/reactor";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { withSignaturePolicy } from "document-model";
-import { StudioProductV1 } from "vetra-app/document-models";
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import { StudioProductV1 } from "document-models";
+import type { StudioProductState } from "document-models/studio-product";
 import type { ProductContext } from "../../src/product/product-doc.js";
 
 const a = StudioProductV1.actions;

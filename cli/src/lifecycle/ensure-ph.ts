@@ -4,7 +4,7 @@
 // when absent, else checks the present ph's version for compatibility.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { LifecycleHook, Logger } from "@powerhousedao/ph-clint";
+import type { LifecycleHook, Logger } from "@powerhousedao/clint";
 import { DEFAULT_PH_VERSION } from "../constants.js";
 
 const execFileAsync = promisify(execFile);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { StudioProductV1 } from "vetra-app/document-models";
+import { StudioProductV1 } from "document-models";
 import { runProgress } from "../../src/commands/product/progress.js";
 import { dispatchProduct } from "../../src/product/product-doc.js";
 import { FORBIDDEN_WORDS } from "../../src/product/forbidden-words.js";

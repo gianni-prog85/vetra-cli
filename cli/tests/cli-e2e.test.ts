@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = join(__dirname, "..", "src", "main.ts");
-const TSX = join(__dirname, "..", "node_modules", ".bin", "tsx");
+const TSX = join(__dirname, "..", "..", "node_modules", ".bin", "tsx");
 
 type RunResult = { stdout: string; stderr: string; code: number };
 

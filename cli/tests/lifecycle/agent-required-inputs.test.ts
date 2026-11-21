@@ -3,8 +3,8 @@
  * inputs required; the command's own schema (the CLI's) is untouched.
  */
 import { describe, expect, it, vi } from "vitest";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
-import { commandsToMastraTools } from "@powerhousedao/ph-clint/mastra";
+import type { LifecycleHook } from "@powerhousedao/clint";
+import { commandsToMastraTools } from "@powerhousedao/clint/mastra";
 import { z } from "zod";
 import { specCreate } from "../../src/commands/spec/create.js";
 import { specUpdate } from "../../src/commands/spec/update.js";

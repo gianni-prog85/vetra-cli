@@ -1,4 +1,4 @@
-import { isStudioEnvironment } from "@powerhousedao/vetra-cloud-client";
+import { isStudioEnvironment } from "../../../cloud-client/index.js";
 import type { EnvironmentSummary } from "./cloudGraphql.js";
 import { CLOUD_BASE_DOMAIN } from "./config.js";
 import type { EnvInstall } from "./useInstalledPackages.js";

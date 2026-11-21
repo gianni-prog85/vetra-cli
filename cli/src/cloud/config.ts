@@ -1,15 +1,15 @@
 /**
  * Vetra Cloud (vetra.io) connection settings for the deploy commands.
  *
- * Constants and helpers live in `@powerhousedao/vetra-cloud-client` (shared with
- * vetra-app's Studio Deploy section). This file only resolves the CLI's
+ * Constants and helpers live in `cloud-client/` (shared with the Studio's
+ * Deploy section). This file only resolves the CLI's
  * config-overridable endpoints on top of those defaults.
  */
 import type { Config } from "../framework.js";
 import {
   CLOUD_RENOWN_URL,
   cloudGraphqlEndpoint,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 
 /** The Renown identity service for the login flow (config, else www.renown.id). */
 export function resolveCloudConfig(config: Pick<Config, "cloudRenownUrl">): {

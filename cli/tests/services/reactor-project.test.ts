@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import type { LifecycleInitContext } from '@powerhousedao/ph-clint';
+import type { LifecycleInitContext } from '@powerhousedao/clint';
 import {
   deployBasePath,
   proxyBasePathHook,
@@ -72,10 +72,10 @@ describe('reactor-project --renown-namespace', () => {
   // and needs no login, so it gets a namespace of its own.
   const studioNamespace = (): string => {
     const pkg = JSON.parse(
-      readFileSync(new URL('../../../vetra-app/package.json', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
     ) as { scripts: Record<string, string> };
     const match = /--renown-namespace\s+(\S+)/.exec(pkg.scripts['build:connect'] ?? '');
-    if (!match) throw new Error('vetra-app build:connect sets no --renown-namespace');
+    if (!match) throw new Error('package.json build:connect sets no --renown-namespace');
     return match[1];
   };
 

@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import * as studioProduct from "vetra-app/document-models/studio-product";
+import * as studioProduct from "document-models/studio-product";
 import { LaunchError } from "../../src/launch/errors.js";
 import {
   MERGE_UNFINISHED_REASON,

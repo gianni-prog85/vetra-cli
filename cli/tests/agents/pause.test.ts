@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
-import { mapMastraStream } from '@powerhousedao/ph-clint/mastra';
-import { StudioProductV1 } from 'vetra-app/document-models';
+import { mapMastraStream } from '@powerhousedao/clint/mastra';
+import { StudioProductV1 } from 'document-models';
 import { z } from 'zod';
 import { PAUSED_REASON, PauseProcessor, agentLogger, isPauseAbortLog, isPaused } from '../../src/agents/pause.js';
 import { productHarness, type ProductHarness } from '../product/helpers.js';

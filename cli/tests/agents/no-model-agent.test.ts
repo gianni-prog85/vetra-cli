@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { StreamChunk } from "@powerhousedao/ph-clint";
+import type { StreamChunk } from "@powerhousedao/clint";
 import { createAgent } from "../../src/agents/agent.js";
 import { NO_MODEL_MESSAGE, createNoModelAgent } from "../../src/agents/no-model-agent.js";
 

@@ -14,6 +14,8 @@ const ignoredFiles = [
   "**/.ph/",
   "**/storybook-static/",
   "**/.vite/",
+  "**/coverage/",
+  "gen/",
 ];
 
 /** Global configs for eslint ignores */
@@ -116,6 +118,57 @@ const javascriptConfig = {
   extends: [tseslint.configs.disableTypeChecked],
 };
 
+/** Unsafe-* rules, relaxed where upstream types are `any` or tests build partial mocks */
+const unsafeRulesOff = {
+  "@typescript-eslint/no-unsafe-assignment": "off",
+  "@typescript-eslint/no-unsafe-member-access": "off",
+  "@typescript-eslint/no-unsafe-call": "off",
+  "@typescript-eslint/no-unsafe-argument": "off",
+  "@typescript-eslint/no-unsafe-return": "off",
+};
+
+/** The CLI (`cli/`) */
+const cliConfigs = [
+  {
+    files: ["cli/**/*.ts"],
+    rules: {
+      // The defineCommand contract (and Mastra's async-generator hooks) requires
+      // `async` even when the body has no awaits — the rule mis-flags valid code.
+      "@typescript-eslint/require-await": "off",
+      // Fires on destructured helper exports that don't depend on `this`.
+      "@typescript-eslint/unbound-method": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
+    },
+  },
+  {
+    // cli/src/agents/ is the Mastra boundary, and cli/src/cli.ts wires clint
+    // service-lifecycle event handlers whose payloads upstream types as `any`.
+    // Disable type-aware unsafe-* and unnecessary-assertion rules here so the
+    // strictness still applies to our own code.
+    files: ["cli/src/agents/**/*.ts", "cli/src/cli.ts"],
+    rules: {
+      ...unsafeRulesOff,
+      // Mastra's Agent typing disagrees with tsc on whether the template-literal
+      // cast is needed; tsc still requires it, so silence the lint complaint.
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
+  {
+    // Tests construct partial mocks of framework types (TriggerContext, services,
+    // DocumentModelModule, vi.mock factories) where matching the full upstream
+    // type is impractical. The unsafe-* rules fire on those mocks; disable them
+    // here so the strictness still applies to production code.
+    files: ["cli/tests/**/*.ts"],
+    rules: {
+      ...unsafeRulesOff,
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/restrict-template-expressions": "off",
+    },
+  },
+];
+
 /** Recommended config from eslint */
 const eslintRecommendedConfig = eslint.configs.recommended;
 
@@ -130,6 +183,7 @@ export default defineConfig(
   eslintRecommendedConfig,
   typescriptEsLintRecommendedConfig,
   typescriptConfig,
+  cliConfigs,
   reactConfig,
   javascriptConfig,
   eslintPluginPrettierRecommended,

@@ -29,5 +29,16 @@
     "skipLibCheck": true
   },
   "include": ["**/*", "./powerhouse.manifest.json"],
-  "exclude": ["dist", "node_modules", ".ph", "vitest.config.ts", "main.tsx"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    ".ph",
+    "vitest.config.ts",
+    "main.tsx",
+    // the playwright suite keeps its own tsconfig
+    "cli/e2e",
+    "lab",
+    "docs",
+    "coverage"
+  ]
 }

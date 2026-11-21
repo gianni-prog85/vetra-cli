@@ -1,55 +1,37 @@
-packages:
-  - 'packages/*'
-  - 'vetra-app'
-  - 'vetra-cli'
-
 catalog:
-  # @powerhousedao/monorepo packages (pinned together for local-link compatibility)
-  '@powerhousedao/builder-tools': '6.2.3-dev.66'
-  '@powerhousedao/codegen': '6.2.3-dev.66'
-  '@powerhousedao/common': '6.2.3-dev.66'
-  '@powerhousedao/config': '6.2.3-dev.66'
-  '@powerhousedao/connect': '6.2.3-dev.66'
-  '@powerhousedao/design-system': '6.2.3-dev.66'
-  '@powerhousedao/opentelemetry-instrumentation-reactor': '6.2.3-dev.66'
-  # Not published on the dev train past 6.2.3-dev.44; stable 6.2.3 is newest.
-  '@powerhousedao/pglite-fs': '6.2.3'
-  '@powerhousedao/ph-cli': '6.2.3-dev.66'
-  '@powerhousedao/powerhouse-vetra-packages': '6.2.3-dev.66'
-  '@powerhousedao/reactor': '6.2.3-dev.66'
-  '@powerhousedao/reactor-api': '6.2.3-dev.66'
-  '@powerhousedao/reactor-attachments': '6.2.3-dev.66'
-  '@powerhousedao/reactor-browser': '6.2.3-dev.66'
-  '@powerhousedao/reactor-drive': '6.2.3-dev.66'
-  # Not published at 6.2.3-dev.66 (dev train stops at dev.64); unused here.
-  '@powerhousedao/reactor-hypercore': '6.2.3'
-  '@powerhousedao/reactor-mcp': '6.2.3-dev.66'
-  '@powerhousedao/registry': '6.2.3-dev.66'
-  '@powerhousedao/shared': '6.2.3-dev.66'
-  '@powerhousedao/switchboard': '6.2.3-dev.66'
-  '@powerhousedao/vetra': '6.2.3-dev.66'
-  '@renown/sdk': '6.2.3-dev.66'
-  document-model: '6.2.3-dev.66'
-  ph-cmd: '6.2.3-dev.66'
+  # @powerhousedao monorepo packages, at the version the monorepo's next/6.4
+  # packages carry (pinned together for local-link compatibility).
+  # cli/scripts/build-assets.ts reads the ph-cli entry as the Powerhouse version marker.
+  '@powerhousedao/clint': '6.3.0-dev.6'
+  # Private in the monorepo, not on npm at this version yet: installs only linked.
+  '@powerhousedao/clint-common': '6.3.0-dev.6'
+  '@powerhousedao/connect': '6.3.0-dev.6'
+  '@powerhousedao/design-system': '6.3.0-dev.6'
+  '@powerhousedao/ph-cli': '6.3.0-dev.6'
+  '@powerhousedao/powerhouse-vetra-packages': '6.3.0-dev.6'
+  '@powerhousedao/reactor': '6.3.0-dev.6'
+  '@powerhousedao/reactor-attachments': '6.3.0-dev.6'
+  '@powerhousedao/reactor-browser': '6.3.0-dev.6'
+  '@powerhousedao/shared': '6.3.0-dev.6'
+  '@powerhousedao/vetra': '6.3.0-dev.6'
+  '@renown/sdk': '6.3.0-dev.6'
+  document-model: '6.3.0-dev.6'
+  ph-cmd: '6.3.0-dev.6'
 
   # other shared deps
-  '@powerhousedao/clint-common': '0.1.0-dev.112'
-  '@powerhousedao/ph-clint': '0.1.0-dev.112'
-  '@powerhousedao/ph-clint-dev': '0.1.0-dev.112'
-  '@powerhousedao/ph-clint-observability': '0.1.0-dev.112'
   '@types/node': '^25.5.2'
   eslint-config-prettier: '^10.1.8'
   graphql: '16.12.0'
-  # Vendored into vetra's dist: @powerhousedao/shared's CLI helpers require it
-  # at runtime. Matches shared@6.2.3(-dev.65)'s exact pin.
+  # @powerhousedao/shared's CLI helpers require it at runtime; the monorepo
+  # catalog's exact pin.
   semver: '7.7.4'
   typescript: '^6.0.2'
   typescript-eslint: '^8.46.2'
-  zod: '4.3.6'
+  # The monorepo's resolved zod (its catalog: ^4.5.4).
+  zod: '4.6.5'
 
 overrides:
-  'mastra>@mastra/deployer': '1.41.0'
-  zod: '4.3.6'
+  zod: '4.6.5'
   viem: '2.49.0'
   # Dedupe graphql to one copy: @graphql-tools schema merge does cross-instance isObjectType
   # checks, which fail when codegen builds types with a different graphql copy than Apollo pulls in.
@@ -57,32 +39,30 @@ overrides:
   graphql: '16.12.0'
 
   # Image-size dedupe (Trim 4): each collapses a duplicate-version train in the
-  # store. Reclaim measured against vetra's prod closure; build/typecheck gated.
+  # store.
   'date-fns': '4.4.0'   # ~-11.5 MiB; all consumers on major 4 (leaner build)
-  # ~-19 MiB; collapses the rolldown binding train. MUST satisfy the vite that
-  # builder-tools builds Connect with (6.2.3-dev.66 -> vite 8.3.4, rolldown ~1.2.12):
-  # vite 8.3 emits `import.meta.ROLLDOWN_FILE_URL_*` asset refs that rolldown
-  # 1.0.x doesn't know, leaving PGlite's .data/.wasm URLs undefined in the
-  # studio bundle (Connect crashes: "Invalid FS bundle size").
+  # ~-19 MiB; collapses the rolldown binding train. Set for the vite that
+  # builder-tools built Connect with (vite 8.3.4, rolldown ~1.2.12): vite 8.3
+  # emits `import.meta.ROLLDOWN_FILE_URL_*` asset refs that rolldown 1.0.x
+  # doesn't know, leaving PGlite's .data/.wasm URLs undefined in the studio
+  # bundle (Connect crashes: "Invalid FS bundle size"). Revisit when the
+  # Connect build returns (B2); until then it only affects vitest's vite.
   rolldown: '1.2.12'
 
-  # Align @powerhousedao/vetra-cloud-package's transitive powerhouse deps onto
-  # vetra's own rc line. The published tarball declares document-model +
-  # these @powerhousedao packages at 6.2.0-dev.43; left alone, the
-  # VetraCloudEnvironmentV1 model object loads a *different* document-model
-  # instance (dev.43) than the rc.5 PHDocumentController it's fed into
-  # (packages/vetra-cloud-client/src/controller.ts) — a class-identity hazard.
-  # Scoped to this package only, so the unrelated 6.0.0-dev.244 train (ph-clint
-  # /otel) is untouched. Keep in lockstep with the catalog rc pin above.
-  '@powerhousedao/vetra-cloud-package>document-model': '6.2.3-dev.66'
-  '@powerhousedao/vetra-cloud-package>@powerhousedao/shared': '6.2.3-dev.66'
-  '@powerhousedao/vetra-cloud-package>@powerhousedao/builder-tools': '6.2.3-dev.66'
-  '@powerhousedao/vetra-cloud-package>@powerhousedao/common': '6.2.3-dev.66'
-  '@powerhousedao/vetra-cloud-package>@powerhousedao/connect': '6.2.3-dev.66'
-  '@powerhousedao/vetra-cloud-package>@powerhousedao/design-system': '6.2.3-dev.66'
+  # One copy of each of these across the tree, @powerhousedao/vetra-cloud-package's
+  # transitive ones included: the published tarball declares them at
+  # 6.2.0-dev.43, and its VetraCloudEnvironmentV1 model object must load the
+  # same document-model instance as the PHDocumentController it is fed into
+  # (cloud-client/controller.ts), a class-identity hazard. Unscoped, so
+  # local-link's overrides replace them with links to the monorepo.
+  document-model: '6.3.0-dev.6'
+  '@powerhousedao/shared': '6.3.0-dev.6'
+  '@powerhousedao/builder-tools': '6.3.0-dev.6'
+  '@powerhousedao/common': '6.3.0-dev.6'
+  '@powerhousedao/connect': '6.3.0-dev.6'
+  '@powerhousedao/design-system': '6.3.0-dev.6'
   #
   # Not applied:
-  # - @powerhousedao/shared dev-train: already collapsed by reactor-attachments -> catalog.
   # - @opentelemetry/* (~121 MiB, 81 dirs, multiple SDK majors): no single safe pin; needs an audit.
   # - zod v3 coexists with v4: a dep hard-requires v3; forcing it is breaking for ~6 MiB.
 
@@ -103,6 +83,10 @@ allowBuilds:
   protobufjs: true
   sqlite3: true
   unrs-resolver: true
+
+# pnpm scripts and `pnpm exec` never reinstall: an install linked to the local
+# monorepo (local-link) stays in place until the next explicit `pnpm install`.
+verifyDepsBeforeRun: false
 
 # The repo tracks freshly-published @powerhousedao dev releases; the lockfile
 # verifier ignores minimumReleaseAgeExclude (pnpm 11.5), so the age gate is off.

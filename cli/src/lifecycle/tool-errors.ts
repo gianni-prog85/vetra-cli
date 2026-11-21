@@ -13,7 +13,7 @@
  * wrapper and catches throws from inner hooks (e.g. ts-check) and the tools
  * themselves alike.
  */
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 
 function ensureSerializable(err: unknown): unknown {
   if (err instanceof Error && !("toJSON" in err)) {

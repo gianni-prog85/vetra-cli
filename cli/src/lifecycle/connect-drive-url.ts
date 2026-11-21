@@ -33,7 +33,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import { DEFAULT_PREVIEW_SERVER_PORT } from "../preview-server/index.js";
 
 interface SwitchboardReadyEvent {

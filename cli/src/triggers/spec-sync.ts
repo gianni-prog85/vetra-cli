@@ -14,7 +14,7 @@
  * Sibling of `spec-fs-sync` (FS → drive). The loop closes via that trigger's
  * `loadBatch`/node dedup — re-feeding a `.phd` it just wrote is a no-op.
  */
-import { createDocumentChangeTrigger } from "@powerhousedao/ph-clint";
+import { createDocumentChangeTrigger } from "@powerhousedao/clint";
 import path from "node:path";
 import { loadByName } from "../commands/spec/_helpers.js";
 import { listSpecTypes, saveSpec } from "../commands/spec/registry.js";

@@ -1,18 +1,167 @@
 {
-  "name": "vetra-monorepo",
-  "version": "0.0.1-dev.0",
-  "private": true,
+  "name": "@powerhousedao/vetra-cli",
+  "version": "6.3.0-dev.6",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@11.5.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "browser": "./dist/browser/index.js",
+      "node": "./dist/node/index.mjs"
+    },
+    "./document-models": {
+      "types": "./dist/types/document-models/index.d.ts",
+      "browser": "./dist/browser/document-models/index.js",
+      "node": "./dist/node/document-models/index.mjs"
+    },
+    "./document-models/*": {
+      "types": "./dist/types/document-models/*/index.d.ts",
+      "browser": "./dist/browser/document-models/*/index.js",
+      "node": "./dist/node/document-models/*/index.mjs"
+    },
+    "./editors": {
+      "types": "./dist/types/editors/index.d.ts",
+      "browser": "./dist/browser/editors/index.js",
+      "node": "./dist/node/editors/index.mjs"
+    },
+    "./editors/*": {
+      "types": "./dist/types/editors/*/module.d.ts",
+      "browser": "./dist/browser/editors/*/module.js"
+    },
+    "./subgraphs": {
+      "types": "./dist/types/subgraphs/index.d.ts",
+      "node": "./dist/node/subgraphs/index.mjs"
+    },
+    "./processors": {
+      "types": "./dist/types/processors/index.d.ts",
+      "browser": "./dist/browser/processors/index.js",
+      "node": "./dist/node/processors/index.mjs"
+    },
+    "./manifest": "./dist/powerhouse.manifest.json",
+    "./style.css": "./dist/style.css"
+  },
   "scripts": {
-    "build": "pnpm --filter vetra-app build && pnpm --filter vetra-app build:connect && pnpm --filter vetra build",
-    "test": "pnpm -r run test",
-    "dev": "pnpm --filter vetra dev",
-    "dev:reset": "pnpm --filter vetra dev:reset",
-    "start": "pnpm --filter vetra start",
-    "lint": "pnpm -r run lint",
-    "publish:dev": "pnpm --filter vetra exec ph-publish dev -c ../publish.config.js --verify-connect",
-    "publish:staging": "pnpm --filter vetra exec ph-publish staging -c ../publish.config.js --verify-connect",
-    "publish:production": "pnpm --filter vetra exec ph-publish production -c ../publish.config.js --verify-connect"
+    "build": "ph-cli build",
+    "build:connect": "ph-cli connect build --outDir dist/connect --app-name \"Vetra Studio\" --favicon ./branding/vetra.ico --default-drives-url http://__ph_drive_url__ --dynamic-base --renown-namespace vetra-studio",
+    "build:assets": "tsx cli/scripts/build-assets.ts",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "tsc": "tsc",
+    "tsc:watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test --config cli/e2e/playwright.config.ts",
+    "test:e2e:install": "playwright install chromium",
+    "test:e2e:report": "playwright show-report cli/e2e/playwright-report",
+    "lint": "eslint --config eslint.config.js --cache --cache-strategy content",
+    "lint:fix": "npm run lint -- --fix",
+    "check-circular-imports": "npx dpdm -T ./index.ts",
+    "generate": "ph-cli generate",
+    "dev": "tsx cli/src/main.ts --workdir ../vetra-test",
+    "dev:reset": "bash cli/scripts/dev-reset.sh",
+    "refresh:test-skills": "pnpm build:assets && rm -rf ../vetra-test/.ph/vetra/.mastra/skills && cp -R gen/skills ../vetra-test/.ph/vetra/.mastra/skills && echo '[refresh] vetra-test skills replaced; restart vetra for the change to take effect'",
+    "check:deps": "tsx cli/scripts/check-runtime-deps.ts",
+    "check:requires": "tsx cli/scripts/check-runtime-requires.ts",
+    "check:connect": "tsx cli/scripts/check-connect-bundle.ts",
+    "vendor": "tsx cli/scripts/vendor-deps.ts",
+    "telemetry:dev": "ph-telemetry-dev --cli-name=vetra",
+    "publish:dev": "ph-publish dev -c ./publish.config.js --verify-connect",
+    "publish:staging": "ph-publish staging -c ./publish.config.js --verify-connect",
+    "publish:production": "ph-publish production -c ./publish.config.js --verify-connect"
+  },
+  "peerDependencies": {
+    "@powerhousedao/clint": "catalog:",
+    "@powerhousedao/reactor-browser": "catalog:",
+    "document-model": "catalog:",
+    "graphql": "^16",
+    "graphql-tag": "^2",
+    "react": "^19",
+    "react-dom": "^19",
+    "zod": "^4"
+  },
+  "dependencies": {
+    "driver.js": "^1.6.0",
+    "lucide-react": "^1.17.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^2.0.80",
+    "@electric-sql/pglite": "0.3.15",
+    "@electric-sql/pglite-tools": "0.2.20",
+    "@eslint/js": "^9.38.0",
+    "@mastra/core": "^1.41.0",
+    "@mastra/libsql": "^1.12.1",
+    "@mastra/mcp": "^1.9.1",
+    "@mastra/memory": "^1.20.2",
+    "@openrouter/ai-sdk-provider": "1.5.4",
+    "@playwright/test": "^1.61.0",
+    "@powerhousedao/clint": "catalog:",
+    "@powerhousedao/clint-common": "catalog:",
+    "@powerhousedao/connect": "catalog:",
+    "@powerhousedao/design-system": "catalog:",
+    "@powerhousedao/document-engineering": "1.40.5",
+    "@powerhousedao/ph-cli": "catalog:",
+    "@powerhousedao/ph-clint-claude-subscription": "0.1.0-dev.1",
+    "@powerhousedao/ph-clint-dev": "0.1.0-dev.112",
+    "@powerhousedao/ph-clint-observability": "0.1.0-dev.112",
+    "@powerhousedao/powerhouse-vetra-packages": "catalog:",
+    "@powerhousedao/reactor": "catalog:",
+    "@powerhousedao/reactor-attachments": "catalog:",
+    "@powerhousedao/reactor-browser": "catalog:",
+    "@powerhousedao/shared": "catalog:",
+    "@powerhousedao/vetra": "catalog:",
+    "@powerhousedao/vetra-cloud-package": "https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz",
+    "@renown/sdk": "catalog:",
+    "@tailwindcss/cli": "^4.1.18",
+    "@tailwindcss/vite": "^4.1.18",
+    "@toon-format/toon": "^2.2.0",
+    "@types/node": "catalog:",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "4.1.1",
+    "chokidar": "^3.6.0",
+    "document-model": "catalog:",
+    "eslint": "9.39.4",
+    "eslint-config-prettier": "catalog:",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "execa": "9.6.1",
+    "fflate": "^0.8.2",
+    "fsevents": "^2.3.3",
+    "globals": "^16.4.0",
+    "graphql": "catalog:",
+    "graphql-tag": "2.12.6",
+    "happy-dom": "20.0.10",
+    "jsonpath-plus": "^10.4.0",
+    "libsql": "^0.5.29",
+    "proper-lockfile": "^4.1.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "semver": "catalog:",
+    "tailwindcss": "^4.1.16",
+    "tsdown": "^0.21.1",
+    "tsx": "^4.19.0",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vite": "8.3.4",
+    "vite-tsconfig-paths": "6.1.1",
+    "vitest": "4.1.1",
+    "zod": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "author": {
+    "name": "Powerhouse",
+    "url": "https://powerhouse.inc"
   }
 }

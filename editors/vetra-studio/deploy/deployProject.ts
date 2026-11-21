@@ -3,7 +3,7 @@ import {
   DEPLOY_SERVICES,
   ensureServicesEnabled,
   isStudioEnvironment,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import type { ISigner } from "document-model";
 import {
   fetchVersion,

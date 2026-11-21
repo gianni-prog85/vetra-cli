@@ -511,7 +511,7 @@ export async function createDriveClient(
   }
   const actionSigner = signer;
   const [{ createReactorClient }, rb, dm, drive] = await Promise.all([
-    import("@powerhousedao/vetra-cloud-client"),
+    import("../../../cloud-client/index.js"),
     import("@powerhousedao/reactor-browser"),
     import("document-model"),
     import("@powerhousedao/shared/document-drive"),

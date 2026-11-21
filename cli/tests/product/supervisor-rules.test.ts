@@ -12,8 +12,8 @@ import type {
   ContentPart,
   Message,
 } from "@powerhousedao/clint-common/document-models/chat-session";
-import { StudioProductV1 } from "vetra-app/document-models";
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import { StudioProductV1 } from "document-models";
+import type { StudioProductState } from "document-models/studio-product";
 import {
   BREATHER_MILESTONE,
   BREATHER_REASON,
@@ -489,7 +489,7 @@ describe("the Studio's copies of the supervisor's words", () => {
   const failureStates = readFileSync(
     path.join(
       path.dirname(fileURLToPath(import.meta.url)),
-      "../../../vetra-app/editors/vetra-studio/failures/failureStates.ts",
+      "../../../editors/vetra-studio/failures/failureStates.ts",
     ),
     "utf8",
   );

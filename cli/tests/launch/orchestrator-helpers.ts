@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { StudioProductV1 } from "vetra-app/document-models";
-import type { StepKind } from "vetra-app/document-models/studio-product";
+import { StudioProductV1 } from "document-models";
+import type { StepKind } from "document-models/studio-product";
 import type { CompatRollbackDeps } from "../../src/launch/compat-rollback.js";
 import type { LaunchDeps } from "../../src/launch/orchestrator.js";
 import type { GoBackContext } from "../../src/launch/rollback.js";

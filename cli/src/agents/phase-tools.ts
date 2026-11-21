@@ -15,7 +15,7 @@
  * Patterns are anchored globs; only `*` is special.
  */
 import type { ProcessInputStepArgs, ProcessInputStepResult, Processor } from '@mastra/core/processors';
-import type { StepKind, StudioProductState } from 'vetra-app/document-models/studio-product';
+import type { StepKind, StudioProductState } from 'document-models/studio-product';
 import { IN_PROGRESS, getProductDoc, type ProductContext } from '../product/product-doc.js';
 
 /** Read-only workspace, progress, skills and identity: visible in every phase. */

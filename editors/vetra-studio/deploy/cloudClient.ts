@@ -1,7 +1,7 @@
 import {
   createReactorClient,
   type ReactorGraphQLClient,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import { resolveStudioCloudSwitchboardUrl } from "../hooks/preview-server-client.js";
 
 let endpointPromise: Promise<string> | undefined;

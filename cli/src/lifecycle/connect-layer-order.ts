@@ -17,7 +17,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 
 const LAYER_STYLE = "<style>@layer external-packages;</style>";
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { StudioProductV1 } from "vetra-app/document-models";
+import { StudioProductV1 } from "document-models";
 import { checkRecorder } from "../../src/lifecycle/check-recorder.js";
 import { reactorProjectCheck } from "../../src/commands/reactor-project/check.js";
 import { attachCheckResults, capReason, readCheckResults } from "../../src/product/check-results.js";
@@ -313,7 +313,7 @@ describe("check-recorder", () => {
 
   it("the hidden results survive ph-clint's command → Mastra tool adapter", async () => {
     h = await productHarness();
-    const { commandsToMastraTools } = await import("@powerhousedao/ph-clint/mastra");
+    const { commandsToMastraTools } = await import("@powerhousedao/clint/mastra");
     const tools = await commandsToMastraTools([reactorProjectCheck as never], {
       workdir: project,
       runProcess,

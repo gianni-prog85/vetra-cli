@@ -12,8 +12,8 @@
  * Nothing here writes to the product drive: the read is `listDocuments` and
  * `operationTypes` only. Rollback never rewrites or deletes documents.
  */
-import { CLOUD_BASE_DOMAIN } from "@powerhousedao/vetra-cloud-client";
-import type { StudioProductState, Version } from "vetra-app/document-models/studio-product";
+import { CLOUD_BASE_DOMAIN } from "../../../cloud-client/index.js";
+import type { StudioProductState, Version } from "document-models/studio-product";
 import {
   dispatchProduct,
   getProductDoc,

@@ -25,7 +25,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { baseLoadFromFile } from "document-model/node";
 import { signaturePolicyOf } from "document-model";
-import type { ReactorContext } from "@powerhousedao/ph-clint";
+import type { ReactorContext } from "@powerhousedao/clint";
 import type { LoadJobPlan } from "@powerhousedao/reactor";
 import {
   createSpecDocument,

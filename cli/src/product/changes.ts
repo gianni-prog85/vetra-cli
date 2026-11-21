@@ -22,7 +22,7 @@
  * in, or which files conflict, through `note`. Such a change is never
  * launched by itself (orchestrator `autoLaunchCandidate`).
  */
-import type { Change, StudioProductState } from "vetra-app/document-models/studio-product";
+import type { Change, StudioProductState } from "document-models/studio-product";
 import {
   discardDraft,
   draftMatches,

@@ -7,7 +7,7 @@
  * equivalent). When an instance for this `workdir` is already `starting` or
  * `ready`, we return the existing instance without spawning a second one.
  */
-import type { ServiceManager } from "@powerhousedao/ph-clint";
+import type { ServiceManager } from "@powerhousedao/clint";
 import { resolveReactorProjectPath } from "../helpers/project.js";
 import { getPreviewDriveId } from "../helpers/reactor-project-preview.js";
 import type { StartResult } from "./config.js";

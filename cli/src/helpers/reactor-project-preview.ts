@@ -13,7 +13,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ServiceManager } from "@powerhousedao/ph-clint";
+import type { ServiceManager } from "@powerhousedao/clint";
 import { getBearerToken } from "../auth/renown.js";
 import { resolveCloudConfig } from "../cloud/config.js";
 import { REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH } from "../constants.js";

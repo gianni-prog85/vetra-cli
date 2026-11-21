@@ -27,7 +27,7 @@ import type {
   CheckRun,
   StepKind,
   StudioProductState,
-} from "vetra-app/document-models/studio-product";
+} from "document-models/studio-product";
 import type {
   ChatSessionState,
   Message,
@@ -38,8 +38,8 @@ export const STUCK_AFTER_MS = 5 * 60_000;
 export const STUCK_AFTER_FAILED_RUNS = 3;
 export const PREVIEW_SLOW_AFTER_MS = 60_000;
 /* CONTINUE_TEXT, BREATHER_REASON and PREVIEW_SLOW_REASON are copied in the
- * Studio (vetra-app/editors/vetra-studio/failures/failureStates.ts), which
- * matches them to show the failure lines; tests/product/supervisor-rules.test.ts
+ * Studio (editors/vetra-studio/failures/failureStates.ts), which
+ * matches them to show the failure lines; cli/tests/product/supervisor-rules.test.ts
  * keeps the copies equal. */
 /** The message the supervisor sends to continue a capped turn. */
 export const CONTINUE_TEXT = "continue";

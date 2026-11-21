@@ -11,7 +11,7 @@
  * This wrap marks those fields required (non-empty) in the schema the agent
  * sees. The CLI keeps its own schema; the command still checks the value.
  */
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import { z } from "zod";
 
 /** Tool → the defaulted string inputs the command can't run without. */

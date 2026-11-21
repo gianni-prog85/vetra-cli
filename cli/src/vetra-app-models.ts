@@ -1,4 +1,4 @@
-// vetra-app's document models via the narrow `./document-models` export, so
+// The package's document models via the narrow `document-models` entry, so
 // the editor graph (katex/mermaid) stays out of the bundle.
 import {
   AudienceSheetV1,
@@ -7,7 +7,7 @@ import {
   ProblemSheetV1,
   StudioProductV1,
   WorkBreakdownStructureV1,
-} from 'vetra-app/document-models';
+} from 'document-models';
 
 export const documentModels = [
   AudienceSheetV1,

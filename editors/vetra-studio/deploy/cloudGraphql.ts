@@ -2,7 +2,7 @@ import {
   fetchMyEnvironments as fetchEnvironments,
   type EnvironmentSummary,
   type ListScope,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import { resolveCloudGraphqlEndpoint } from "./cloudClient.js";
 
 export type { EnvironmentSummary, ListScope };

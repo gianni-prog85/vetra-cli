@@ -10,7 +10,7 @@
  * then nothing is written: the agent's client refuses unsigned writes, and the
  * chat watch holds turns.
  */
-import { ensureDrive } from "@powerhousedao/ph-clint/powerhouse";
+import { ensureDrive } from "@powerhousedao/clint/powerhouse";
 import { defineTrigger } from "../framework.js";
 import type { Config } from "../framework.js";
 import { planStudioSigning } from "../auth/studio-mode.js";

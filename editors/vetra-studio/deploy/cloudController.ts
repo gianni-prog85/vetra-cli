@@ -3,7 +3,7 @@ import {
   createNewEnvironmentController as createNew,
   loadEnvironmentController as load,
   type EnvironmentController,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import { client } from "./cloudClient.js";
 
 export type { EnvironmentController };

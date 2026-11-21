@@ -7,7 +7,7 @@ import {
   listMyEnvironments,
 } from "../../cloud/environments-read.js";
 import { loadEnvironmentState } from "../../cloud/environments-write.js";
-import { isStudioEnvironment } from "@powerhousedao/vetra-cloud-client";
+import { isStudioEnvironment } from "../../../../cloud-client/index.js";
 import {
   describeEnvironmentState,
   describeEnvironmentSummary,

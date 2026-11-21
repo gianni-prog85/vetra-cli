@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-/** vetra-cli/e2e */
+/** cli/e2e */
 export const E2E_DIR = path.resolve(here, "..");
-/** vetra-cli (where `tsx src/main.ts` is run from) */
+/** cli (where `tsx src/main.ts` is run from) */
 export const CLI_DIR = path.resolve(E2E_DIR, "..");
 export const CACHE_DIR = path.join(E2E_DIR, ".cache");
 /** Written by global-setup once the studio boots: where to point the test. */

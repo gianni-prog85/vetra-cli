@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { StepKind } from 'vetra-app/document-models/studio-product';
+import type { StepKind } from 'document-models/studio-product';
 import { selectTools } from '../../src/agents/phase-tools.js';
 import { registeredToolNames } from './tool-names.js';
 
@@ -13,7 +13,7 @@ import { registeredToolNames } from './tool-names.js';
  * the workflow, or a skill it loads for a step, tells the agent to use in a
  * step must be visible in that step (and be a real tool, so visible in NONE).
  */
-const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prompts');
+const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'prompts');
 const WORKFLOW = readFileSync(path.join(PROMPTS_DIR, 'agent-profiles', 'workflow.md'), 'utf-8');
 const STEPS: StepKind[] = ['PLAN', 'DATA', 'EDITORS', 'TESTS', 'LIVE'];
 

@@ -39,9 +39,9 @@ import {
   CLOUD_BASE_DOMAIN,
   isStudioEnvironment,
   type VetraCloudEnvironmentGlobalState,
-} from "@powerhousedao/vetra-cloud-client";
-import type { StudioProductState, StepKind } from "vetra-app/document-models/studio-product";
-import { StudioProductV1 } from "vetra-app/document-models";
+} from "../../../cloud-client/index.js";
+import type { StudioProductState, StepKind } from "document-models/studio-product";
+import { StudioProductV1 } from "document-models";
 import type { Config } from "../framework.js";
 import { defineTrigger } from "../framework.js";
 import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
@@ -676,10 +676,10 @@ async function renameProductFile(
 
 /**
  * True for a product made by `adoptExisting` that has no version yet. Same
- * rule as vetra-app's `adoptedWithoutVersions`
+ * rule as the Studio's `adoptedWithoutVersions`
  * (editors/vetra-studio/shell/firstVersion.ts, not importable here without the
  * editor bundle): change both together. Both run the cases in
- * vetra-app/editors/vetra-studio/shell/adoptedWithoutVersions.cases.json.
+ * editors/vetra-studio/shell/adoptedWithoutVersions.cases.json.
  */
 export function adoptedWithoutVersions(state: StudioProductState): boolean {
   return (

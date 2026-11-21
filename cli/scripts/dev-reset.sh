@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Wipe the vetra dev workspace store (full nuke of {workdir}/.ph/{cli}).
-# The workdir + cli mirror the `dev` script (`tsx src/main.ts --workdir
-# ../../vetra-test`). Service state in ~/.ph/vetra is left intact.
+# The workdir + cli mirror the `dev` script (`tsx cli/src/main.ts --workdir
+# ../vetra-test`, from the package root). Service state in ~/.ph/vetra is left intact.
 #
 # The reactor store is an embedded PGlite (Postgres) data dir held open by
 # the running reactor; deleting it from under a live process can corrupt

@@ -20,7 +20,7 @@
  */
 import chokidar from "chokidar";
 import path from "node:path";
-import type { ReactorContext } from "@powerhousedao/ph-clint";
+import type { ReactorContext } from "@powerhousedao/clint";
 import {
   applyFsChangesToReactor,
   removeSpecFromDrive,

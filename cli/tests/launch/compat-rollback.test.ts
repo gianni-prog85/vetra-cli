@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ISigner } from "document-model";
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import type { ModelSpec } from "../../src/launch/compat-launch.js";
 import {
   USED_MAX_DOCUMENTS,

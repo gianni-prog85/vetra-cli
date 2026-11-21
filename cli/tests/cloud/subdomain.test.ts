@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { generateSubdomain } from "@powerhousedao/vetra-cloud-client";
+import { generateSubdomain } from "../../../cloud-client/index.js";
 
 // Guards the verbatim move of the subdomain generator into the shared package:
 // these vectors must stay byte-for-byte stable (the gitops namespace derives

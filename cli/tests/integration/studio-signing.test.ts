@@ -30,11 +30,11 @@ import type { DocumentModelModule } from "document-model";
 import {
   buildDefaultReactor,
   deterministicId,
-} from "@powerhousedao/ph-clint";
+} from "@powerhousedao/clint";
 import type {
   DriveEntry,
   ReactorContext,
-} from "@powerhousedao/ph-clint";
+} from "@powerhousedao/clint";
 import type { IRenown } from "@renown/sdk/node";
 import {
   cloudStudioDriveConfig,

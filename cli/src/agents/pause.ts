@@ -20,7 +20,7 @@
  */
 import { ConsoleLogger, type LogLevel } from '@mastra/core/logger';
 import type { ProcessInputStepArgs, Processor } from '@mastra/core/processors';
-import type { StudioProductState } from 'vetra-app/document-models/studio-product';
+import type { StudioProductState } from 'document-models/studio-product';
 import { getProductDoc, type ProductContext } from '../product/product-doc.js';
 
 /** The reason a paused turn is aborted with (F16). */

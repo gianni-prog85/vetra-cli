@@ -33,7 +33,7 @@
  * and resumes it (F22); this trigger skips the reconcile and tries the next
  * pass, so the two never race.
  */
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import { defineTrigger } from "../framework.js";
 import { studioGql, type CloudContext } from "../launch/cloud-launch.js";
 import type { OrchestratorContext } from "../launch/orchestrator.js";

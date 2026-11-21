@@ -1,7 +1,7 @@
 /**
  * Write-side environment operations for the deploy commands: resolve the
  * workdir's Renown signer + an authenticated reactor client, then delegate the
- * load/create + signed action sequences to `@powerhousedao/vetra-cloud-client`
+ * load/create + signed action sequences to `cloud-client/`
  * and push.
  */
 import type { ISigner } from "document-model";
@@ -20,7 +20,7 @@ import {
   type EnvironmentSummary,
   type ListScope,
   type VetraCloudEnvironmentGlobalState,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import { resolveRegistryUrl } from "./registry-url.js";
 import { getBearerToken, getRenown } from "../auth/renown.js";
 import { DEFAULT_PH_VERSION } from "../constants.js";
@@ -35,7 +35,7 @@ import { stampStudioInstance } from "./stamp-studio-instance.js";
 export type {
   EnvironmentChanges,
   EnvironmentTransition,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 
 interface WriteSession {
   signer: ISigner;

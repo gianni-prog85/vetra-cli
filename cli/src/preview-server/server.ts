@@ -25,7 +25,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import path from "node:path";
-import type { ServiceManager } from "@powerhousedao/ph-clint";
+import type { ServiceManager } from "@powerhousedao/clint";
 import { PREVIEW_SERVER_HOST, type ResolveResult } from "./config.js";
 import { createSseBroadcaster } from "./events.js";
 import { readProjectPackage } from "./package-info.js";

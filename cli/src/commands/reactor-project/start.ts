@@ -1,6 +1,6 @@
 import path from "node:path";
 import { z } from "zod";
-import { formatStatus } from "@powerhousedao/ph-clint";
+import { formatStatus } from "@powerhousedao/clint";
 import { defineCommand } from "../../framework.js";
 import { resolveReactorProjectPath } from "../../helpers/project.js";
 

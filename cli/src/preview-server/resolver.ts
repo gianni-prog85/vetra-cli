@@ -10,7 +10,7 @@
  * Read-only. Never mutates ServiceManager state. The `/start` handler is the
  * sole mutator.
  */
-import type { ServiceManager } from "@powerhousedao/ph-clint";
+import type { ServiceManager } from "@powerhousedao/clint";
 import { REACTOR_PROJECT_CONNECT_PROXY_PATH } from "../constants.js";
 import { resolveReactorProjectPath } from "../helpers/project.js";
 import {

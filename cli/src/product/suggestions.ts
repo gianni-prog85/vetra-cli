@@ -4,7 +4,7 @@
  * `product-progress suggest` at the end of the Tests step; they are stored
  * for the version being launched and shown once it is live.
  */
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import { nextVersionNumber } from "../launch/orchestrator.js";
 import { IN_PROGRESS, activeChange } from "./product-doc.js";
 

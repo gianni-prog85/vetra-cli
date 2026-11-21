@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMemoryWorkdirStore } from "@powerhousedao/ph-clint";
+import { createMemoryWorkdirStore } from "@powerhousedao/clint";
 
 /**
  * Make a fresh temp workdir for one test, and a cleanup function. The dir is

@@ -16,7 +16,7 @@
  *   `CHANGE_BASE_RETRY_MS` (reads and git alike).
  */
 import type { ProcessInputStepArgs, Processor } from '@mastra/core/processors';
-import type { Change } from 'vetra-app/document-models/studio-product';
+import type { Change } from 'document-models/studio-product';
 import { markChangeUnbased } from '../launch/git-versions.js';
 import { activeChange, getProductDoc } from '../product/product-doc.js';
 import {

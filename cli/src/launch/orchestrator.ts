@@ -38,7 +38,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { CLOUD_BASE_DOMAIN } from "@powerhousedao/vetra-cloud-client";
+import { CLOUD_BASE_DOMAIN } from "../../../cloud-client/index.js";
 import type {
   Change,
   LaunchLineKind,
@@ -47,7 +47,7 @@ import type {
   RequestKind,
   StudioProductState,
   Version,
-} from "vetra-app/document-models/studio-product";
+} from "document-models/studio-product";
 import type { Config } from "../framework.js";
 import { listReactorProjects } from "../helpers/project.js";
 import {

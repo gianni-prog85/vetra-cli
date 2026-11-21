@@ -8,7 +8,7 @@ import {
   type LifecycleHook,
   type ServiceInstanceStatus,
   type ServiceProxyRouteSpec,
-} from '@powerhousedao/ph-clint';
+} from '@powerhousedao/clint';
 import { defineService } from '../framework.js';
 import {
   REACTOR_PROJECT_CONNECT_PROXY_PATH,

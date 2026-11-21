@@ -8,7 +8,7 @@ import {
   localConfigPath,
   userConfigPath,
   type CommandContext,
-} from '@powerhousedao/ph-clint';
+} from '@powerhousedao/clint';
 import { CLI_NAME } from './config.js';
 import { configSchema, secretsSchema } from './framework.js';
 

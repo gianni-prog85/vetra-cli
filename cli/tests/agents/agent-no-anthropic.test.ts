@@ -44,7 +44,7 @@ vi.doMock("@powerhousedao/ph-clint-claude-subscription", () => ({
   },
 }));
 let wrapOpts: { maxSteps?: number } | undefined;
-vi.doMock("@powerhousedao/ph-clint/mastra", () => ({
+vi.doMock("@powerhousedao/clint/mastra", () => ({
   createMastraHelpers: () => ({
     createMemory: async (o: { observationalMemory: { model: unknown } }) => {
       memoryModel = o.observationalMemory.model;

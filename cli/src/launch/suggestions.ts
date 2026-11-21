@@ -4,7 +4,7 @@
  * the new version, and the budget is not used up, the Studio asks the agent
  * for them in one short turn: a Studio note in the change's conversation.
  */
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
 import { getProductDoc } from "../product/product-doc.js";
 import { messageAgent } from "./compat-launch.js";

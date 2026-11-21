@@ -25,7 +25,7 @@ import type {
   DriveConfig,
   ReactorSigningOptions,
   ReactorClientModule,
-} from "@powerhousedao/ph-clint";
+} from "@powerhousedao/clint";
 import type { IRenown, ISigner } from "@renown/sdk/node";
 import { getRenown } from "./renown.js";
 import { createOwnerTrustPolicy } from "./owner-trust.js";

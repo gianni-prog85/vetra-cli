@@ -6,7 +6,7 @@
  * Everything outside the markers is user-editable and preserved.
  */
 // @clint:begin imports
-import { defineCli, buildDefaultReactor, deterministicId } from '@powerhousedao/ph-clint';
+import { defineCli, buildDefaultReactor, deterministicId } from '@powerhousedao/clint';
 import { z } from 'zod';
 import path from 'node:path';
 import { CLI_NAME, CLI_VERSION, CLI_ROOT } from './config.js';
@@ -45,7 +45,7 @@ import {
 } from './auth/reactor-signing.js';
 import { resolveCloudConfig } from './cloud/config.js';
 import { studioBootstrapTrigger } from './triggers/studio-bootstrap.js';
-import type { ReactorSigningOptions } from '@powerhousedao/ph-clint';
+import type { ReactorSigningOptions } from '@powerhousedao/clint';
 import { connectExternalPackagesLayerOrder } from './lifecycle/connect-layer-order.js';
 import { DEFAULT_PREVIEW_SERVER_PORT } from './preview-server/index.js';
 import { genGuard } from './lifecycle/gen-guard.js';
@@ -64,15 +64,11 @@ import { existingStudioUpgradeTrigger } from './product/upgrade-existing.js';
 import { DocumentModelModule } from '@powerhousedao/shared/document-model';
 // @clint:end imports
 import { createClaudeAuthCommands } from '@powerhousedao/ph-clint-claude-subscription';
-import { createAttachmentCommands } from '@powerhousedao/ph-clint/powerhouse';
+import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
-import { existsSync } from 'node:fs';
 
-// Connect SPA dir: vetra's own dist when built/published, else the
-// workspace vetra-app (dev, no build step). Lets vetra-app be a devDep.
-const CONNECT_ASSETS_ROOT = existsSync(path.join(CLI_ROOT, 'dist', 'connect', 'index.html'))
-  ? CLI_ROOT
-  : path.resolve(CLI_ROOT, '..', 'vetra-app');
+// The package root: the Connect SPA is served from its dist/connect.
+const CONNECT_ASSETS_ROOT = CLI_ROOT;
 
 export const cli = defineCli({
   name: CLI_NAME,

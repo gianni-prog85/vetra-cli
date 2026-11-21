@@ -23,7 +23,7 @@
  * `createAgent`) — only agent tool calls pass through this wrap anyway.
  */
 import { randomUUID } from "node:crypto";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import { capReason, readCheckResults, type ObservedCheck } from "../product/check-results.js";
 import {
   IN_PROGRESS,

@@ -4,9 +4,16 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+# skills and agent profiles cli/scripts/build-assets.ts writes
+/gen/
+/dist/connect.bak/
 
 # Test / coverage
 coverage/
+# Playwright e2e artifacts
+/cli/e2e/test-results/
+/cli/e2e/playwright-report/
+/cli/e2e/.cache/
 
 # Caches
 .eslintcache
@@ -17,6 +24,11 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+projects-import.js
+
+# Local benchmarking scratch
+bench.sh
+bench-out/
 
 # Env
 .env
@@ -35,11 +47,8 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-/vetra-app/.npmrc
-/vetra-app/dist/connect.bak/
 .claude/ph-clint
 .claude/worktrees/
-vetra-cli/.npmrc
 .npmrc
 
 # brainstorm mockups, SDD ledgers and other agent scratch

@@ -7,7 +7,7 @@
  * every `step-finish` chunk, and prints one JSON object: totals, per-step
  * mean, the per-step series, and the tool calls made.
  *
- *   OPENROUTER_API_KEY=… npx tsx vetra-cli/scripts/measure-turn-tokens.ts [--prompt …] [--maxWallMs …] [--keep]
+ *   OPENROUTER_API_KEY=… npx tsx cli/scripts/measure-turn-tokens.ts [--prompt …] [--maxWallMs …] [--keep]
  *
  * Model: VETRA_MODEL (default deepseek/deepseek-v4.1-flash-1017);
  * fallbacks: VETRA_MODEL_FALLBACKS (default `none`, so runs stay comparable).
@@ -21,7 +21,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const CLI_PATH = path.join(ROOT, 'src', 'main.ts');
-const TSX = path.join(ROOT, 'node_modules', '.bin', 'tsx');
+const TSX = path.join(ROOT, '..', 'node_modules', '.bin', 'tsx');
 
 export const DEFAULT_PROMPT =
   'Build a todo list app with a title, due date and done flag; editor with add, complete and delete';

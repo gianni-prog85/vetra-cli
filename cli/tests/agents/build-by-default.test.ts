@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
  * alongside, without asking; a question is only for genuine ambiguity about
  * WHAT to build. These assertions pin that rule into the always-loaded text.
  */
-const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prompts');
+const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'prompts');
 const PROFILES_DIR = path.join(PROMPTS_DIR, 'agent-profiles');
 
 /** The customer prompt that regressed. */

@@ -6,7 +6,7 @@ import type {
   AgentProvider,
   AgentSetupContext,
   StreamChunk,
-} from '@powerhousedao/ph-clint';
+} from '@powerhousedao/clint';
 import type { Config } from '../framework.js';
 
 /**

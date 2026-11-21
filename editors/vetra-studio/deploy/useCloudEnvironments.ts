@@ -1,5 +1,5 @@
 import { useRenown } from "@powerhousedao/reactor-browser";
-import { filterOwn } from "@powerhousedao/vetra-cloud-client";
+import { filterOwn } from "../../../cloud-client/index.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAuthToken } from "./cloudClient.js";
 import {

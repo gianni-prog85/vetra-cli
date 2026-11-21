@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { genGuard, extractPath, isCodegenPath } from "../../src/lifecycle/gen-guard.js";
 import { tsCheck } from "../../src/lifecycle/ts-check.js";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 
 type ToolWrap = NonNullable<
   NonNullable<Awaited<ReturnType<LifecycleHook["onInit"]>>["contribute"]>["tool"]

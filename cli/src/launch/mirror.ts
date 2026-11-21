@@ -19,7 +19,7 @@
  * Every git call goes through `workspaceGit` (safe.directory scoped to the
  * workspace), after a pre-check that fails with git's own error.
  */
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import {
   GITHUB_NOT_CONNECTED_CODE,
   cloudClearExternalChanges,

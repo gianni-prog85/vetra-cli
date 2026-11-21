@@ -8,8 +8,8 @@
 import { randomUUID } from "node:crypto";
 import type { Action } from "document-model";
 import { z } from "zod";
-import { StudioProductV1 } from "vetra-app/document-models";
-import type { placeholderName as PlaceholderName } from "vetra-app/document-models/studio-product";
+import { StudioProductV1 } from "document-models";
+import type { placeholderName as PlaceholderName } from "document-models/studio-product";
 import { defineCommand } from "../../framework.js";
 import { activePhases, claimedMissingTools, toolsGained } from "../../agents/phase-tools.js";
 import { requestLiveTarget, type OrchestratorContext } from "../../launch/orchestrator.js";

@@ -6,7 +6,7 @@ import { verifyActionSignature } from "@powerhousedao/reactor";
 import {
   applyCreateEnvironment,
   createNewEnvironmentController,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 import type { ReactorGraphQLClient } from "@powerhousedao/reactor-browser";
 import {
   deserializeSignature,

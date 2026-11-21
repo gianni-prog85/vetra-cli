@@ -5,7 +5,7 @@
  * tick. Put custom bindings in `framework.ts`, not here — edits to
  * this file will be overwritten.
  */
-import { defineRegistry } from '@powerhousedao/ph-clint';
+import { defineRegistry } from '@powerhousedao/clint';
 import { ChatSession } from '@powerhousedao/clint-common/document-models/chat-session';
 
 /**

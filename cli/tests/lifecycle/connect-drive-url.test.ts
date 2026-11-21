@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import { connectDriveUrlOnSwitchboardReady } from "../../src/lifecycle/connect-drive-url.js";
 
 const READY = {

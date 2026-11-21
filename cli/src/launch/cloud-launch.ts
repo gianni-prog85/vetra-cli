@@ -13,7 +13,7 @@
  * runs from the browser — the browser writes request operations into the
  * product document and the agent's trigger calls these (E7).
  */
-import { CLOUD_BASE_DOMAIN } from "@powerhousedao/vetra-cloud-client";
+import { CLOUD_BASE_DOMAIN } from "../../../cloud-client/index.js";
 import type { Config } from "../framework.js";
 import { getBearerToken } from "../auth/renown.js";
 import { resolveCloudConfig, resolveVetraAppsEndpoint } from "../cloud/config.js";

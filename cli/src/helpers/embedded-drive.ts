@@ -13,7 +13,7 @@
  * already-cached reactor. The configured `vetra` drive has role 'personal',
  * so `personalDriveId` is set; fall back to `driveId` for safety.
  */
-import type { ReactorContext } from "@powerhousedao/ph-clint";
+import type { ReactorContext } from "@powerhousedao/clint";
 
 export interface EmbeddedDrive {
   reactor: Pick<ReactorContext, "client">;

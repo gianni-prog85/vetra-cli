@@ -10,7 +10,7 @@
  * regenerated whenever the spec's `documentTypes` list changes.
  */
 import { z } from 'zod';
-import { createTypes } from '@powerhousedao/ph-clint';
+import { createTypes } from '@powerhousedao/clint';
 import { registry } from './framework.gen.js';
 import { DEFAULT_PH_VERSION } from './constants.js';
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { createProcessManager } from '@powerhousedao/ph-clint';
+import { createProcessManager } from '@powerhousedao/clint';
 import { defineCommand } from '../../framework.js';
 import { resolveReactorProjectPath } from '../../helpers/project.js';
 import { formatProcessFailure } from '../../helpers/cli-errors.js';

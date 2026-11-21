@@ -1,6 +1,6 @@
 /**
  * Cloud (vetra.io) integration for the Deploy section. Constants + helpers live
- * in `@powerhousedao/vetra-cloud-client` (shared with vetra); re-exported
+ * in `cloud-client/` (shared with the cli); re-exported
  * here so the Studio deploy modules keep a stable local import path.
  */
 export {
@@ -9,4 +9,4 @@ export {
   resolveCloudDriveId,
   MANAGEABLE_SERVICES,
   type CloudServiceType,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";

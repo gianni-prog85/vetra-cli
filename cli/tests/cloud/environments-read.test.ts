@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterOwn,
   type EnvironmentSummary,
-} from "@powerhousedao/vetra-cloud-client";
+} from "../../../cloud-client/index.js";
 
 function env(p: Partial<EnvironmentSummary>): EnvironmentSummary {
   return {

@@ -1,4 +1,4 @@
-import { readPackageInfo } from '@powerhousedao/ph-clint';
+import { readPackageInfo } from '@powerhousedao/clint';
 
 const pkg = readPackageInfo(import.meta.url);
 

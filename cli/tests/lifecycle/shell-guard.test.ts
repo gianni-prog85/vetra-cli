@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 import {
   CHECKS_REFUSAL,
   GIT_REFUSAL,

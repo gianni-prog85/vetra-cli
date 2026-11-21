@@ -20,7 +20,7 @@
  * contribute a `tool` wrap that recognises the two writing workspace tools
  * by name, inspects `args.path`, and throws before the inner execute runs.
  */
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 
 const WRITE_TOOLS = new Set([
   "mastra_workspace_write_file",

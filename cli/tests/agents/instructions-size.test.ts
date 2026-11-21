@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prompts', 'agent-profiles');
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'prompts', 'agent-profiles');
 const MAX_MAIN_INSTRUCTION_BYTES = 8 * 1024;
 
 /** The main agent's always-loaded instructions: its profile sections, as the build joins them. */

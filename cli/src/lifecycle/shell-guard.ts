@@ -13,7 +13,7 @@
  *
  * Same hook point as gen-guard: a `tool` wrap on the workspace tool.
  */
-import type { LifecycleHook } from "@powerhousedao/ph-clint";
+import type { LifecycleHook } from "@powerhousedao/clint";
 
 const SHELL_TOOL = "mastra_workspace_execute_command";
 

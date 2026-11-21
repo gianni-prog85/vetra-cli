@@ -9,7 +9,7 @@
  */
 import os from "node:os";
 import path from "node:path";
-import type { CheckResultInput } from "vetra-app/document-models/studio-product";
+import type { CheckResultInput } from "document-models/studio-product";
 import { FORBIDDEN_WORDS } from "./forbidden-words.js";
 
 export type ObservedCheck = {

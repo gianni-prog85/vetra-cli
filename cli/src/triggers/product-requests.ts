@@ -16,7 +16,7 @@
  * and never overlap. Nothing here needs a browser or the LLM. Only a Studio
  * (an environment id is configured) launches.
  */
-import type { ProductAccess } from "vetra-app/document-models/studio-product";
+import type { ProductAccess } from "document-models/studio-product";
 import { defineTrigger } from "../framework.js";
 import {
   AUTO_LAUNCHED_BY,

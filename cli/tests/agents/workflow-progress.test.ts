@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
  * Task 0.6: the always-loaded workflow drives the Studio's step strip through
  * `product-progress`, and the deploy skill only serves explicit requests.
  */
-const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prompts');
+const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'prompts');
 const PROFILES_DIR = path.join(PROMPTS_DIR, 'agent-profiles');
 const STEPS = ['PLAN', 'DATA', 'EDITORS', 'TESTS', 'LIVE'];
 

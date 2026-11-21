@@ -1,4 +1,4 @@
-import type { AgentProvider, StreamChunk } from '@powerhousedao/ph-clint';
+import type { AgentProvider, StreamChunk } from '@powerhousedao/clint';
 import { VETRA_AGENT_IMAGE } from './agent-image.js';
 
 /** Spec "No key means connect a model": verbatim. */

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { CLOUD_BASE_DOMAIN } from "@powerhousedao/vetra-cloud-client";
+import { CLOUD_BASE_DOMAIN } from "../../../../cloud-client/index.js";
 import { listEnvironmentsWithStudioFlag } from "../../cloud/environments-write.js";
 
 /** Public host for an environment: custom domain wins, else the generated

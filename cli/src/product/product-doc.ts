@@ -9,12 +9,12 @@
  * (`getEmbeddedDrive`): one-shot CLI runs never boot one just for this.
  */
 import type { Action } from "document-model";
-import { StudioProductV1 } from "vetra-app/document-models";
+import { StudioProductV1 } from "document-models";
 import type {
   Change,
   ChangeStatus,
   StudioProductState,
-} from "vetra-app/document-models/studio-product";
+} from "document-models/studio-product";
 import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
 
 export const STUDIO_PRODUCT_TYPE = "vetra/studio-product";

@@ -21,10 +21,10 @@ import {
   ChatSession,
   type ChatSessionState,
 } from '@powerhousedao/clint-common/document-models/chat-session';
-import { mapMastraStream } from '@powerhousedao/ph-clint/mastra';
+import { mapMastraStream } from '@powerhousedao/clint/mastra';
 import { withSignaturePolicy } from 'document-model';
-import { StudioProductV1 } from 'vetra-app/document-models';
-import type { StudioProductState } from 'vetra-app/document-models/studio-product';
+import { StudioProductV1 } from 'document-models';
+import type { StudioProductState } from 'document-models/studio-product';
 import { PauseProcessor } from '../../src/agents/pause.js';
 import type { ProductContext } from '../../src/product/product-doc.js';
 

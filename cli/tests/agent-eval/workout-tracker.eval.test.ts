@@ -67,7 +67,7 @@ const EVAL_MODEL_ID = "anthropic/claude-sonnet-4-5";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = join(__dirname, "..", "..", "src", "main.ts");
-const TSX = join(__dirname, "..", "..", "node_modules", ".bin", "tsx");
+const TSX = join(__dirname, "..", "..", "..", "node_modules", ".bin", "tsx");
 
 const optedIn = process.env.RUN_AGENT_EVALS === "1";
 const describeIfEnabled = optedIn ? describe : describe.skip;

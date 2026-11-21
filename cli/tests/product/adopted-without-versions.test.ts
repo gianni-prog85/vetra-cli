@@ -8,11 +8,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import type { StudioProductState } from "document-models/studio-product";
 import { adoptedWithoutVersions } from "../../src/product/upgrade-existing.js";
 
 const CASES = fileURLToPath(
-  new URL("../../../vetra-app/editors/vetra-studio/shell/adoptedWithoutVersions.cases.json", import.meta.url),
+  new URL("../../../editors/vetra-studio/shell/adoptedWithoutVersions.cases.json", import.meta.url),
 );
 const { cases } = JSON.parse(readFileSync(CASES, "utf-8")) as {
   cases: { name: string; state: unknown; expected: boolean }[];

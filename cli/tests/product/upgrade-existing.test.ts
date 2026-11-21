@@ -12,8 +12,8 @@ import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "
 import { addFile, driveDocumentModelModule, setDriveName } from "@powerhousedao/shared/document-drive";
 import { ChatSession } from "@powerhousedao/clint-common/document-models/chat-session";
 import { withSignaturePolicy } from "document-model";
-import { StudioProductV1 } from "vetra-app/document-models";
-import type { StudioProductState } from "vetra-app/document-models/studio-product";
+import { StudioProductV1 } from "document-models";
+import type { StudioProductState } from "document-models/studio-product";
 import { LaunchError } from "../../src/launch/errors.js";
 import { autoLaunchCandidate, ensureLiveTarget, type OrchestratorContext } from "../../src/launch/orchestrator.js";
 import { runProgress } from "../../src/commands/product/progress.js";
