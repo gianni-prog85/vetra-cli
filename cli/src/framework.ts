@@ -1,18 +1,19 @@
 /**
- * Per-CLI typed framework binding.
- *
- * This file is USER-OWNED. ph-clint-cli emits it once at project
- * creation and never overwrites it afterwards — edit `configSchema`
- * and `secretsSchema` freely.
- *
- * Typed factories (`defineCommand`, `defineTrigger`, ...) and the
- * document `registry` come from `framework.gen.ts`, which IS
- * regenerated whenever the spec's `documentTypes` list changes.
+ * Per-CLI typed framework binding: the config and secrets schemas, the
+ * document `registry`, and the typed factories (`defineCommand`,
+ * `defineTrigger`, ...) built from both.
  */
 import { z } from 'zod';
-import { createTypes } from '@powerhousedao/clint';
-import { registry } from './framework.gen.js';
+import { createTypes, defineRegistry } from '@powerhousedao/clint';
+import { ChatSession } from '@powerhousedao/clint-common/document-models/chat-session';
 import { DEFAULT_PH_VERSION } from './constants.js';
+
+/** Typed document registry of the document models the CLI's triggers read. */
+export const registry = defineRegistry([
+  ChatSession,
+] as const);
+
+export type Registry = typeof registry;
 
 /** Fallback chain when VETRA_MODEL_FALLBACKS is unset or blank (a model is never its own fallback). */
 export const DEFAULT_MODEL_FALLBACKS = ['deepseek/deepseek-v4.1-flash', 'google/gemini-3.1-flash-lite'] as const;
@@ -87,6 +88,3 @@ export const {
   configSchema: fullConfigSchema,
   registry,
 });
-
-export { registry } from './framework.gen.js';
-export type { Registry } from './framework.gen.js';

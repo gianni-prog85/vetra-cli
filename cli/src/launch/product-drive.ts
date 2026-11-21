@@ -604,9 +604,9 @@ export async function createDriveClient(
       }),
     createDocument: (driveId, { documentType, name }) =>
       scrubbed(async () => {
-        const created = await client.CreateEmptyDocument({ documentType, parentIdentifier: driveId });
+        const created = await client.CreateEmptyDocument({ documentType, parentIdOrSlug: driveId });
         const id = created.createEmptyDocument.id;
-        await client.RenameDocument({ documentIdentifier: id, name });
+        await client.RenameDocument({ documentIdOrSlug: id, name });
         return id;
       }),
     applyActions: (documentId, actions) =>
@@ -615,7 +615,7 @@ export async function createDriveClient(
         for (const a of actions) {
           const index = seen[a.scope] ?? 0;
           seen[a.scope] = index + 1;
-          const got = await client.GetDocument({ identifier: documentId });
+          const got = await client.GetDocument({ idOrSlug: documentId });
           if (!got.document) throw new Error(`Document ${documentId} not found.`);
           const revision = got.document.document.revisionsList.find((r) => r.scope === a.scope)?.revision ?? 0;
           // Already applied by an earlier try whose answer was lost.
@@ -624,7 +624,7 @@ export async function createDriveClient(
           const snapshot = rb.phDocumentFromGetDocument(got.document.document);
           const [signed] = await rb.prepareSignedActions([action], snapshot, actionSigner);
           await client.MutateDocument({
-            documentIdentifier: documentId,
+            documentIdOrSlug: documentId,
             actions: [dm.toTransportAction(signed)],
           });
         }

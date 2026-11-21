@@ -8,7 +8,7 @@ import {
 } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
-import { planStudioSigning } from "../../auth/studio-mode.js";
+import { activeStudioSigning } from "../../auth/studio-mode.js";
 import { assertKnownDocumentType, slugify } from "./_helpers.js";
 import {
   createSpecDocument,
@@ -61,7 +61,7 @@ export const specCreate = defineCommand({
     }
     // A new cloud Studio signs every document (Task 5.SIG, X39); the spec is
     // then created through the reactor and mirrored back signed.
-    const signatureMode = planStudioSigning(workdir, context.config).mode;
+    const signatureMode = activeStudioSigning(workdir, context.config).mode;
     const signed = signatureMode === "v2-required";
     const drive = await getEmbeddedDrive(context);
     if (signed && !drive) {

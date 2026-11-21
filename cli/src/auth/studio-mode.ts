@@ -163,6 +163,30 @@ export function planStudioSigning(
 }
 
 /**
+ * Whether the v2 mode can run. TODO(B3): the Cli attaches to a remote
+ * switchboard without the agent's signer (`runCli` passes none, and
+ * `powerhouse:writes:ready` never fires), so a v2-required Studio could not
+ * sign one write. B3 brings the signer and token through `runCli`.
+ */
+export const STUDIO_V2_SIGNING: boolean = false;
+
+/**
+ * The plan this boot runs with: {@link planStudioSigning} while
+ * {@link STUDIO_V2_SIGNING} is on, else `legacy` for every Studio. The sticky
+ * marker guarded the embedded store, which the remote path does not use: its
+ * documents live on the switchboard.
+ */
+export function activeStudioSigning(
+  workdir: string,
+  config: { environmentId?: unknown } | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): StudioSigningPlan {
+  const plan = planStudioSigning(workdir, config, env);
+  if (STUDIO_V2_SIGNING || plan.mode === "legacy") return plan;
+  return { ...plan, mode: "legacy", fresh: false };
+}
+
+/**
  * Make the planned mode sticky. Called before the reactor is built: a failure
  * here stops the boot of a new cloud Studio rather than letting it create a
  * legacy drive that could never become signed.

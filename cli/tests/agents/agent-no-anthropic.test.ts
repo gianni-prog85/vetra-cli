@@ -29,20 +29,6 @@ vi.doMock("@ai-sdk/anthropic", () => ({
     throw new Error("anthropic must not be built");
   },
 }));
-vi.doMock("@powerhousedao/ph-clint-claude-subscription", () => ({
-  createClaudeSubscriptionModel: (...a: unknown[]) => {
-    anthropicBuilt("createClaudeSubscriptionModel", a);
-    throw new Error("claude subscription must not be read");
-  },
-  createUserTokenStore: (...a: unknown[]) => {
-    anthropicBuilt("createUserTokenStore", a);
-    throw new Error("claude session must not be read");
-  },
-  resolveClaudeAgentModel: (...a: unknown[]) => {
-    anthropicBuilt("resolveClaudeAgentModel", a);
-    throw new Error("claude session must not be read");
-  },
-}));
 let wrapOpts: { maxSteps?: number } | undefined;
 vi.doMock("@powerhousedao/clint/mastra", () => ({
   createMastraHelpers: () => ({

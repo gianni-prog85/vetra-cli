@@ -12,7 +12,7 @@
  */
 
 import {AppModuleV1} from "@powerhousedao/vetra/document-models"
-import {AppModuleDocument, setAppName} from "@powerhousedao/vetra/document-models/app-module"
+import {type AppModuleDocument, setAppName} from "@powerhousedao/vetra/document-models/app-module"
 import {baseLoadFromFile} from "document-model/node"
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
 import {
   ReactorBuilder,
   ReactorClientBuilder,
-  type ReactorClientModule,
+  type InProcessReactorClientModule,
 } from '@powerhousedao/reactor';
 import { documentModels as vetraDocumentModels } from '@powerhousedao/vetra';
 import { documentModels as driveDocumentModels } from '@powerhousedao/clint-common';
@@ -49,7 +49,7 @@ async function waitUntil(
 }
 
 describe('spec-sync drive → FS integration', () => {
-  let module: ReactorClientModule;
+  let module: InProcessReactorClientModule;
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -190,17 +190,13 @@ describe('spec-sync drive → FS integration', () => {
 
     // Create a non-spec doc (the drive itself). Should not arrive on this
     // subscription.
-    const driveModel = (driveDocumentModels as any[]).find(
-      (m: any) => typeof m.utils?.createDocument === 'function',
-    );
-    if (driveModel) {
-      try {
-        const driveDoc = driveModel.utils.createDocument();
-        await module.client.create(driveDoc);
-      } catch {
-        // Some doc-model types require additional setup; ignore — the point
-        // is just that observed[] stays empty for non-app types.
-      }
+    const [driveModel] = driveDocumentModels;
+    try {
+      const driveDoc = driveModel.utils.createDocument();
+      await module.client.create(driveDoc);
+    } catch {
+      // Some doc-model types require additional setup; ignore — the point
+      // is just that observed[] stays empty for non-app types.
     }
 
     await new Promise((r) => setTimeout(r, 100));

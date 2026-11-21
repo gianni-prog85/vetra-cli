@@ -1,11 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import type { LifecycleInitContext } from '@powerhousedao/clint';
+import type { LifecycleInitContext, ServiceBuildContext } from '@powerhousedao/clint';
+import type { Config } from '../../src/framework.js';
 import {
   deployBasePath,
   proxyBasePathHook,
   reactorProject,
 } from '../../src/services/reactor-project.js';
+import { defaultConfig } from '../spec/_fixtures.js';
+
+/** A ServiceBuildContext as the service manager builds it (no proxy mount). */
+function buildCtx(params?: Record<string, unknown>): ServiceBuildContext<Config> {
+  return { ...(params ? { params } : {}), config: defaultConfig(), proxy: { basePath: '' } };
+}
 
 // ── deployBasePath ─────────────────────────────────────────────────
 
@@ -43,7 +50,7 @@ function initHook(proxyPublicUrl: string | undefined): void {
 function baseFlag(): string {
   const { command } = reactorProject;
   if (typeof command !== 'function') throw new Error('expected command function');
-  const match = /--base (\S+)/.exec(command());
+  const match = /--base (\S+)/.exec(command(buildCtx()));
   if (!match?.[1]) throw new Error('--base flag not found in command');
   return match[1];
 }
@@ -83,7 +90,7 @@ describe('reactor-project --renown-namespace', () => {
     const { command } = reactorProject;
     if (typeof command !== 'function')
       throw new Error('expected command function');
-    const cmd = command({ config: {} } as unknown as Parameters<typeof command>[0]);
+    const cmd = command(buildCtx());
     const previewNamespace = /--renown-namespace\s+(\S+)/.exec(cmd)?.[1];
     expect(previewNamespace).toBeDefined();
     expect(previewNamespace).not.toBe(studioNamespace());
@@ -96,7 +103,7 @@ describe('reactor-project env — public preview reactor', () => {
   it('disables auth so the preview reactor boots OPEN', () => {
     const { env } = reactorProject;
     if (typeof env !== 'function') throw new Error('expected env function');
-    const e = env({ params: { switchboardPort: 4001 } } as Parameters<typeof env>[0]);
+    const e = env(buildCtx({ switchboardPort: 4001 }));
     expect(e.AUTH_ENABLED).toBe('false');
     expect(e.DOCUMENT_PERMISSIONS_ENABLED).toBe('false');
     expect(e.PORT).toBe('4001');
@@ -105,7 +112,7 @@ describe('reactor-project env — public preview reactor', () => {
   it('clears admin/credential/protection hygiene keys', () => {
     const { env } = reactorProject;
     if (typeof env !== 'function') throw new Error('expected env function');
-    const e = env({ params: { switchboardPort: 4001 } } as Parameters<typeof env>[0]);
+    const e = env(buildCtx({ switchboardPort: 4001 }));
     expect(e.DEFAULT_PROTECTION).toBe('false');
     expect(e.SKIP_CREDENTIAL_VERIFICATION).toBe('false');
     expect(e.ADMINS).toBe('');

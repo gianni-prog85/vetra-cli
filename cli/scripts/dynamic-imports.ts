@@ -1,9 +1,8 @@
-// Bare `import("<pkg>")` calls tsdown leaves in dist resolve at runtime from
-// dist/node_modules, exactly like a leftover `__require`. @mastra/core loads
-// the workspace shell's `execa` this way (`const mod = "execa"; await
+// Bare `import("<pkg>")` calls a bundle keeps resolve at runtime from the
+// installed dependencies, exactly like a leftover `__require`. @mastra/core
+// loads the workspace shell's `execa` this way (`const mod = "execa"; await
 // import(mod)`, which rolldown inlines to `import(/* @vite-ignore */ "execa")`
-// without bundling it); unvendored, every shell call in a global install
-// failed with "execa is required for local process execution".
+// without bundling it), so `execa` must be installed next to the bundle.
 // Only imports marked `@vite-ignore` (deliberately left unbundled): plain
 // `import("x")` text also appears in bundled docs and comments.
 const DYNAMIC_IMPORT =

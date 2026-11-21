@@ -1,7 +1,9 @@
-import { readPackageInfo } from '@powerhousedao/clint';
+import { readOwnPackage } from './own-package.js';
 
-const pkg = readPackageInfo(import.meta.url);
+const pkg = readOwnPackage();
 
 export const CLI_ROOT = pkg.root;
-export const CLI_NAME = pkg.name.replace(/-cli$/, '');
+// A literal, not the package name: it is the VETRA_* env prefix, the
+// `.ph/vetra` store folder and the name in messages.
+export const CLI_NAME = 'vetra';
 export const CLI_VERSION = pkg.version;

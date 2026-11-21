@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ServiceInstanceStatus } from "@powerhousedao/clint";
 
 import { restartPreview, startPreview } from "../../src/preview-server/starter.js";
 import { getPreviewDriveId } from "../../src/helpers/reactor-project-preview.js";
@@ -8,7 +9,7 @@ import { makeWorkdir } from "../spec/_fixtures.js";
 
 interface FakeInstance {
   workdir: string;
-  status: "starting" | "ready" | "stopped" | "failed";
+  status: ServiceInstanceStatus["status"];
   instanceId?: string;
 }
 

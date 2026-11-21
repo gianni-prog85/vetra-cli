@@ -103,7 +103,7 @@ describe("shellGuard tool wrap", () => {
 
   it("forwards installs with every argument", async () => {
     const wrap = await toolWrap();
-    const inner = vi.fn(() => "ok");
+    const inner = vi.fn((_args: unknown, _toolContext: unknown) => "ok");
     const wrapped = wrap("mastra_workspace_execute_command", { execute: inner });
     const args = { command: "pnpm add zod" };
     const ctx = { workspace: {} };

@@ -64,7 +64,9 @@ describe('workflow drives the step strip (Task 0.6)', () => {
     const preamble = flat(readFileSync(path.join(PROMPTS_DIR, 'skills-tpl', 'deploy', '.preamble.md'), 'utf-8'));
     expect(preamble.slice(0, 400)).toMatch(/Studio products go live by themselves/);
     const { cli } = await import('../../src/cli.js');
-    const description = cli.getMetadata().prompts?.skills?.['deploy']?.description ?? '';
+    // A plain string is clint's shorthand for { description }.
+    const skill = cli.getMetadata().prompts?.skills['deploy'];
+    const description = typeof skill === 'string' ? skill : (skill?.description ?? '');
     expect(description).toMatch(/only for an explicit request/i);
   }, 60_000);
 });

@@ -16,20 +16,34 @@
  *     recorded on creation, which makes the Studio sticky across restarts.
  *
  * Local Studios and cloud Studios from before the marker get none of this and
- * keep the legacy, unsigned path.
+ * keep the legacy, unsigned path. TODO(B3): nothing calls `studioReactorSigning`
+ * until the remote attach takes a signer (`STUDIO_V2_SIGNING`).
  */
 import { readFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import type {
-  DriveConfig,
-  ReactorSigningOptions,
-  ReactorClientModule,
-} from "@powerhousedao/clint";
+import type { DriveConfig, ReactorClientModule } from "@powerhousedao/clint";
 import type { IRenown, ISigner } from "@renown/sdk/node";
 import { getRenown } from "./renown.js";
-import { createOwnerTrustPolicy } from "./owner-trust.js";
+import {
+  createOwnerTrustPolicy,
+  type SignatureTrustPolicyLike,
+} from "./owner-trust.js";
 import { studioStoreDir } from "./studio-mode.js";
+
+/**
+ * The signing a v2-required Studio's reactor takes. On the remote attach
+ * (B3) `signer`, `legacyDocuments` and `onSignerChange` go to the agent's
+ * writes; the trust and create policies are the switchboard's.
+ */
+export interface StudioSigningOptions {
+  signer: ISigner;
+  trustPolicy: SignatureTrustPolicyLike;
+  createSignaturePolicy: "v2-required";
+  legacyDocuments: "refuse";
+  /** Subscribe to the signer's user changes; returns an unsubscribe. */
+  onSignerChange: (listener: () => void) => () => void;
+}
 
 /** Pointer to the drive this Studio created (`<workdir>/.ph/vetra`). */
 export function studioDrivePointerPath(workdir: string): string {
@@ -130,16 +144,16 @@ export function signerHasUser(signer: { user?: { address?: string } }): boolean 
  */
 export async function studioReactorSigning(
   input: StudioSigningInput,
-): Promise<{ signing: ReactorSigningOptions; renown: IRenown }> {
+): Promise<{ signing: StudioSigningOptions; renown: IRenown }> {
   const renown =
     input.renown ?? (await getRenown(input.workdir, input.renownUrl));
-  const signer = renown.signer as unknown as ReactorSigningOptions["signer"];
+  const signer = renown.signer;
   const trustPolicy = createOwnerTrustPolicy({
     renownUrl: input.renownUrl,
-    ownSigner: signer as never,
+    ownSigner: signer,
     adminsEnv: input.adminsEnv,
   });
-  const signing: ReactorSigningOptions = {
+  const signing: StudioSigningOptions = {
     signer,
     trustPolicy,
     createSignaturePolicy: "v2-required",

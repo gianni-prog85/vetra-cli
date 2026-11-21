@@ -62,6 +62,7 @@ describe("Renown signing for Vetra Cloud", () => {
   it("Renown signer produces a v2 tuple the shared verifier accepts as v2-required", async () => {
     const signer = await renownSigner(workdir);
     if (!signer.app) throw new Error("Renown signer has no app identity");
+    if (!signer.user) throw new Error("Renown signer has no user");
 
     const target = { documentId: "fake-env-id", branch: "main" };
     const action: Action = {

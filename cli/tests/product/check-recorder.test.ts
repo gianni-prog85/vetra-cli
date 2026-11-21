@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { StudioProductV1 } from "document-models";
+import type { StudioProductDocument } from "document-models/studio-product";
 import { checkRecorder } from "../../src/lifecycle/check-recorder.js";
 import { reactorProjectCheck } from "../../src/commands/reactor-project/check.js";
 import { attachCheckResults, capReason, readCheckResults } from "../../src/product/check-results.js";
@@ -145,7 +146,7 @@ describe("check-recorder", () => {
 
   it("records spec-generate outcomes as GENERATE runs", async () => {
     h = await productHarness();
-    await specCreate.execute({ type: "powerhouse/document-model", name: "Todo", dryRun: false }, makeCtx(project) as never);
+    await specCreate.execute({ type: "powerhouse/document-model", name: "Todo", dryRun: false }, makeCtx(project));
     let codegenOk = false;
     const ctx = {
       ...makeCtx(project),
@@ -153,7 +154,7 @@ describe("check-recorder", () => {
         codegenOk ? { success: true, output: "" } : { success: false, output: 'Unknown type "Foo"' },
     };
     const tool = wrapWith(h, "spec-generate", {
-      execute: (input) => specGenerate.execute(input as never, ctx as never),
+      execute: (input) => specGenerate.execute(input as never, ctx),
     });
     await expect(tool.execute({ name: "Todo", skipChecks: true }, {})).rejects.toThrow(/Unknown type/);
     codegenOk = true;
@@ -201,8 +202,8 @@ describe("check-recorder", () => {
         personalDriveId: h!.driveId,
         client: {
           get: async (id: string) => {
-            const doc = (await client.get(id)) as { state: { global: { changes?: Array<{ status: string }> } } };
-            for (const c of doc.state.global.changes ?? []) c.status = "LAUNCHED";
+            const doc = await client.get<StudioProductDocument>(id);
+            for (const c of doc.state.global.changes) c.status = "LAUNCHED";
             return doc;
           },
           execute: async () => {

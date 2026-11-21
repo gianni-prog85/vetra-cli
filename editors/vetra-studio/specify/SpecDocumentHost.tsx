@@ -1,10 +1,13 @@
 import {
+  EditorDocumentProvider,
   setSelectedNode,
+  useDocumentById,
   useEditorModuleById,
   useEditorModulesForDocumentType,
   useNodeById,
   useSelectedNode,
 } from "@powerhousedao/reactor-browser";
+import type { EditorModule } from "document-model";
 import { Suspense, useEffect, useRef } from "react";
 import { DOCUMENT_MODEL_TYPE } from "./projects.js";
 
@@ -20,12 +23,27 @@ function Loading() {
 }
 
 /**
+ * The editor with its document, as Connect hosts one: `document` and
+ * `dispatch` as props and through the editor document context. Suspends
+ * while the document loads.
+ */
+function HostedEditor({ id, editor }: { id: string; editor: EditorModule }) {
+  const [document, dispatch] = useDocumentById(id);
+  if (!document) return <Loading />;
+  const Editor = editor.Component;
+  return (
+    <EditorDocumentProvider document={document} dispatch={dispatch}>
+      <Editor documentId={id} document={document} dispatch={dispatch} />
+    </EditorDocumentProvider>
+  );
+}
+
+/**
  * Renders the registry editor matching `documentType` for a document node.
- * The editor's Component is zero-prop and reads the *selected* document, so
- * this host drives Connect's node selection: select when the node resolves,
- * clear on unmount only if the selection is still ours. Render is gated on
- * the selection matching so the editor never mounts without its selected
- * document.
+ * The editor and its toolbar also act on Connect's *selected* node, so this
+ * host drives the selection: select when the node resolves, clear on unmount
+ * only if the selection is still ours. Render is gated on the selection
+ * matching so the editor never mounts before its node is selected.
  *
  * The editor ships its own toolbar whose "Close document" button moves the
  * global selection to the parent folder. The host observes the selection
@@ -99,7 +117,7 @@ export function SpecDocumentHost({
   if (!node || selected?.id !== id) return <Loading />;
   return (
     <Suspense fallback={<Loading />}>
-      <mod.Component />
+      <HostedEditor id={id} editor={mod} />
     </Suspense>
   );
 }

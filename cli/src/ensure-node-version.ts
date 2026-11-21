@@ -1,4 +1,4 @@
-// Side-effecting Node version guard. Imported first in main.ts so it fails
+// Side-effecting Node version guard. Imported first by cli/index.ts so it fails
 // fast before the import graph, which relies on Node 24+ APIs/syntax.
 const MIN_MAJOR = 24;
 

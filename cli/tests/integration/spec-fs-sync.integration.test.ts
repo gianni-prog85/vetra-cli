@@ -15,8 +15,9 @@ import path from "node:path";
 import {
   ReactorBuilder,
   ReactorClientBuilder,
-  type ReactorClientModule,
+  type InProcessReactorClientModule,
 } from "@powerhousedao/reactor";
+import type { ReactorContext } from "@powerhousedao/clint";
 import { documentModels as vetraDocumentModels } from "@powerhousedao/vetra";
 import { documentModels as driveDocumentModels } from "@powerhousedao/clint-common";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
@@ -80,8 +81,14 @@ function makeLog(): { logs: CapturedLog[]; api: {
   };
 }
 
+/** The ReactorContext view of an in-process client, as clint's
+ * buildDefaultReactor makes it. */
+function contextOf(m: InProcessReactorClientModule): Pick<ReactorContext, "client"> {
+  return { client: m.client as ReactorContext["client"] };
+}
+
 describe("spec-fs-sync FS → drive", () => {
-  let module: ReactorClientModule;
+  let module: InProcessReactorClientModule;
   let tmpDir: string;
   let driveId: string;
 
@@ -232,7 +239,7 @@ describe("spec-fs-sync FS → drive", () => {
       const submitted = await applyFsChangesToReactor(
         [filePath],
         tmpDir,
-        module,
+        contextOf(module),
         driveId,
         log,
       );
@@ -279,7 +286,7 @@ describe("spec-fs-sync FS → drive", () => {
     await expect(module.client.get(doc.header.id)).rejects.toBeTruthy();
 
     const { logs, api: log } = makeLog();
-    const submitted = await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
+    const submitted = await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
     expect(submitted).toBeGreaterThan(0);
 
     await waitUntil(async () => {
@@ -298,7 +305,7 @@ describe("spec-fs-sync FS → drive", () => {
 
     // Re-sync is idempotent: no duplicate ops, no duplicate nodes.
     const before = (await module.client.getOperations(doc.header.id)).results.length;
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
     await new Promise((r) => setTimeout(r, 100));
     expect((await module.client.getOperations(doc.header.id)).results.length).toBe(before);
     expect((await driveNodes()).filter((n) => n.kind === "file" && n.id === doc.header.id)).toHaveLength(1);
@@ -324,7 +331,7 @@ describe("spec-fs-sync FS → drive", () => {
     expect(filePath.startsWith(path.join(projectDir, "specs"))).toBe(true);
 
     const { logs, api: log } = makeLog();
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
 
     const nodes = await driveNodes();
     const folder = nodes.find((n) => n.kind === "folder" && n.name === project);
@@ -334,7 +341,7 @@ describe("spec-fs-sync FS → drive", () => {
     expect(logs.some((l) => l.level === "error")).toBe(false);
 
     // Re-sync: no duplicate folder/file nodes.
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
     const after = await driveNodes();
     expect(after.filter((n) => n.kind === "folder" && n.name === project)).toHaveLength(1);
     expect(after.filter((n) => n.kind === "file" && n.id === draft.header.id)).toHaveLength(1);
@@ -354,7 +361,7 @@ describe("spec-fs-sync FS → drive", () => {
     );
     await saveSpec(mutated, tmpDir);
 
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId);
 
     await waitUntil(async () => {
       const inDrive = await module.client.get<AppModuleDocument>(id);
@@ -380,8 +387,8 @@ describe("spec-fs-sync FS → drive", () => {
     const countBefore = opsBefore.results.length;
     expect(countBefore).toBeGreaterThan(0);
 
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId);
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId);
 
     // Give the queue a tick; if dedup were broken the count would grow.
     await new Promise((r) => setTimeout(r, 100));
@@ -404,15 +411,15 @@ describe("spec-fs-sync FS → drive", () => {
     // disk from makeSpecFile already has the ops, so we re-use that.
     const inDrive = await module.client.get<AppModuleDocument>(id);
     await syncSpecsToFs([inDrive], tmpDir);
-    await persistDocToFs(id, "round-trip"); // re-attach ops onto the file
+    await persistDocToFs(id); // re-attach ops onto the file
 
     const opsBefore = (await module.client.getOperations(id)).results.length;
 
     // FS → drive: the file's ops are all already in the store; this must
     // be a successful no-op (dedup by action.id).
     const { logs, api: log } = makeLog();
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
-    await applyFsChangesToReactor([filePath], tmpDir, module, driveId, log);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
+    await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
 
     await new Promise((r) => setTimeout(r, 100));
 

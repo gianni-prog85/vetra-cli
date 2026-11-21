@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import type { SpecMirrorIo } from '../../src/triggers/spec-sync.js';
-import { documentModelDocumentModelModule, actions, Operation } from 'document-model';
+import { documentModelDocumentModelModule, actions, type Operation } from 'document-model';
 
 // Only needed so the module imports (listSpecTypes runs at load; realSpecMirrorIo
 // is built from these). Tests inject their own io, so these are never exercised.
@@ -18,6 +18,9 @@ vi.doMock('../../src/helpers/project-lock.js', () => ({
 
 const { syncSpecsToFs, mirrorSpecDoc, specRevision, resolveDriveNodes } =
   await import('../../src/triggers/spec-sync.js');
+
+/** The operation-history client syncSpecsToFs reads. */
+type OperationsClient = NonNullable<NonNullable<Parameters<typeof syncSpecsToFs>[2]>['client']>;
 
 type LoadExisting = (
   projectDir: string,
@@ -171,14 +174,14 @@ describe('syncSpecsToFs', () => {
     doc = documentModelDocumentModelModule.reducer(doc, actions.setModelName({name: "Test Model"}));
     doc = documentModelDocumentModelModule.reducer(doc, actions.setModelDescription({description: "A test model"}));
 
-    const getOperations = vi.fn<(docId: string) => Promise<unknown>>();
+    const getOperations = vi.fn<OperationsClient['getOperations']>();
     getOperations.mockResolvedValueOnce({
       results: [
        ...doc.operations.global.slice(0, -1),
        ...doc.operations.document
       ] as Operation[],
       next: () =>
-        Promise.resolve({ results: [doc.operations.global.at(-1)] }),
+        Promise.resolve({ results: doc.operations.global.slice(-1) }),
     });
     const docs = [
       { header: { id: 'a', documentType: 'powerhouse/app', name: 'foo' } },

@@ -183,7 +183,7 @@ describe("spec-preview commands against a live (mocked) reactor-project", () => 
       { document: { document: SAMPLE_FULL } },
     ]);
     const result = await specPreviewGet.execute(
-      { name: "Alpha" },
+      { name: "Alpha", full: false },
       withLiveReactorProject(workdir),
     );
     expect(result.text).toMatch(/Alpha/);
@@ -195,7 +195,7 @@ describe("spec-preview commands against a live (mocked) reactor-project", () => 
       { document: { document: SAMPLE_FULL } },
     ]);
     const result = await specPreviewGet.execute(
-      { name: "Alpha", filter: "$.global.name" },
+      { name: "Alpha", full: false, filter: "$.global.name" },
       withLiveReactorProject(workdir),
     );
     expect(result.text).toMatch(/Alpha/);

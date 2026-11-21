@@ -114,9 +114,7 @@ export const ADVANCED_ONLY: readonly string[] = [
   'reactor-project-publish',
   'reactor-project-publish-status',
   'reactor-project-manage',
-  'vetra-studio-*',
   'vetra-agent-run',
-  'claude-*',
   'config',
   'cli-docs',
   // Destructive or process-level workspace tools.
@@ -124,7 +122,6 @@ export const ADVANCED_ONLY: readonly string[] = [
   'mastra_workspace_mkdir',
   'mastra_workspace_get_process_output',
   'mastra_workspace_kill_process',
-  'mastra_workspace_lsp_inspect',
 ];
 
 /** Step statuses that mean the step is finished. */

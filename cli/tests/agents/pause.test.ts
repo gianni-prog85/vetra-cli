@@ -3,6 +3,8 @@ import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { mapMastraStream } from '@powerhousedao/clint/mastra';
 import { StudioProductV1 } from 'document-models';
+import type { StudioProductDocument } from 'document-models/studio-product';
+import type { StreamChunk } from '@powerhousedao/clint';
 import { z } from 'zod';
 import { PAUSED_REASON, PauseProcessor, agentLogger, isPauseAbortLog, isPaused } from '../../src/agents/pause.js';
 import { productHarness, type ProductHarness } from '../product/helpers.js';
@@ -65,7 +67,7 @@ async function runTurn(
   h: ProductHarness,
   model: ReturnType<typeof scriptedModel>,
   onWork: () => Promise<void>,
-): Promise<{ raw: Array<{ type: string; payload?: Record<string, unknown> }>; mapped: Array<Record<string, unknown>> }> {
+): Promise<{ raw: Array<{ type: string; payload?: Record<string, unknown> }>; mapped: StreamChunk[] }> {
   const work = createTool({
     id: 'work',
     description: 'does one unit of work',
@@ -92,8 +94,8 @@ async function runTurn(
       yield chunk;
     }
   }
-  const mapped: Array<Record<string, unknown>> = [];
-  for await (const c of mapMastraStream(tap() as never)) mapped.push(c as Record<string, unknown>);
+  const mapped: StreamChunk[] = [];
+  for await (const c of mapMastraStream(tap() as never)) mapped.push(c);
   return { raw, mapped };
 }
 
@@ -104,9 +106,12 @@ describe('PauseProcessor', () => {
     h = undefined;
   });
 
-  const pause = () => h!.module.client.execute(h!.productId!, 'main', [a.pauseChange({ changeId: 'change-1', at: AT })]);
-  const resume = () =>
-    h!.module.client.execute(h!.productId!, 'main', [a.resumeChange({ changeId: 'change-1', at: AT })]);
+  const pause = async () => {
+    await h!.module.client.execute(h!.productId!, 'main', [a.pauseChange({ changeId: 'change-1', at: AT })]);
+  };
+  const resume = async () => {
+    await h!.module.client.execute(h!.productId!, 'main', [a.resumeChange({ changeId: 'change-1', at: AT })]);
+  };
 
   it('pause stops after the current step, not mid-tool', async () => {
     h = await productHarness();
@@ -179,7 +184,8 @@ describe('PauseProcessor', () => {
   it('a turn that starts on a paused change waits for the resume, then stops', async () => {
     h = await productHarness();
     await pause();
-    const read = () => h!.module.client.get(h!.productId!).then((d) => ({ id: 'p', state: (d as { state: { global: never } }).state.global }));
+    const read = () =>
+      h!.module.client.get<StudioProductDocument>(h!.productId!).then((d) => ({ id: 'p', state: d.state.global }));
     const sleeps: number[] = [];
     const abort = (reason?: string): never => {
       throw new Error(`abort:${reason}`);

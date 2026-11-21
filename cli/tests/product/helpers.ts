@@ -2,7 +2,7 @@ import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { withSignaturePolicy } from "document-model";
 import { StudioProductV1 } from "document-models";
-import type { StudioProductState } from "document-models/studio-product";
+import type { StudioProductDocument, StudioProductState } from "document-models/studio-product";
 import type { ProductContext } from "../../src/product/product-doc.js";
 
 const a = StudioProductV1.actions;
@@ -51,7 +51,7 @@ export async function productHarness(
     driveId,
     productId,
     async state() {
-      const d = (await module.client.get(productId!)) as { state: { global: StudioProductState } };
+      const d = await module.client.get<StudioProductDocument>(productId!);
       return d.state.global;
     },
     async kill() {

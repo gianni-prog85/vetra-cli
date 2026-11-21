@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  activeStudioSigning,
   commitStudioSigningPlan,
   environmentIdOf,
   hasReactorStore,
@@ -99,5 +100,19 @@ describe("planStudioSigning", () => {
     expect(onDisk).toEqual(marker);
     expect(marker.since).toMatch(/^\d{4}-/);
     expect(hasReactorStore(workdir)).toBe(false);
+  });
+});
+
+describe("activeStudioSigning (v2 mode off until B3)", () => {
+  it("runs a fresh cloud Studio and a marked one legacy", () => {
+    expect(activeStudioSigning(workdir, { environmentId: "env-1" }, {})).toMatchObject({
+      cloud: true,
+      mode: "legacy",
+      fresh: false,
+    });
+    writeSigningMarker(workdir, "env-1");
+    expect(activeStudioSigning(workdir, {}, {}).mode).toBe("legacy");
+    // The planner itself is unchanged.
+    expect(planStudioSigning(workdir, {}, {}).mode).toBe("v2-required");
   });
 });

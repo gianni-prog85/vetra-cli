@@ -4,16 +4,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Action } from "document-model";
 import { withSignaturePolicy } from "document-model";
-import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "@powerhousedao/reactor";
+import { ReactorBuilder, ReactorClientBuilder, type InProcessReactorClientModule } from "@powerhousedao/reactor";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { ChatSession } from "@powerhousedao/clint-common/document-models/chat-session";
 import type {
+  ChatSessionDocument,
   ChatSessionState,
   ContentPart,
   Message,
 } from "@powerhousedao/clint-common/document-models/chat-session";
 import { StudioProductV1 } from "document-models";
-import type { StudioProductState } from "document-models/studio-product";
+import type { StudioProductDocument, StudioProductState } from "document-models/studio-product";
 import {
   BREATHER_MILESTONE,
   BREATHER_REASON,
@@ -279,7 +280,7 @@ describe("supervisor rules: metrics", () => {
 /* ---------- the trigger's pass, against a real in-memory reactor ---------- */
 
 describe("supervise", () => {
-  let module: ReactorClientModule | undefined;
+  let module: InProcessReactorClientModule | undefined;
   afterEach(async () => {
     await module?.reactor.kill().completed;
     module = undefined;
@@ -320,9 +321,9 @@ describe("supervise", () => {
     ] as Action[]);
   }
   const getProduct = async (id: string) =>
-    ((await module!.client.get(id)) as { state: { global: StudioProductState } }).state.global.changes[0];
+    (await module!.client.get<StudioProductDocument>(id)).state.global.changes[0];
   const lastMessage = async (id: string) =>
-    ((await module!.client.get(id)) as { state: { global: ChatSessionState } }).state.global.messages.at(-1)!;
+    (await module!.client.get<ChatSessionDocument>(id)).state.global.messages.at(-1)!;
   const now = () => new Date(T0 + 60_000);
 
   it("marks stuck and records metrics — once", async () => {

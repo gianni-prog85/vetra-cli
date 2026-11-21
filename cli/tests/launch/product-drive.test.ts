@@ -697,25 +697,25 @@ describe("product drive (D21)", () => {
                 slug: id,
                 name: "",
                 documentType: String(v.documentType),
-                parentId: (v.parentIdentifier as string | null) ?? null,
+                parentId: (v.parentIdOrSlug as string | null) ?? null,
                 revision: 0,
                 state: { global: {} },
               });
-              const parent = docs.get(String(v.parentIdentifier ?? ""));
+              const parent = docs.get(String(v.parentIdOrSlug ?? ""));
               if (parent) parent.revision += 1; // ADD_FILE on the drive
               data = { createEmptyDocument: fields(id) };
               break;
             }
             case "RenameDocument":
-              docs.get(String(v.documentIdentifier))!.name = String(v.name);
-              data = { renameDocument: fields(String(v.documentIdentifier)) };
+              docs.get(String(v.documentIdOrSlug))!.name = String(v.name);
+              data = { renameDocument: fields(String(v.documentIdOrSlug)) };
               break;
             case "GetDocument":
-              data = { document: { childIds: [], document: fields(String(v.identifier)) } };
+              data = { document: { childIds: [], document: fields(String(v.idOrSlug)) } };
               break;
             case "MutateDocument": {
-              docs.get(String(v.documentIdentifier))!.revision += (v.actions as unknown[]).length;
-              data = { mutateDocument: fields(String(v.documentIdentifier)) };
+              docs.get(String(v.documentIdOrSlug))!.revision += (v.actions as unknown[]).length;
+              data = { mutateDocument: fields(String(v.documentIdOrSlug)) };
               break;
             }
             case "DocumentProtection":

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { findBareDynamicImports } from "../../scripts/dynamic-imports.js";
-import { VENDOR } from "../../scripts/vendor-list.js";
 
 describe("findBareDynamicImports", () => {
   it("finds the unbundled import rolldown leaves for @mastra/core's shell", () => {
@@ -17,9 +16,5 @@ describe("findBareDynamicImports", () => {
       `import(/* @vite-ignore */ "\${path}")`,
     ].join("\n");
     expect(findBareDynamicImports(code)).toEqual([]);
-  });
-
-  it("vendors execa so the workspace shell works in a global install", () => {
-    expect(VENDOR).toContain("execa");
   });
 });

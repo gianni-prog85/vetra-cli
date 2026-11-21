@@ -84,7 +84,7 @@ describe("genGuard tool wrap", () => {
 
   it("forwards all invocation arguments for allowed paths", async () => {
     const wrap = await toolWrapOf(genGuard());
-    const inner = vi.fn(() => "ok");
+    const inner = vi.fn((_args: unknown, _toolContext: unknown) => "ok");
     const wrapped = wrap("mastra_workspace_write_file", { execute: inner });
     const args = { path: "editors/todo/editor.tsx", content: "x" };
     const toolContext = { workspace: {}, requestContext: {} };
@@ -102,7 +102,7 @@ describe("tsCheck tool wrap", () => {
 
   it("forwards all invocation arguments and returns the inner result", async () => {
     const wrap = await toolWrapOf(tsCheck());
-    const inner = vi.fn(async () => ({ success: true }));
+    const inner = vi.fn(async (_args: unknown, _toolContext: unknown) => ({ success: true }));
     const wrapped = wrap("mastra_workspace_write_file", { execute: inner });
     const args = { path: "README.md", content: "# hi" };
     const toolContext = { workspace: {}, requestContext: {} };
@@ -112,7 +112,7 @@ describe("tsCheck tool wrap", () => {
 
   it("skips checking for .ts files that do not exist on disk", async () => {
     const wrap = await toolWrapOf(tsCheck());
-    const inner = vi.fn(async () => "written");
+    const inner = vi.fn(async (_args: unknown, _toolContext: unknown) => "written");
     const wrapped = wrap("mastra_workspace_edit_file", { execute: inner });
     await expect(
       wrapped.execute({ context: { path: "no/such/dir/file.ts" } }, {}),

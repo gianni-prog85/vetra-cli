@@ -19,7 +19,7 @@ import path from "node:path";
 import {
   ReactorBuilder,
   ReactorClientBuilder,
-  type ReactorClientModule,
+  type InProcessReactorClientModule,
 } from "@powerhousedao/reactor";
 import { documentModels as vetraDocumentModels } from "@powerhousedao/vetra";
 import { documentModels as driveDocumentModels } from "@powerhousedao/clint-common";
@@ -58,7 +58,7 @@ function makeLog(): {
 }
 
 describe("spec-* commands → embedded drive", () => {
-  let module: ReactorClientModule;
+  let module: InProcessReactorClientModule;
   let tmpDir: string;
   let driveId: string;
 

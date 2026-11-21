@@ -18,7 +18,7 @@ describe("isBareLaunchArgs", () => {
   });
 
   it.each([
-    [["claude-login"], "subcommand"],
+    [["spec-list"], "subcommand"],
     [["reactor-project-init", "foo"], "subcommand + arg"],
     [["--version"], "--version"],
     [["-V"], "-V"],

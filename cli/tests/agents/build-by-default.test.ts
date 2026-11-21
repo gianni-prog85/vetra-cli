@@ -69,7 +69,9 @@ describe('main agent builds by default (R18)', () => {
 
   it('the product-specs skill description does not read as an alternative to building', async () => {
     const { cli } = await import('../../src/cli.js');
-    const description = cli.getMetadata().prompts?.skills?.['product-specs']?.description ?? '';
+    // A plain string is clint's shorthand for { description }.
+    const skill = cli.getMetadata().prompts?.skills['product-specs'];
+    const description = typeof skill === 'string' ? skill : (skill?.description ?? '');
     expect(description).toMatch(/alongside the build/i);
   }, 60_000);
 

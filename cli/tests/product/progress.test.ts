@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { StudioProductV1 } from "document-models";
+import type { StudioProductDocument } from "document-models/studio-product";
 import { runProgress } from "../../src/commands/product/progress.js";
 import { dispatchProduct } from "../../src/product/product-doc.js";
 import { FORBIDDEN_WORDS } from "../../src/product/forbidden-words.js";
@@ -216,7 +217,7 @@ describe("product-progress", () => {
         client: {
           ...h!.module.client,
           get: async (id: string) => {
-            const doc = (await get(id)) as { state: { global: Record<string, unknown> } };
+            const doc = await get<StudioProductDocument>(id);
             if (id === h!.productId) doc.state.global.liveVersion = 1;
             return doc;
           },

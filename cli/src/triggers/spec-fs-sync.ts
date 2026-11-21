@@ -28,7 +28,7 @@ import {
   SPECS_DIRNAME,
 } from "../helpers/spec-drive-sync.js";
 import { defineTrigger } from "../framework.js";
-import { planStudioSigning, type StudioSignatureMode } from "../auth/studio-mode.js";
+import { activeStudioSigning, type StudioSignatureMode } from "../auth/studio-mode.js";
 
 interface TriggerState {
   changed: Set<string>;
@@ -241,5 +241,5 @@ function signatureModeOf(
   config: Record<string, unknown>,
   workdir: string,
 ): StudioSignatureMode {
-  return planStudioSigning(workdir, config).mode;
+  return activeStudioSigning(workdir, config).mode;
 }

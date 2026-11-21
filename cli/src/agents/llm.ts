@@ -1,4 +1,4 @@
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createOpenRouter, type LanguageModelV2 } from '@openrouter/ai-sdk-provider';
 import { DEFAULT_MODEL_FALLBACKS, type Config } from '../framework.js';
 
 /**
@@ -119,7 +119,14 @@ export function resolveLlmSettings(
   };
 }
 
-export function createLlmModels(s: LlmSettings, opts: { fetch?: typeof fetch } = {}) {
+/** The agent's models, each an AI SDK language model on OpenRouter. */
+export interface LlmModels {
+  main: LanguageModelV2;
+  subagent: LanguageModelV2;
+  memory: LanguageModelV2;
+}
+
+export function createLlmModels(s: LlmSettings, opts: { fetch?: typeof fetch } = {}): LlmModels {
   const provider = createOpenRouter({
     apiKey: s.apiKey,
     headers: { ...OPENROUTER_ATTRIBUTION_HEADERS },

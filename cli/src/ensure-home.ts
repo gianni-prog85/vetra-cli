@@ -1,4 +1,4 @@
-// Side-effecting HOME guard. Imported first in main.ts so it runs before the
+// Side-effecting HOME guard. Imported first by cli/index.ts so it runs before the
 // rest of the import graph (Vite/chokidar) reads HOME. A container that starts
 // vetra-cli with HOME unset or empty makes chokidar throw a spurious ENOSPC on
 // the first watched file, since os.homedir() resolves to "". Resolve a usable

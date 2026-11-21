@@ -36,6 +36,8 @@ export default defineConfig({
           name: "app",
           // Node by default; the DOM test files set `// @vitest-environment happy-dom`.
           exclude: [...notOurs, "cli/**"],
+          // Projects with different maxWorkers run in separate groups.
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -46,6 +48,7 @@ export default defineConfig({
           // Many tests spawn git and hit the 5 s default timeout when every
           // core is busy, so cap the workers.
           maxWorkers: 6,
+          sequence: { groupOrder: 1 },
           include: ["cli/tests/**/*.test.ts"],
           exclude: notOurs,
         },

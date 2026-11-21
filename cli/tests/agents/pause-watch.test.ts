@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
-import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from '@powerhousedao/reactor';
+import { ReactorBuilder, ReactorClientBuilder, type InProcessReactorClientModule } from '@powerhousedao/reactor';
 import { driveDocumentModelModule } from '@powerhousedao/shared/document-drive';
 import {
   STEER_THREAD_KEY,
@@ -19,12 +19,12 @@ import {
 } from '@powerhousedao/clint-common/chat';
 import {
   ChatSession,
-  type ChatSessionState,
+  type ChatSessionDocument,
 } from '@powerhousedao/clint-common/document-models/chat-session';
 import { mapMastraStream } from '@powerhousedao/clint/mastra';
 import { withSignaturePolicy } from 'document-model';
 import { StudioProductV1 } from 'document-models';
-import type { StudioProductState } from 'document-models/studio-product';
+import type { StudioProductDocument } from 'document-models/studio-product';
 import { PauseProcessor } from '../../src/agents/pause.js';
 import type { ProductContext } from '../../src/product/product-doc.js';
 
@@ -78,7 +78,7 @@ function promptText(prompt: unknown): string {
 }
 
 describe('pause through the chat watcher', () => {
-  let module: ReactorClientModule;
+  let module: InProcessReactorClientModule;
   let productId: string;
   let sessionId: string;
   const prompts: string[] = [];
@@ -87,9 +87,9 @@ describe('pause through the chat watcher', () => {
   let triggerCtx: Record<string, unknown>;
 
   const product = async () =>
-    ((await module.client.get(productId)) as { state: { global: StudioProductState } }).state.global;
+    (await module.client.get<StudioProductDocument>(productId)).state.global;
   const session = async () =>
-    ((await module.client.get(sessionId)) as { state: { global: ChatSessionState } }).state.global;
+    (await module.client.get<ChatSessionDocument>(sessionId)).state.global;
   const send = (text: string, id = randomUUID()) =>
     module.client.execute(sessionId, 'main', [
       chat.addUserMessage({ id, createdAt: new Date().toISOString(), content: [{ id: randomUUID(), type: 'TEXT', text }] }),

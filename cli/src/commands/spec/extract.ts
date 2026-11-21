@@ -6,7 +6,7 @@ import { defineCommand } from "../../framework.js";
 import { projectInputSchema, resolveReactorProjectPath } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
-import { planStudioSigning } from "../../auth/studio-mode.js";
+import { activeStudioSigning } from "../../auth/studio-mode.js";
 import { phBuildNodeOptions } from "../../helpers/node-memory.js";
 import { loadSpecDocument } from "./registry.js";
 import { slugify } from "./_helpers.js";
@@ -56,7 +56,7 @@ export const specExtract = defineCommand({
   }),
   execute: async (input, context) => {
     const { workdir, runProcess } = context;
-    const signatureMode = planStudioSigning(workdir, context.config).mode;
+    const signatureMode = activeStudioSigning(workdir, context.config).mode;
     const drive = await getEmbeddedDrive(context);
     if (signatureMode === "v2-required" && !drive) {
       // The extracted files are unsigned; without the reactor they could not

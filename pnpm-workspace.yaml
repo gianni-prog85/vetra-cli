@@ -18,6 +18,17 @@ catalog:
   document-model: '6.3.0-dev.6'
   ph-cmd: '6.3.0-dev.6'
 
+  # The monorepo catalog's pins, which clint and clint-common resolve: the
+  # copies on both sides of a local link (or one copy, from npm) agree.
+  '@mastra/core': '1.67.0'
+  '@mastra/libsql': '1.23.0'
+  '@mastra/mcp': '2.3.0'
+  '@mastra/memory': '1.30.0'
+  react: '19.2.6'
+  react-dom: '19.2.6'
+  '@types/react': '19.2.14'
+  '@types/react-dom': '19.2.3'
+
   # other shared deps
   '@types/node': '^25.5.2'
   eslint-config-prettier: '^10.1.8'
@@ -72,11 +83,9 @@ allowBuilds:
   keccak: true
   'utf-8-validate': true
   '@apollo/protobufjs': true
-  '@datadog/pprof': true
   '@parcel/watcher': true
   '@prisma/client': true
   '@prisma/engines': true
-  '@sentry/cli': true
   aws-sdk: true
   esbuild: true
   prisma: true

@@ -22,7 +22,7 @@ describe("fetchMyEnvironments", () => {
         createdBy: null,
       },
     ];
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => ({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -33,7 +33,7 @@ describe("fetchMyEnvironments", () => {
     const result = await fetchMyEnvironments(ENDPOINT, "MINE", "tok");
     expect(result).toEqual(envs);
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(ENDPOINT);
     const body = JSON.parse(init.body as string) as {
       variables: unknown;

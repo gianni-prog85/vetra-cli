@@ -278,7 +278,7 @@ describe("spec-get", () => {
 
   it("projects via --filter against the state", async () => {
     const result = await specGet.execute(
-      { name: "Target", filter: "$.global.specifications[0].version" },
+      { name: "Target", full: false, latest: false, filter: "$.global.specifications[0].version" },
       makeCtx(workdir),
     );
     expect(result.text).toBe("1");
@@ -286,7 +286,7 @@ describe("spec-get", () => {
 
   it("throws when the spec is missing", async () => {
     await expect(
-      specGet.execute({ name: "DoesNotExist" }, makeCtx(workdir)),
+      specGet.execute({ name: "DoesNotExist", full: false, latest: false }, makeCtx(workdir)),
     ).rejects.toThrow(/Unknown spec "DoesNotExist"/);
   });
 });
@@ -315,7 +315,7 @@ describe("spec-update", () => {
     );
     expect(result.text).toMatch(/Applied 1 action/);
     const after = await specGet.execute(
-      { name: "Target", filter: "$.global.name" },
+      { name: "Target", full: false, latest: false, filter: "$.global.name" },
       makeCtx(workdir),
     );
     expect(after.text).toBe("Renamed");
@@ -427,7 +427,7 @@ describe("spec-update", () => {
     // The minted id must be surfaced so a later action can target the module.
     expect(result.text).toMatch(/Minted id\(s\)[\s\S]*ADD_MODULE "Workouts" → [0-9a-f-]{36}/i);
     const ids = await specGet.execute(
-      { name: "Target", latest: true, filter: "$.modules[*].id" },
+      { name: "Target", full: false, latest: true, filter: "$.modules[*].id" },
       makeCtx(workdir),
     );
     expect(ids.text).toMatch(/[0-9a-f-]{36}/i);
@@ -453,7 +453,7 @@ describe("spec-update", () => {
     );
     expect(result.text).toMatch(/Applied 2 action/);
     const ops = await specGet.execute(
-      { name: "Target", latest: true, filter: "$.modules[?(@.id=='mod-1')].operations[*].name" },
+      { name: "Target", full: false, latest: true, filter: "$.modules[?(@.id=='mod-1')].operations[*].name" },
       makeCtx(workdir),
     );
     expect(ops.text).toMatch(/ADD_WORKOUT/);
@@ -631,7 +631,7 @@ describe("spec-schema", () => {
 
   it("--action returns the GraphQL input for one operation", async () => {
     const result = await specSchema.execute(
-      { type: DOC_TYPE, action: "SET_MODEL_NAME", state: false },
+      { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: false },
       makeCtx(workdir),
     );
     expect(result.text).toMatch(/^input SetModelNameInput/);
@@ -722,7 +722,7 @@ describe("spec-schema", () => {
 
   it("--state returns the GraphQL state schema", async () => {
     const result = await specSchema.execute(
-      { type: DOC_TYPE, state: true },
+      { type: DOC_TYPE, full: false, state: true },
       makeCtx(workdir),
     );
     expect(result.text.length).toBeGreaterThan(0);
@@ -732,7 +732,7 @@ describe("spec-schema", () => {
   it("--action rejects unknown action names with a discovery hint", async () => {
     await expect(
       specSchema.execute(
-        { type: DOC_TYPE, action: "NOT_A_REAL_ACTION", state: false },
+        { type: DOC_TYPE, action: "NOT_A_REAL_ACTION", full: false, state: false },
         makeCtx(workdir),
       ),
     ).rejects.toThrow(
@@ -743,7 +743,7 @@ describe("spec-schema", () => {
   it("--action suggests the closest match on a near-miss", async () => {
     await expect(
       specSchema.execute(
-        { type: DOC_TYPE, action: "SET_NAME", state: false },
+        { type: DOC_TYPE, action: "SET_NAME", full: false, state: false },
         makeCtx(workdir),
       ),
     ).rejects.toThrow(/Did you mean:[^.]*SET_MODEL_NAME/);
@@ -752,7 +752,7 @@ describe("spec-schema", () => {
   it("rejects --action combined with --state", async () => {
     await expect(
       specSchema.execute(
-        { type: DOC_TYPE, action: "SET_MODEL_NAME", state: true },
+        { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: true },
         makeCtx(workdir),
       ),
     ).rejects.toThrow(/mutually exclusive/);
@@ -763,7 +763,7 @@ describe("spec-schema", () => {
     // the resolved filter string mentions the script index for "last element".
     // (Defensive: prevents regression to the buggy `[0]` form.)
     const result = await specSchema.execute(
-      { type: DOC_TYPE, action: "SET_MODEL_NAME", state: false },
+      { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: false },
       makeCtx(workdir),
     );
     // Latest-spec correctness is verified end-to-end in the multi-spec

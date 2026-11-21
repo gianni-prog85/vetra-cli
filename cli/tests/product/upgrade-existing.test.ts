@@ -8,12 +8,21 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ReactorBuilder, ReactorClientBuilder, type ReactorClientModule } from "@powerhousedao/reactor";
-import { addFile, driveDocumentModelModule, setDriveName } from "@powerhousedao/shared/document-drive";
-import { ChatSession } from "@powerhousedao/clint-common/document-models/chat-session";
+import { ReactorBuilder, ReactorClientBuilder, type InProcessReactorClientModule } from "@powerhousedao/reactor";
+import {
+  addFile,
+  driveDocumentModelModule,
+  isFileNode,
+  setDriveName,
+  type DocumentDriveDocument,
+} from "@powerhousedao/shared/document-drive";
+import {
+  ChatSession,
+  type ChatSessionDocument,
+} from "@powerhousedao/clint-common/document-models/chat-session";
 import { withSignaturePolicy } from "document-model";
 import { StudioProductV1 } from "document-models";
-import type { StudioProductState } from "document-models/studio-product";
+import type { StudioProductDocument, StudioProductState } from "document-models/studio-product";
 import { LaunchError } from "../../src/launch/errors.js";
 import { autoLaunchCandidate, ensureLiveTarget, type OrchestratorContext } from "../../src/launch/orchestrator.js";
 import { runProgress } from "../../src/commands/product/progress.js";
@@ -42,7 +51,7 @@ const PROD_SWITCHBOARD = "https://switchboard.vetra.io";
 const OLD_ENV: LiveCandidate = { environmentId: "env-old", url: "https://bold-crow-connect.vetra.io" };
 
 interface Harness {
-  module: ReactorClientModule;
+  module: InProcessReactorClientModule;
   driveId: string;
   workdir: string;
   ctx: UpgradeContext;
@@ -106,14 +115,14 @@ async function harness(): Promise<Harness> {
       },
     },
     async products() {
-      const d = (await module.client.get(driveId)) as {
-        state: { global: { nodes: { id: string; documentType?: string }[] } };
-      };
-      return d.state.global.nodes.filter((n) => n.documentType === "vetra/studio-product").map((n) => n.id);
+      const d = await module.client.get<DocumentDriveDocument>(driveId);
+      return d.state.global.nodes
+        .filter((n) => isFileNode(n) && n.documentType === "vetra/studio-product")
+        .map((n) => n.id);
     },
     async state() {
       const [id] = await self.products();
-      const d = (await module.client.get(id)) as { state: { global: StudioProductState } };
+      const d = await module.client.get<StudioProductDocument>(id);
       return d.state.global;
     },
     async session(messages, createdAt) {
@@ -222,7 +231,7 @@ describe("adoptExisting", () => {
     // No project yet: nothing is marked done.
     expect(c.steps.every((st) => st.status === "NOT_STARTED")).toBe(true);
     // The conversations themselves are untouched.
-    const doc = (await h.module.client.get(first)) as { state: { global: { messages: unknown[] } } };
+    const doc = await h.module.client.get<ChatSessionDocument>(first);
     expect(doc.state.global.messages).toHaveLength(1);
   });
 
@@ -345,7 +354,7 @@ describe("adoptExisting", () => {
     // As if the rename after the upgrade had failed.
     await h.module.client.execute(h.driveId, "main", [updateNode({ id, name: UPGRADING_PRODUCT_NAME }) as never]);
     expect(await adoptExisting(h.ctx)).toBe("skipped");
-    const d = (await h.module.client.get(h.driveId)) as { state: { global: { nodes: { id: string; name: string }[] } } };
+    const d = await h.module.client.get<DocumentDriveDocument>(h.driveId);
     expect(d.state.global.nodes.find((n) => n.id === id)?.name).toBe("Todo app");
   });
 
