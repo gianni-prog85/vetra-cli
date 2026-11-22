@@ -118,10 +118,6 @@ correctness must-fixes landed on the branches; these are deferred cleanups.
 - `vetra-app/editors/vetra-studio/ChatPane.tsx` — replace
   `indexOf('/switchboard')` with a segment-boundary match (or strip the known
   `/d/<driveId>` suffix from the drive remoteUrl).
-- `src/triggers/studio-redirect.ts` — early-return when no Connect `/`
-  catch-all route exists instead of falling back to the proxy's own URL as
-  upstream (only reachable under `--no-studio`, but the failure mode is a
-  self-proxy loop).
 - `src/lifecycle/ensure-ph.ts` — reuse ph-clint's `createProcessManager` /
   `checkCommand` instead of the hand-rolled exec wrappers; revisit the
   documented stopgap of halting all boot when the install fails.

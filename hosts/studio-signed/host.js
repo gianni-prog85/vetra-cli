@@ -18,11 +18,23 @@ export default /** @satisfies {PHHost} */ ({
     module: "@powerhousedao/host-core/runners/compound",
     defaultVerb: "serve",
   },
-  // A member's `reactor` replaces the host's whole section (only `runner`
-  // key-merges), so each restates its host's reactor with the change.
+  // A member's `reactor` and `config` replace the host's whole sections (only
+  // `runner` key-merges), so each restates its host's with the change.
   children: {
     switchboard: {
       host: "switchboard",
+      // Its own identity, apart from the unsigned Studio's.
+      config: {
+        switchboard: {
+          ...switchboard.config.switchboard,
+          identity: {
+            keypairPath:
+              "${userData}/.ph/vetra-signed/switchboard/.keypair.json",
+            storagePath:
+              "${userData}/.ph/vetra-signed/switchboard/.renown.json",
+          },
+        },
+      },
       reactor: {
         ...switchboard.reactor,
         protocol,

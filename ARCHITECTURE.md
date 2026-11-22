@@ -107,11 +107,11 @@ A host may import a sibling host file (`connect` and `studio-signed` do).
 
 | Host | Runner | What it is |
 |---|---|---|
-| `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (a local Studio's Cli attaches without a signer). Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
-| `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: dist/connect` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only |
+| `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (a local Studio's Cli attaches without a signer). Its config file is the package's empty `hosts/switchboard/config.json` (`configFile: "${package}/…"`), its packages are `${package}`, `@powerhousedao/clint-common` and `@powerhousedao/vetra` with `disableLocal: true` (the working directory is not loaded), and its identity is `${userData}/.ph/vetra/switchboard/{.keypair.json,.renown.json}`. Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
+| `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: "${package}/dist/connect"` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only. `runner.serveFiles` serves `/studio.config.json` from `${userData}/.ph/vetra/studio.config.json`, read per request (`no-store`, 404 while missing) |
 | `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
-| `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` replaces the host's whole section; only `runner` key-merges), and the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store. Auth stays off. Not run by anything; see "The signed check" |
+| `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` and `config` replace the host's whole sections; only `runner` key-merges), the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store, and its identity to `${userData}/.ph/vetra-signed/switchboard/`. Auth stays off. Not run by anything; see "The signed check" |
 
 The drive slug is `studio`, not `vetra` or `vetra-*`: loading
 `@powerhousedao/vetra` registers its codegen processor, which attaches to
@@ -128,21 +128,32 @@ vetra local API, 8092-8093 kept free for a preview run. Neither runner sets
 carry the real one.
 
 Stores: `${userData}/.ph/vetra/reactor-storage` and
-`${userData}/.ph/vetra/read-storage` (PGlite). `${userData}` is
-`PH_USER_DATA_DIR`, else the project root. Under the same `.ph` tree: the
-run records `.ph/run/{studio,switchboard,connect}.json` and the member logs
-`.ph/services/{switchboard,connect}/`.
+`${userData}/.ph/vetra/read-storage` (PGlite), the switchboard's identity in
+`${userData}/.ph/vetra/switchboard/`. `${userData}` is `PH_USER_DATA_DIR`,
+else the project root. Under the same `.ph` tree: the run records and member
+logs, `.ph/run/{studio,switchboard,connect}.json` and
+`.ph/services/{switchboard,connect}/` in this repository, and
+`.ph/run/@powerhousedao/vetra-cli/` and
+`.ph/services/@powerhousedao/vetra-cli/` in another project.
 
-The switchboard loads this package (from `dist/node` at `serve`, through
-the Vite loader at `dev`) and the packages of the project's
-`powerhouse.config.json` (clint-common and `@powerhousedao/vetra`, both
-local). The config names no `packageRegistryUrl`, so nothing is fetched
-from a registry. `@powerhousedao/vetra-cloud-package` stays a dependency
-but is no Studio package: its processors and subgraphs belong to the cloud
-switchboard, and the Studio's Deploy view imports its document models
-through `cloud-client/`. From another project
-(`ph run @powerhousedao/vetra-cli/studio`) that and Connect's `outDir` are
-read against the project, not the package: not supported yet.
+**Both forms, one set of files.** `${package}` is the real root of the
+package that supplies the host, and the project root for a project host: in
+this repository both are the repository root, so `ph run studio` here and
+`ph run @powerhousedao/vetra-cli/studio` in another project read the same
+host files. The switchboard loads this package (`${package}`: from
+`dist/node` at `serve`, through the Vite loader at `dev`), clint-common and
+`@powerhousedao/vetra` (each name found from the package), never the
+project's code (`disableLocal`), and reads the package's empty
+`hosts/switchboard/config.json`, never the project's
+`powerhouse.config.json`: no project packages, no `packageRegistryUrl`, so
+nothing is fetched from a registry. Connect serves the package's
+`dist/connect`; `ph run <package>/connect build` is refused in another
+project (the package builds it). Relative paths in a host file still
+resolve against the project. `@powerhousedao/vetra-cloud-package` stays a
+dependency but is no Studio package: its processors and subgraphs belong to
+the cloud switchboard, and the Studio's Deploy view imports its document
+models through `cloud-client/`. `dev` on the package's compound runs Vite
+over the project: unsupported for Studio.
 
 `hosts/tsconfig.json` type-checks the host files (`tsc -p hosts`, part of
 `pnpm typecheck`); `hosts/types.d.ts`, the two `outputs.js`/`outputs.d.ts`
@@ -155,7 +166,7 @@ The `@satisfies {PHHost}` tag sits on the exported expression: in front of
 What a person runs to see a signed Studio on this machine (design B3,
 acceptance A10). It needs a wallet that can sign in on Renown; no `ph login`
 is needed: a switchboard without a keypair generates one at
-`${userData}/.ph/.keypair.json` and signs with it. It cannot run next to a
+`${userData}/.ph/vetra-signed/switchboard/.keypair.json` and signs with it. It cannot run next to a
 `studio` stack (same ports, and the members' run records
 `.ph/run/{switchboard,connect}.json` share names).
 
@@ -224,8 +235,7 @@ clint's runner calls with the setup context at attach: the document models
 declares it) and the subscriptions, plus, in a cloud Studio, the agent's
 identity. The runner attaches with clint's `attachDefaultReactor`: a
 `GraphQLReactorClient` on the switchboard, `personalDriveId` = the `Home`
-drive, no `_module`. `create` only throws: vetra builds no in-process
-reactor.
+drive. `create` only throws: vetra builds no in-process reactor.
 
 The Home drive holds: chat session documents, spec documents
 (mirrored from the reactor-project filesystems by the spec-sync
@@ -294,8 +304,10 @@ still carries the empty pre-edit manifest, so Connect falls back to
 baked `powerhouse.config.json` per request (`serve`): the Studio drive
 and the remote backend come from the switchboard's outputs, written as
 `${origin}/d/studio` because Connect proxies the switchboard. Nothing is
-stamped into `dist/connect` for it, and no `studio.config.json` is written:
-the SPA falls back to `127.0.0.1:5180` for the local API.
+stamped into `dist/connect` for it. Connect serves `/studio.config.json`
+from `${userData}/.ph/vetra/studio.config.json` (`runner.serveFiles`); while
+nothing writes that file it is a 404 and the SPA falls back to
+`127.0.0.1:5180` for the local API.
 
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
@@ -971,11 +983,11 @@ These are limitations of the current direction; not bugs.
   box sends text only; files reach a conversation from the chat-session
   editor or the API.
 
-- **Hosts (B2).** The package's form (`ph run
-  @powerhousedao/vetra-cli/studio` from another project) is not supported
-  yet: Connect's `outDir` and the switchboard's packages are read against
-  the project (see "Hosts"). Connect's `/` shows its own start page,
-  not the Studio drive: the printed `/d/<id>` URL is the Studio.
+- **Hosts.** The package's form (`ph run @powerhousedao/vetra-cli/studio`
+  from another project) reads the package's own build, config file,
+  packages and identity folder (see "Hosts"); no trust check limits which
+  package a project may take hosts from. Connect's `/` shows its own start
+  page, not the Studio drive: the printed `/d/<id>` URL is the Studio.
 
 The live publish path — `commands/reactor-project/publish.ts` and
 `publish-status.ts` — is unaffected: those are the deploy-flow tools that

@@ -11,8 +11,16 @@ export default /** @satisfies {PHHost} */ ({
   runner: {
     module: "@powerhousedao/ph-cli/runners/connect",
     port: 8090,
-    // `build` writes the Studio SPA here; `serve` serves it.
-    outDir: "dist/connect",
+    // `build` writes the Studio SPA here; `serve` serves it. This package's
+    // build, also when another project runs the package's Studio (the
+    // package builds it; `ph run <package>/connect build` is refused there).
+    outDir: "${package}/dist/connect",
+    // Read per request (no-store, 404 while missing): the Cli writes it once
+    // its local API listens and removes it at its end. It names the local
+    // API's address and the Studio's origin to the tab.
+    serveFiles: {
+      "/studio.config.json": "${userData}/.ph/vetra/studio.config.json",
+    },
     // The browser talks to this origin only: Connect's server proxies the
     // switchboard's paths (/graphql, /d/*, /attachments, /mcp, /api/*).
     proxy: {
