@@ -76,17 +76,18 @@ function binPath(base: string, name: string): string | null {
  * tsc --pretty false emits lines like:
  *   document-models/x/v1/gen/actions.ts(10,5): error TS1109: Expression expected.
  * Multi-line messages indent continuation lines; we keep only the leading line
- * (matches what tsc reports as the diagnostic head).
+ * (matches what tsc reports as the diagnostic head). TypeScript up to 6 ends
+ * lines with the OS newline (`\r\n` on Windows).
  */
 const TSC_LINE = /^(.+?)\((\d+),(\d+)\): (error|warning) (TS\d+): (.+)$/;
 
-function parseTscOutput(
+export function parseTscOutput(
   output: string,
   base: string,
   scope: CheckScope,
 ): GenDiagnostic[] {
   const out: GenDiagnostic[] = [];
-  for (const raw of output.split("\n")) {
+  for (const raw of output.split(/\r?\n/)) {
     const m = TSC_LINE.exec(raw);
     if (!m) continue;
     const [, file, line, col, severity, code, message] = m;

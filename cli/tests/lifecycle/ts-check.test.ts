@@ -45,6 +45,8 @@ describe("ts-check runs the project's tools", () => {
       expect(problems[0]).toMatch(/^tsc:\n/);
       expect(problems[0]).toContain("todo/editors/todo/editor.ts(1,14): error TS2322");
       expect(problems[0]).not.toContain("other.ts");
+      // TypeScript up to 6 ends its lines with "\r\n" on Windows.
+      expect(problems[0]).not.toContain("\r");
     },
     TIMEOUT,
   );

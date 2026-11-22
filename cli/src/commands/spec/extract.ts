@@ -27,9 +27,9 @@ function extractCommand(type: z.infer<typeof typeSchema>): string {
 }
 
 // Pull the `Wrote <path>` lines the extract subprocess prints.
-function parseWritten(output: string): string[] {
+export function parseWritten(output: string): string[] {
   const paths: string[] = [];
-  for (const line of output.split("\n")) {
+  for (const line of output.split(/\r?\n/)) {
     const m = line.match(/^Wrote\s+(.+)$/);
     if (m) paths.push(m[1].trim());
   }

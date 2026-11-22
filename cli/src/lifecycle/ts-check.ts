@@ -133,11 +133,12 @@ export async function lintAndTypecheck(
       ["--noEmit", "--pretty", "false"],
       tscRoot!,
     );
-    // tsc prints paths relative to its cwd (the project root); keep this
-    // file's diagnostics and rewrite the prefix to the tool-call relative path.
+    // tsc prints paths relative to its cwd (the project root), with the OS
+    // newline up to TypeScript 6; keep this file's diagnostics and rewrite the
+    // prefix to the tool-call relative path.
     const relFromProject = path.relative(tscRoot!, absFile).replace(/\\/g, "/");
     const lines = output
-      .split("\n")
+      .split(/\r?\n/)
       .filter((l) => l.replace(/\\/g, "/").startsWith(relFromProject))
       .map((l) => l.replace(/\\/g, "/").replace(relFromProject, rel));
     if (lines.length) {
