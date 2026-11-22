@@ -27,32 +27,34 @@ import {
   type InstalledPackagesState,
 } from "./deploy/useInstalledPackages.js";
 import {
-  useProjectPackages,
-  type ProjectPackagesState,
-} from "./deploy/useProjectPackages.js";
+  useProjectPackageInfo,
+  type ProjectPackageState,
+} from "./deploy/useProjectPackageInfo.js";
 import {
-  useReleaseStatuses,
+  useReleaseStatus,
   type ReleaseStatus,
-} from "./deploy/useReleaseStatuses.js";
-import { useProjects } from "./specify/useProjects.js";
-import type { Project } from "./specify/projects.js";
+} from "./deploy/useReleaseStatus.js";
+import {
+  PROJECT_FALLBACK_NAME,
+  PROJECT_ID,
+  type Project,
+} from "./specify/projects.js";
+import { useSpecDocuments } from "./specify/useSpecDocuments.js";
 
 const UNKNOWN_RELEASE: ReleaseStatus = { known: false };
 
-type View = { kind: "list" } | { kind: "deploy"; project: Project };
+type View = { kind: "list" } | { kind: "deploy" };
 
-/** Adapt the batched package lookup to a single project's resolved package. */
-function toPackageView(pkgs: ProjectPackagesState, name: string): PackageView {
-  if (pkgs.status === "loading") return { status: "loading" };
-  if (pkgs.status === "error")
-    return { status: "error", message: pkgs.message };
-  const info = pkgs.byProject.get(name);
-  return info
-    ? { status: "ready", name: info.name, version: info.version }
+/** Adapt the package lookup to the deploy detail's package view. */
+function toPackageView(pkg: ProjectPackageState): PackageView {
+  if (pkg.status === "loading") return { status: "loading" };
+  if (pkg.status === "error") return { status: "error", message: pkg.message };
+  return pkg.info
+    ? { status: "ready", name: pkg.info.name, version: pkg.info.version }
     : { status: "error", message: "No package.json found for this project." };
 }
 
-/** Resolve the deploy detail's data for one project, gated on sign-in and every
+/** Resolve the deploy detail's data for the project, gated on sign-in and every
  * source loading, so the variants render fully-formed. */
 function buildDeployData(args: {
   authorized: boolean;
@@ -84,10 +86,10 @@ function buildDeployData(args: {
   };
 }
 
-/** Home > Deploy. Requires a Renown sign-in, then lists the drive's projects
- * with their deploy status (which of the user's environments has each project's
- * package installed) and lets the user deploy one. The list waits for envs +
- * package data so cards render fully resolved. */
+/** Home > Deploy. Requires a Renown sign-in, then shows the project the Studio
+ * runs in with its deploy status (which of the user's environments has its
+ * package installed) and lets the user deploy it. The list waits for envs +
+ * package data so the card renders fully resolved. */
 export function DeploySection({
   productName,
   onExitToHome,
@@ -96,7 +98,7 @@ export function DeploySection({
 }: {
   productName: string;
   onExitToHome: () => void;
-  /** Auto-nav target: the project the agent is deploying. Applied once per
+  /** Auto-nav target: the deploy the agent is running. Applied once per
    * deploy (keyed by callId); null when nothing is being followed. */
   focus?: DeployTarget | null;
   /** Id of the newest completed deploy command in the chat. Advances when an
@@ -114,16 +116,13 @@ export function DeploySection({
   const [view, setView] = useState<View>({ kind: "list" });
   // Bumped after a successful deploy to re-resolve package/release/install data.
   const [reloadNonce, setReloadNonce] = useState(0);
-  // project name -> version we just deployed; trusted over the (briefly stale)
-  // registry until the registry catches up to it.
-  const [deployedVersions, setDeployedVersions] = useState<Map<string, string>>(
-    new Map(),
-  );
+  // The version we just deployed; trusted over the (briefly stale) registry
+  // until the registry catches up to it.
+  const [deployedVersion, setDeployedVersion] = useState<string | null>(null);
 
-  const projects = useProjects();
-  const projectNames = projects.map((p) => p.name);
-  const pkgs = useProjectPackages(projectNames, reloadNonce);
-  const releases = useReleaseStatuses(projectNames, reloadNonce);
+  const specs = useSpecDocuments();
+  const pkgState = useProjectPackageInfo(reloadNonce);
+  const releaseState = useReleaseStatus(reloadNonce);
   const envSummaries =
     envs.status === "ready"
       ? envs.items.map((e) => ({ id: e.id, name: e.name }))
@@ -134,6 +133,12 @@ export function DeploySection({
     auth.signer,
     reloadNonce,
   );
+  const packageInfo = pkgState.status === "ready" ? pkgState.info : null;
+  const project: Project = {
+    id: PROJECT_ID,
+    name: packageInfo?.name ?? PROJECT_FALLBACK_NAME,
+    documents: specs,
+  };
 
   // Attach the no-aud Renown token to every cloud client request.
   useEffect(() => {
@@ -141,32 +146,25 @@ export function DeploySection({
     return () => setAuthTokenProvider(null);
   }, [renown]);
 
-  // Auto-nav focus: open the deploy detail for the project the agent is
-  // deploying. Applied once per focus (keyed by callId) so navigating within
-  // Deploy isn't overridden until the next deploy; retried across renders
-  // while projects/packages are still resolving, then given up if the target
-  // never matches (e.g. an external package) so we neither loop nor strand.
+  // Auto-nav focus: open the project's deploy detail when the agent deploys
+  // it. Applied once per focus (keyed by callId) so navigating within Deploy
+  // isn't overridden until the next deploy; retried while the package data is
+  // still loading, then given up if the target isn't the project (e.g. an
+  // external package) so we neither loop nor strand.
   const appliedFocusRef = useRef<string | null>(null);
   useEffect(() => {
     if (!focus || focus.callId === appliedFocusRef.current) return;
-    const project = resolveDeployProject(
+    const match = resolveDeployProject(
       focus,
-      projects,
-      pkgs.status === "ready" ? pkgs.byProject : undefined,
+      pkgState.status === "ready" ? pkgState.info : undefined,
     );
-    if (project) {
-      setView({ kind: "deploy", project });
-      appliedFocusRef.current = focus.callId;
-      return;
-    }
-    const settled =
-      (focus.project ? projects.length > 0 : true) &&
-      (focus.packageName ? pkgs.status !== "loading" : true);
-    if (settled) appliedFocusRef.current = focus.callId;
-  }, [focus, projects, pkgs]);
+    if (match === null && pkgState.status === "loading") return;
+    appliedFocusRef.current = focus.callId;
+    if (match) setView({ kind: "deploy" });
+  }, [focus, pkgState]);
 
   // Re-fetch the once-loaded install/release/package data when an agent deploy
-  // finishes in the chat (its env writes happen outside the UI, so the cards
+  // finishes in the chat (its env writes happen outside the UI, so the card
   // would otherwise keep showing pre-deploy state). Same refresh the UI's own
   // Deploy button triggers via onDeployed. Seeded per mount so the initial
   // fetch isn't immediately redone; a remount re-fetches on its own.
@@ -189,7 +187,7 @@ export function DeploySection({
   const crumbs: Crumb[] = [
     { label: productName, onClick: onExitToHome },
     { label: "Deploy", onClick: atRoot ? undefined : goToList },
-    ...(view.kind === "deploy" ? [{ label: view.project.name }] : []),
+    ...(view.kind === "deploy" ? [{ label: project.name }] : []),
   ];
 
   const listError =
@@ -197,68 +195,51 @@ export function DeploySection({
       ? envs.error
       : installed.status === "error"
         ? installed.message
-        : pkgs.status === "error"
-          ? pkgs.message
+        : pkgState.status === "error"
+          ? pkgState.message
           : null;
   const listLoading =
     envs.status === "loading" ||
-    pkgs.status === "loading" ||
-    releases.status === "loading" ||
+    pkgState.status === "loading" ||
+    releaseState.status === "loading" ||
     installed.status === "loading" ||
     installed.status === "idle";
-
-  const releaseFor = (name: string): ReleaseStatus =>
-    releases.status === "ready"
-      ? (releases.byProject.get(name) ?? UNKNOWN_RELEASE)
-      : UNKNOWN_RELEASE;
 
   // After a deploy the registry packument is stale for a while, so it still
   // reports "needs release". Trust the version we just published until the
   // registry's latest catches up to it, then defer to the live status again.
-  const effectiveReleaseFor = (name: string): ReleaseStatus => {
-    const live = releaseFor(name);
-    const deployed = deployedVersions.get(name);
-    if (deployed && !(live.known && live.publishedVersion === deployed)) {
-      return {
-        known: true,
-        upToDate: true,
-        needsRelease: false,
-        localVersion: deployed,
-        publishedVersion: deployed,
-      };
-    }
-    return live;
-  };
+  const liveRelease =
+    releaseState.status === "ready" ? releaseState.release : UNKNOWN_RELEASE;
+  const release: ReleaseStatus =
+    deployedVersion &&
+    !(liveRelease.known && liveRelease.publishedVersion === deployedVersion)
+      ? {
+          known: true,
+          upToDate: true,
+          needsRelease: false,
+          localVersion: deployedVersion,
+          publishedVersion: deployedVersion,
+        }
+      : liveRelease;
 
-  const deployments: ProjectDeployment[] = projects.map((project) => {
-    const info =
-      pkgs.status === "ready" ? pkgs.byProject.get(project.name) : null;
-    const pkgName = info?.name;
-    const where =
-      pkgName && installed.status === "ready"
-        ? (installed.byPackage.get(pkgName) ?? [])
-        : [];
-    return {
+  const pkg = toPackageView(pkgState);
+  const deployments: ProjectDeployment[] = [
+    {
       project,
-      deployedEnvironments: where,
-      release: effectiveReleaseFor(project.name),
-    };
-  });
-
-  const selectedProject = view.kind === "deploy" ? view.project : null;
-  const selectedPkg: PackageView = selectedProject
-    ? toPackageView(pkgs, selectedProject.name)
-    : { status: "loading" };
-  const selectedRelease = selectedProject
-    ? effectiveReleaseFor(selectedProject.name)
-    : UNKNOWN_RELEASE;
-  const selectedDeploy: DeployData = buildDeployData({
+      deployedEnvironments:
+        packageInfo && installed.status === "ready"
+          ? (installed.byPackage.get(packageInfo.name) ?? [])
+          : [],
+      release,
+    },
+  ];
+  const deploy: DeployData = buildDeployData({
     authorized: auth.authorized,
     authLoading: auth.loading,
     envs,
     installed,
-    release: selectedRelease,
-    pkg: selectedPkg,
+    release,
+    pkg,
   });
 
   return (
@@ -268,18 +249,16 @@ export function DeploySection({
         <AuthGate loading={auth.loading} onLogin={auth.login} />
       ) : view.kind === "deploy" ? (
         <ProjectDeployDetail
-          project={view.project}
-          pkg={selectedPkg}
-          release={selectedRelease}
-          deploy={selectedDeploy}
+          project={project}
+          pkg={pkg}
+          release={release}
+          deploy={deploy}
           driveId={driveId}
           signer={auth.signer}
           onSignIn={auth.login}
           onRefresh={refresh}
           onDeployed={(version) => {
-            setDeployedVersions((prev) =>
-              new Map(prev).set(view.project.name, version),
-            );
+            setDeployedVersion(version);
             setReloadNonce((n) => n + 1);
             refresh();
           }}
@@ -302,7 +281,7 @@ export function DeploySection({
           <GithubConnectCard authorized={auth.authorized} />
           <ProjectDeployList
             deployments={deployments}
-            onDeploy={(project) => setView({ kind: "deploy", project })}
+            onDeploy={() => setView({ kind: "deploy" })}
           />
         </div>
       )}
@@ -313,21 +292,16 @@ export function DeploySection({
 function ProjectsLoading() {
   return (
     <section className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold text-foreground">Projects</h3>
+      <h3 className="text-base font-semibold text-foreground">Project</h3>
       <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(22rem,1fr))]">
-        {[0, 1].map((i) => (
-          <div
-            key={i}
-            className="flex animate-pulse flex-col gap-4 rounded-xl border border-border bg-card p-5"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="h-4 w-32 rounded bg-muted" />
-              <div className="h-3 w-20 rounded bg-muted" />
-            </div>
-            <div className="h-3 w-24 rounded bg-muted" />
-            <div className="h-9 w-full rounded-lg bg-muted" />
+        <div className="flex animate-pulse flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="h-4 w-32 rounded bg-muted" />
+            <div className="h-3 w-20 rounded bg-muted" />
           </div>
-        ))}
+          <div className="h-3 w-24 rounded bg-muted" />
+          <div className="h-9 w-full rounded-lg bg-muted" />
+        </div>
       </div>
     </section>
   );
@@ -351,8 +325,7 @@ function AuthGate({
       ) : (
         <>
           <p className="max-w-md text-sm text-muted-foreground">
-            Sign in with Renown to see your projects and deploy them to the
-            cloud.
+            Sign in with Renown to see your project and deploy it to the cloud.
           </p>
           <button
             type="button"

@@ -1,6 +1,6 @@
 import { ArrowRight, Folder, Server } from "lucide-react";
 import type { Project } from "../specify/projects.js";
-import type { ReleaseStatus } from "./useReleaseStatuses.js";
+import type { ReleaseStatus } from "./useReleaseStatus.js";
 
 /** A project with its resolved deploy status: the environments (by label) where
  * its package is installed (empty = not deployed), plus whether its current
@@ -11,10 +11,9 @@ export type ProjectDeployment = {
   release: ReleaseStatus;
 };
 
-/** Home > Deploy. Lists the drive's projects with a Deploy action and, for each,
- * whether its package is installed in any of the user's environments (and
- * where). Fully resolved before render — no per-card loading. UI only: the
- * Deploy flow doesn't push anything yet. */
+/** Home > Deploy. Shows the project the Studio runs in with a Deploy action
+ * and whether its package is installed in any of the user's environments (and
+ * where). Fully resolved before render — no per-card loading. */
 export function ProjectDeployList({
   deployments,
   onDeploy,
@@ -24,12 +23,11 @@ export function ProjectDeployList({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold text-foreground">Projects</h3>
+      <h3 className="text-base font-semibold text-foreground">Project</h3>
 
       {deployments.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-accent px-4 py-6 text-sm text-muted-foreground">
-          No projects yet. Create specification documents in the Specify
-          section, then deploy them here.
+          No project to deploy.
         </div>
       ) : (
         <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(22rem,1fr))]">

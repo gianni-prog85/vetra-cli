@@ -241,7 +241,6 @@ export function screenPreviews(
   for (const call of toolCalls(messages)) {
     index += 1;
     if (call.isError || call.result === null) continue;
-    const project = text(call.args.project);
     const callId = `screen-${index}`;
 
     switch (call.name) {
@@ -254,20 +253,19 @@ export function screenPreviews(
         if (id) sampleType.set(id, type);
         const screen = editorFor(type);
         const doc = id ?? name;
-        if (screen && project && doc && !targets.has(screen.id)) {
-          targets.set(screen.id, { project, doc, callId });
+        if (screen && doc && !targets.has(screen.id)) {
+          targets.set(screen.id, { doc, callId });
         }
         break;
       }
       case "spec-preview-show": {
-        if (!project) break;
         const data = record(parse(call.result).data);
         if (record(data).blocked === true) break;
         const drive = text(call.args.drive);
         if (drive) {
           const screen = appFor(screens, text(call.args.app));
           if (!screen) break;
-          targets.set(screen.id, { project, drive, callId });
+          targets.set(screen.id, { drive, callId });
           activeScreenId = screen.id;
           break;
         }
@@ -278,7 +276,7 @@ export function screenPreviews(
           (id && sampleType.get(id)) ?? (name && sampleType.get(name));
         const screen = editorFor(type || undefined);
         if (!screen || !doc) break;
-        targets.set(screen.id, { project, doc, callId });
+        targets.set(screen.id, { doc, callId });
         activeScreenId = screen.id;
         break;
       }
@@ -307,7 +305,6 @@ export function tabForTarget(
   if (!target) return null;
   for (const [screenId, t] of targets) {
     if (
-      t.project === target.project &&
       (t.doc ?? null) === (target.doc ?? null) &&
       (t.drive ?? null) === (target.drive ?? null)
     ) {

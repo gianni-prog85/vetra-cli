@@ -797,12 +797,15 @@ Only with the project run on (`projectRun`; off, `/resolve` says
 `preview-off` and nothing starts). The editor pre-empts manual lifecycle
 calls for the BUILD pane. When
 `/resolve` returns `project-stopped` for a session's target, the
-browser-side `useResolvedPreview` hook fires `POST /start` once per
-target without any user click. SSE drives the resulting state
+browser-side `useResolvedPreview` hook fires `POST /start` once
+without any user click. SSE drives the resulting state
 transitions back into the pane: `service:starting` →
 `service:ready` → the pane refetches `/resolve` and lands on `ready`.
+No call of the SPA names a project: its targets are a document, a drive or
+the project's home, and its Specify and Deploy views show the one project
+(the specs at the Home drive's root, the workdir's package).
 
-Guards: the browser tracks "auto-started for project X" to avoid
+Guards: the browser tracks "auto-started" to avoid
 spinning on a persistent failure (e.g. port conflict surfaces as
 `service:failed`; the guard is only cleared when state reaches
 `ready`, so the next stop will auto-recover). The server side is

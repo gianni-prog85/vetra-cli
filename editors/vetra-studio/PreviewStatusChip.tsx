@@ -1,7 +1,7 @@
 /**
- * Small status chip that surfaces the chat session's bound reactor project
- * and its current lifecycle state. Rendered in the chat header so the user
- * sees the project context even during IDEATE, before the BUILD iframe
+ * Small status chip that surfaces the preview of the project the Studio runs
+ * in and its current lifecycle state. Rendered in the chat header so the
+ * user sees the preview's state even during IDEATE, before the BUILD iframe
  * takes the right pane.
  *
  * No interaction in this version — it's a passive readout. Could later
@@ -10,11 +10,11 @@
 import type { ResolvedPreview } from "./hooks/useResolvedPreview.js";
 
 export function PreviewStatusChip({ preview }: { preview: ResolvedPreview }) {
-  /* no-target = session hasn't bound a project yet; render nothing rather
-   * than a "no project" chip so the header stays clean during IDEATE. */
+  /* no-target = the agent hasn't shown a preview yet; render nothing so the
+   * header stays clean during IDEATE. */
   if (preview.kind === "no-target") return null;
 
-  const { label, tone, project } = describe(preview);
+  const { label, tone, subject } = describe(preview);
 
   return (
     <span
@@ -32,9 +32,7 @@ export function PreviewStatusChip({ preview }: { preview: ResolvedPreview }) {
           (tone === "starting" ? " animate-pulse" : "")
         }
       />
-      <span className="truncate max-w-[10rem]" title={project}>
-        {project}
-      </span>
+      <span className="truncate max-w-[10rem]">{subject}</span>
       <span className="text-muted-foreground">·</span>
       <span>{label}</span>
     </span>
@@ -43,30 +41,28 @@ export function PreviewStatusChip({ preview }: { preview: ResolvedPreview }) {
 
 type Tone = "ready" | "starting" | "stopped" | "error";
 
+const PREVIEW = "preview";
+
 function describe(preview: Exclude<ResolvedPreview, { kind: "no-target" }>): {
   label: string;
   tone: Tone;
-  project: string;
+  subject: string;
 } {
   switch (preview.kind) {
     case "ready":
-      return { label: "running", tone: "ready", project: preview.project };
+      return { label: "running", tone: "ready", subject: PREVIEW };
     case "starting":
-      return { label: "starting…", tone: "starting", project: preview.project };
+      return { label: "starting…", tone: "starting", subject: PREVIEW };
     case "project-stopped":
-      return { label: "starting…", tone: "starting", project: preview.project };
+      return { label: "starting…", tone: "starting", subject: PREVIEW };
     case "preview-off":
-      return {
-        label: "preview off",
-        tone: "stopped",
-        project: preview.project,
-      };
+      return { label: "off", tone: "stopped", subject: PREVIEW };
     case "loading":
-      return { label: "checking…", tone: "starting", project: "" };
+      return { label: "checking…", tone: "starting", subject: PREVIEW };
     case "unknown-project":
-      return { label: "not found", tone: "error", project: preview.project };
+      return { label: "no project", tone: "error", subject: PREVIEW };
     case "error":
-      return { label: "unreachable", tone: "error", project: "preview-server" };
+      return { label: "unreachable", tone: "error", subject: "preview-server" };
   }
 }
 

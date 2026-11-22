@@ -37,8 +37,8 @@ export const EARLY_PREVIEW_NOTE =
 
 /* ---------- restart ---------- */
 
-/** The project the mounted pane shows (one pane per page). */
-let shownProject: string | null = null;
+/** Whether the mounted pane shows the project's preview (one pane per page). */
+let previewShown = false;
 let reloads = 0;
 const reloadListeners = new Set<() => void>();
 
@@ -52,19 +52,18 @@ function reloadCount(): number {
 }
 
 /**
- * Restarts the preview: stops the shown project and starts it again (also
- * when it is stuck starting), then reloads the frame. On an older Studio
- * without `/restart` it asks for a start instead. Rejects when the preview
- * can't be reached or the restart isn't allowed ("Couldn't restart the
- * preview."); the frame reloads either way.
+ * Restarts the preview: stops the project and starts it again (also when it
+ * is stuck starting), then reloads the frame. On an older Studio without
+ * `/restart` it asks for a start instead. Rejects when the preview can't be
+ * reached or the restart isn't allowed ("Couldn't restart the preview.");
+ * the frame reloads either way.
  */
 export async function restartPreview(): Promise<void> {
-  const project = shownProject;
   try {
-    if (project) {
-      const restarted = await fetchRestart({ project });
+    if (previewShown) {
+      const restarted = await fetchRestart();
       // Older Studios have no /restart: start (a stopped project comes back).
-      if (restarted === null) await fetchStart({ project });
+      if (restarted === null) await fetchStart();
     }
   } finally {
     reloads += 1;
@@ -166,14 +165,14 @@ export function PreviewPane({
       : resolved;
   const reloadKey = useSyncExternalStore(subscribeReloads, reloadCount);
 
-  const project =
-    (target ?? (preview.kind === "ready" ? home : undefined))?.project ?? null;
+  const shown =
+    target !== undefined || (home !== undefined && preview.kind === "ready");
   useEffect(() => {
-    shownProject = project;
+    previewShown = shown;
     return () => {
-      if (shownProject === project) shownProject = null;
+      previewShown = false;
     };
-  }, [project]);
+  }, [shown]);
 
   const building = shownTab?.building
     ? `${shownTab.label} — building…`

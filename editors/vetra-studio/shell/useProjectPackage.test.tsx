@@ -51,12 +51,7 @@ describe("useProjectPackage", () => {
       Promise.reject(new Error("local API not known yet")),
     );
     hoisted.results.push(() =>
-      Promise.resolve({
-        kind: "ok",
-        project: "",
-        name: "@acme/shop",
-        version: "1.0.9",
-      }),
+      Promise.resolve({ kind: "ok", name: "@acme/shop", version: "1.0.9" }),
     );
     const container = render(<Probe />);
     await settle();

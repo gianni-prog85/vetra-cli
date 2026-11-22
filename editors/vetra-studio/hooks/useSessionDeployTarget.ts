@@ -6,12 +6,10 @@
  * the intent to surface a project's deploy view, keyed by the tool call's id so
  * a later deploy navigates again:
  *
- *  - `reactor-project-publish` — its `name` arg is the project directory (==
- *    the studio project folder name), so it names the project directly. A
- *    publish with no `name` (the cwd project) can't be pinpointed and is
- *    skipped.
+ *  - `reactor-project-publish` — publishes the project the Studio runs in, so
+ *    it is that project's deploy.
  *  - `deploy-environment-update` WITH `addPackage` — the go-live install. It
- *    names a package, not a project (mapped to a project downstream via the
+ *    names a package (matched to the project's package downstream via the
  *    loaded package data), and is the ONLY deploy signal when an already-
  *    published package is installed without re-publishing.
  *
@@ -49,17 +47,13 @@ const DEPLOY_RESULT_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export interface DeployTarget {
-  /** Studio project (folder) name, when the signal names it directly. */
-  project?: string;
+  /** The signal is a publish of the project the Studio runs in. */
+  publish?: true;
   /** Package name (no version), when the signal is a package install. */
   packageName?: string;
   /** toolCallId of the deploy tool call — lets the watcher tell a NEW deploy
    * apart from the same one re-rendered. */
   callId: string;
-}
-
-interface PublishArgs {
-  name?: string;
 }
 
 interface EnvUpdateArgs {
@@ -87,10 +81,7 @@ export function extractDeployTarget(
       if (!part.toolCallId) continue;
 
       if (part.toolName === PUBLISH_TOOL) {
-        const args = safeParse<PublishArgs>(part.args);
-        const project = args?.name?.trim();
-        if (!project) continue; // cwd publish — no project to pinpoint
-        return { project, callId: part.toolCallId };
+        return { publish: true, callId: part.toolCallId };
       }
 
       if (part.toolName === ENV_UPDATE_TOOL) {

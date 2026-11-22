@@ -31,22 +31,20 @@ afterEach(() => {
 });
 
 describe("fetchRestart", () => {
-  it("posts /restart for the project and returns the result", async () => {
-    respond(202, { kind: "started", project: "hotel" });
-    expect(await fetchRestart({ project: "hotel" })).toMatchObject({
-      kind: "started",
-    });
-    expect(urls.some((u) => u.includes("/restart?project=hotel"))).toBe(true);
+  it("posts /restart (the Studio's own project) and returns the result", async () => {
+    respond(202, { kind: "started" });
+    expect(await fetchRestart()).toMatchObject({ kind: "started" });
+    expect(urls).toContain("http://127.0.0.1:61234/restart");
   });
 
   it("returns null on a Studio without /restart, so the caller can start", async () => {
     respond(404, { error: "not found", path: "/restart" });
-    expect(await fetchRestart({ project: "hotel" })).toBeNull();
+    expect(await fetchRestart()).toBeNull();
   });
 
   it("a refused restart says so and never falls back to a start", async () => {
     respond(403, { error: "forbidden" });
-    await expect(fetchRestart({ project: "hotel" })).rejects.toThrow(
+    await expect(fetchRestart()).rejects.toThrow(
       "Couldn't restart the preview.",
     );
     expect(urls.some((u) => u.includes("/start"))).toBe(false);
@@ -54,15 +52,13 @@ describe("fetchRestart", () => {
 
   it("an unauthenticated restart (401) is refused the same way", async () => {
     respond(401, { error: "unauthorized" });
-    await expect(fetchRestart({ project: "hotel" })).rejects.toThrow(
+    await expect(fetchRestart()).rejects.toThrow(
       "Couldn't restart the preview.",
     );
   });
 
-  it("an unknown project is a result, not a missing route", async () => {
-    respond(404, { kind: "unknown-project", project: "x", error: "nope" });
-    expect(await fetchRestart({ project: "x" })).toMatchObject({
-      kind: "unknown-project",
-    });
+  it("a workdir that is no project is a result, not a missing route", async () => {
+    respond(404, { kind: "unknown-project", error: "unknown project" });
+    expect(await fetchRestart()).toMatchObject({ kind: "unknown-project" });
   });
 });

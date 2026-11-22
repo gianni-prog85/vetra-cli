@@ -7,20 +7,17 @@ import type { PreviewTarget } from "./useSessionPreviewTarget.js";
 
 const hoisted = vi.hoisted(() => ({
   resolves: [] as Record<string, unknown>[],
-  starts: [] as string[],
+  starts: [] as Record<string, unknown>[],
   kind: "project-stopped",
 }));
 
 vi.mock("./preview-server-client.js", () => ({
   fetchResolve: (args: Record<string, unknown>) => {
     hoisted.resolves.push(args);
-    return Promise.resolve({
-      kind: hoisted.kind,
-      project: args.project,
-    });
+    return Promise.resolve({ kind: hoisted.kind });
   },
-  fetchStart: ({ project }: { project: string }) => {
-    hoisted.starts.push(project);
+  fetchStart: (args: Record<string, unknown>) => {
+    hoisted.starts.push(args);
     return Promise.resolve({ kind: "started" });
   },
   subscribePreviewEvents: () => () => {},
@@ -53,33 +50,29 @@ beforeEach(() => {
 describe("useResolvedPreview", () => {
   it("asks for the home view and never starts a stopped project for it", async () => {
     const container = render(
-      <Probe
-        target={{ project: "todo", home: true, callId: "s1" }}
-        autoStart={false}
-      />,
+      <Probe target={{ home: true, callId: "s1" }} autoStart={false} />,
     );
     await settle();
-    expect(hoisted.resolves.at(-1)).toMatchObject({
-      project: "todo",
-      home: true,
-    });
+    expect(hoisted.resolves.at(-1)).toMatchObject({ home: true });
+    // The project is the Studio's own: no call names one.
+    expect(hoisted.resolves.at(-1)).not.toHaveProperty("project");
     expect(
       container.querySelector("[data-kind]")?.getAttribute("data-kind"),
     ).toBe("project-stopped");
     expect(hoisted.starts).toEqual([]);
   });
 
-  it("starts a stopped project for a shared screen", async () => {
-    render(<Probe target={{ project: "todo", doc: "d1", callId: "c1" }} />);
+  it("starts a stopped project once for a shared screen", async () => {
+    render(<Probe target={{ doc: "d1", callId: "c1" }} />);
     await settle();
-    expect(hoisted.starts).toEqual(["todo"]);
+    expect(hoisted.resolves.at(-1)).toMatchObject({ doc: "d1" });
+    expect(hoisted.starts).toHaveLength(1);
+    expect(hoisted.starts[0]).not.toHaveProperty("project");
   });
 
   it("never starts anything while the Studio's project run is off", async () => {
     hoisted.kind = "preview-off";
-    const container = render(
-      <Probe target={{ project: "todo", doc: "d1", callId: "c1" }} />,
-    );
+    const container = render(<Probe target={{ doc: "d1", callId: "c1" }} />);
     await settle();
     expect(
       container.querySelector("[data-kind]")?.getAttribute("data-kind"),

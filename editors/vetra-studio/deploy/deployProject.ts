@@ -111,7 +111,7 @@ async function commitAndApprove(
 }
 
 /**
- * Deploy a project end to end:
+ * Deploy the project the Studio runs in end to end:
  *  1. publish the package to the registry (server-side; skipped when the source
  *     is already the latest published version);
  *  2. install that exact version into the target environment (or create the
@@ -121,16 +121,15 @@ async function commitAndApprove(
  * authoritative post-push environment status.
  */
 export async function deployProject(opts: {
-  project: string;
   driveId: string;
   signer: ISigner;
   target: DeployTarget;
   onPhase?: (phase: DeployPhase) => void;
 }): Promise<DeployOutcome> {
-  const { project, driveId, signer, target, onPhase } = opts;
+  const { driveId, signer, target, onPhase } = opts;
 
   onPhase?.("publishing");
-  const pub = await publishProject({ project });
+  const pub = await publishProject();
   if (pub.kind !== "ok") {
     const kind: DeployErrorKind =
       pub.kind === "auth-required"

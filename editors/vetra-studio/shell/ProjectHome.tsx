@@ -14,12 +14,14 @@ import type { DocumentDispatch } from "@powerhousedao/reactor-browser";
 import { useState } from "react";
 import { ChatPane } from "../ChatPane.js";
 import { useStudioSignIn } from "../idea/useStudioSignIn.js";
-import { specDocuments, SPECIFY_TYPES } from "../specify/projects.js";
+import {
+  PROJECT_FALLBACK_NAME,
+  specDocuments,
+  SPECIFY_TYPES,
+} from "../specify/projects.js";
 import { AccountMenu } from "./AccountMenu.js";
 import { useProjectPackage } from "./useProjectPackage.js";
 
-/** Shown while the project's name is not known (yet). */
-export const PROJECT_FALLBACK_NAME = "This project";
 export const NO_SPECS =
   "No specifications yet. Ask the agent for a document model, an editor or an app.";
 

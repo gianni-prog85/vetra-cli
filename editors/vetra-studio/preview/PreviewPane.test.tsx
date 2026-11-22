@@ -27,8 +27,8 @@ const hoisted = vi.hoisted(() => ({
   resolve: (_target: PreviewTarget | undefined): ResolvedPreview => ({
     kind: "no-target",
   }),
-  started: [] as string[],
-  restarted: [] as string[],
+  started: [] as unknown[],
+  restarted: [] as unknown[],
   /** The autoStart option of each resolve. */
   autoStart: [] as (boolean | undefined)[],
   /** false: an older Studio without /restart. */
@@ -46,16 +46,17 @@ vi.mock("../hooks/useResolvedPreview.js", () => ({
   },
 }));
 vi.mock("../hooks/preview-server-client.js", () => ({
-  fetchRestart: ({ project }: { project: string }) => {
+  // The project is the Studio's own: the calls name none.
+  fetchRestart: (args?: unknown) => {
     if (hoisted.refused) {
       return Promise.reject(new Error("Couldn't restart the preview."));
     }
     if (!hoisted.hasRestart) return Promise.resolve(null);
-    hoisted.restarted.push(project);
+    hoisted.restarted.push(args);
     return Promise.resolve({ kind: "started" });
   },
-  fetchStart: ({ project }: { project: string }) => {
-    hoisted.started.push(project);
+  fetchStart: (args?: unknown) => {
+    hoisted.started.push(args);
     return Promise.resolve({ kind: "already-running" });
   },
 }));
@@ -69,7 +70,6 @@ function ready(target: PreviewTarget | undefined): ResolvedPreview {
   const id = target.doc ?? target.drive ?? (target.home ? "home" : "");
   return {
     kind: "ready",
-    project: target.project,
     driveId: "d1",
     documentId: id,
     url: `about:blank#${id}`,
@@ -95,17 +95,17 @@ function session(messages: Messages): ChatSessionDocument {
 const AGENT_SHOWS_ORDER = [
   toolTurn(
     "spec-preview-create",
-    { project: "hotel", type: "hotel/order", name: "Breakfast for 2" },
+    { type: "hotel/order", name: "Breakfast for 2" },
     'Created hotel/order "Breakfast for 2"  id: doc-o1  (drive d1)',
   ),
   toolTurn(
     "spec-preview-create",
-    { project: "hotel", type: "hotel/menu", name: "Menu" },
+    { type: "hotel/menu", name: "Menu" },
     'Created hotel/menu "Menu"  id: doc-m1  (drive d1)',
   ),
   toolTurn(
     "spec-preview-show",
-    { project: "hotel", name: "Breakfast for 2" },
+    { name: "Breakfast for 2" },
     { data: { documentId: "doc-o1", documentSlug: "breakfast-for-2" } },
   ),
 ];
@@ -140,7 +140,7 @@ beforeEach(() => {
 const PROJECT_STARTED = toolTurn(
   "reactor-project-start",
   {},
-  { text: "reactor-project ready", data: { project: "hotel" } },
+  { text: "reactor-project ready", data: { projectPath: "/abs/hotel" } },
 );
 
 describe("PreviewPane", () => {
@@ -170,9 +170,7 @@ describe("PreviewPane", () => {
 
   it("says the preview comes with the Preview run while the project run is off", () => {
     hoisted.resolve = (target) =>
-      target
-        ? { kind: "preview-off", project: target.project }
-        : { kind: "no-target" };
+      target ? { kind: "preview-off" } : { kind: "no-target" };
     const { container } = mount({
       change: null,
       documents: [],
@@ -217,11 +215,7 @@ describe("PreviewPane", () => {
   it("keeps the skeleton while the started project isn't up yet", () => {
     hoisted.resolve = (target) =>
       target?.home
-        ? {
-            kind: "starting",
-            project: "hotel",
-            driveId: "d1",
-          }
+        ? { kind: "starting", driveId: "d1" }
         : { kind: "no-target" };
     const { container } = mount({
       change: null,
@@ -243,11 +237,7 @@ describe("PreviewPane", () => {
     );
     expect(container.querySelector("[data-preview-skeleton]")).not.toBeNull();
 
-    hoisted.resolve = () => ({
-      kind: "starting",
-      project: "hotel",
-      driveId: "d1",
-    });
+    hoisted.resolve = () => ({ kind: "starting", driveId: "d1" });
     ({ container } = mount(props));
     expect(container.textContent).toContain("Starting the preview…");
 
@@ -320,7 +310,7 @@ describe("PreviewPane", () => {
       session: session(AGENT_SHOWS_ORDER),
     });
     await act(() => restartPreview());
-    expect(hoisted.started).toEqual(["hotel"]);
+    expect(hoisted.started).toHaveLength(1);
   });
 
   it("a refused restart rejects with a plain message and doesn't start", async () => {
@@ -339,6 +329,13 @@ describe("PreviewPane", () => {
     expect(hoisted.started).toEqual([]);
   });
 
+  it("restartPreview restarts nothing while no preview is shown", async () => {
+    mount({ change: null, documents: [], session: undefined });
+    await act(() => restartPreview());
+    expect(hoisted.restarted).toEqual([]);
+    expect(hoisted.started).toEqual([]);
+  });
+
   it("restartPreview restarts the shown project and reloads the frame", async () => {
     hoisted.resolve = ready;
     const { container } = mount({
@@ -348,7 +345,7 @@ describe("PreviewPane", () => {
     });
     const before = container.querySelector("iframe");
     await act(() => restartPreview());
-    expect(hoisted.restarted).toEqual(["hotel"]);
+    expect(hoisted.restarted).toHaveLength(1);
     expect(hoisted.started).toEqual([]);
     const after = container.querySelector("iframe");
     expect(after).not.toBeNull();

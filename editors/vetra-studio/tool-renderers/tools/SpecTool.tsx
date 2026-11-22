@@ -10,7 +10,7 @@ export function SpecTool(props: ToolRenderProps) {
     <CommandTool
       {...props}
       icon={isWriteVerb(props.toolName) ? PenLine : FileText}
-      detail={str(a.project) ?? str(a.name) ?? str(a.id)}
+      detail={str(a.name) ?? str(a.id)}
     />
   );
 }

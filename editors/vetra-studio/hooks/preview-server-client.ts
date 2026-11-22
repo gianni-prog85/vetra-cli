@@ -273,16 +273,19 @@ export async function resolveStudioCloudSwitchboardUrl(): Promise<
   return config.cloudSwitchboardUrl ?? null;
 }
 
+// Every route acts on the project the Studio runs in (the Cli's workdir): no
+// call names a project.
+
 export type ResolveResult =
   | { kind: "no-target" }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "project-stopped"; project: string }
+  /** The Studio's workdir is no Reactor Package project. */
+  | { kind: "unknown-project"; error: string }
+  | { kind: "project-stopped" }
   /** The project run is off in this Studio: nothing starts it. */
-  | { kind: "preview-off"; project: string }
-  | { kind: "starting"; project: string; driveId?: string }
+  | { kind: "preview-off" }
+  | { kind: "starting"; driveId?: string }
   | {
       kind: "ready";
-      project: string;
       driveId: string;
       documentId: string;
       url: string;
@@ -292,31 +295,28 @@ export type ResolveResult =
 export type StartResult =
   | {
       kind: "started";
-      project: string;
       projectPath: string;
       instanceId: string;
       driveId?: string;
     }
   | {
       kind: "already-running";
-      project: string;
       projectPath: string;
       instanceId: string;
       driveId?: string;
       status: "starting" | "ready";
     }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "failed"; project: string; error: string };
+  | { kind: "unknown-project"; error: string }
+  | { kind: "failed"; error: string };
 
 export async function fetchResolve(args: {
-  project: string;
   doc: string;
   drive?: string;
   /** The project's preview drive root (no doc, no drive). */
   home?: boolean;
   signal?: AbortSignal;
 }): Promise<ResolveResult> {
-  const params = new URLSearchParams({ project: args.project, doc: args.doc });
+  const params = new URLSearchParams({ doc: args.doc });
   if (args.drive) params.set("drive", args.drive);
   if (args.home) params.set("home", "1");
   const { base, proxyBase } = await previewBase();
@@ -332,21 +332,16 @@ export async function fetchResolve(args: {
 }
 
 export type ProjectPackageResult =
-  | { kind: "ok"; project: string; name: string; version: string }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "no-package"; project: string; error: string };
+  | { kind: "ok"; name: string; version: string }
+  | { kind: "unknown-project"; error: string }
+  | { kind: "no-package"; error: string };
 
-/** Read a project's package identity (name + version) from its package.json;
- * no `project`: the project the Studio runs in. */
-export async function fetchProjectPackage(args: {
-  project?: string;
-  signal?: AbortSignal;
-}): Promise<ProjectPackageResult> {
-  const query = args.project
-    ? `?${new URLSearchParams({ project: args.project })}`
-    : "";
+/** The project's package identity (name + version) from its package.json. */
+export async function fetchProjectPackage(
+  args: { signal?: AbortSignal } = {},
+): Promise<ProjectPackageResult> {
   const { base } = await previewBase();
-  const res = await fetch(`${base}/project-package${query}`, {
+  const res = await fetch(`${base}/project-package`, {
     headers: await ownerHeaders(),
     signal: args.signal,
   });
@@ -361,7 +356,6 @@ export async function fetchProjectPackage(args: {
 export type ReleaseStatusResult =
   | {
       kind: "ok";
-      project: string;
       packageName: string;
       localVersion: string | null;
       publishedVersion: string | null;
@@ -369,19 +363,17 @@ export type ReleaseStatusResult =
       needsRelease: boolean;
       reason: string;
     }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "no-package"; project: string; error: string }
-  | { kind: "unknown"; project: string; error: string };
+  | { kind: "unknown-project"; error: string }
+  | { kind: "no-package"; error: string }
+  | { kind: "unknown"; error: string };
 
-/** Whether a project's current source is already published (up to date) or
+/** Whether the project's current source is already published (up to date) or
  * needs a new release, by comparing its content hash to the registry. */
-export async function fetchReleaseStatus(args: {
-  project: string;
-  signal?: AbortSignal;
-}): Promise<ReleaseStatusResult> {
-  const params = new URLSearchParams({ project: args.project });
+export async function fetchReleaseStatus(
+  args: { signal?: AbortSignal } = {},
+): Promise<ReleaseStatusResult> {
   const { base } = await previewBase();
-  const res = await fetch(`${base}/release-status?${params}`, {
+  const res = await fetch(`${base}/release-status`, {
     headers: await ownerHeaders(),
     signal: args.signal,
   });
@@ -396,28 +388,25 @@ export async function fetchReleaseStatus(args: {
 export type PublishProjectResult =
   | {
       kind: "ok";
-      project: string;
       packageName: string;
       version: string;
       registry: string;
       published: boolean;
     }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "no-package"; project: string; error: string }
-  | { kind: "auth-required"; project: string; error: string }
-  | { kind: "failed"; project: string; error: string };
+  | { kind: "unknown-project"; error: string }
+  | { kind: "no-package"; error: string }
+  | { kind: "auth-required"; error: string }
+  | { kind: "failed"; error: string };
 
-/** Build + publish a project's package to the registry (skipped server-side
+/** Build + publish the project's package to the registry (skipped server-side
  * when the source is already the latest published version). Returns the
  * published name + version to install into an environment. All outcomes carry a
  * discriminated body, so this doesn't throw on non-2xx. */
-export async function publishProject(args: {
-  project: string;
-  signal?: AbortSignal;
-}): Promise<PublishProjectResult> {
-  const params = new URLSearchParams({ project: args.project });
+export async function publishProject(
+  args: { signal?: AbortSignal } = {},
+): Promise<PublishProjectResult> {
   const { base } = await previewBase();
-  const res = await fetch(`${base}/publish?${params}`, {
+  const res = await fetch(`${base}/publish`, {
     method: "POST",
     headers: await ownerHeaders(),
     signal: args.signal,
@@ -428,7 +417,6 @@ export async function publishProject(args: {
   if (!body?.kind) {
     return {
       kind: "failed",
-      project: args.project,
       error: isRefused(res.status)
         ? OWNER_REQUIRED
         : `preview-server /publish: ${res.status} ${res.statusText}`,
@@ -437,13 +425,11 @@ export async function publishProject(args: {
   return body;
 }
 
-export async function fetchStart(args: {
-  project: string;
-  signal?: AbortSignal;
-}): Promise<StartResult> {
-  const params = new URLSearchParams({ project: args.project });
+export async function fetchStart(
+  args: { signal?: AbortSignal } = {},
+): Promise<StartResult> {
   const { base } = await previewBase();
-  const res = await fetch(`${base}/start?${params}`, {
+  const res = await fetch(`${base}/start`, {
     method: "POST",
     headers: await ownerHeaders(),
     signal: args.signal,
@@ -454,7 +440,6 @@ export async function fetchStart(args: {
   if (!body?.kind) {
     return {
       kind: "failed",
-      project: args.project,
       error: isRefused(res.status)
         ? OWNER_REQUIRED
         : `preview-server /start: ${res.status} ${res.statusText}`,
@@ -471,13 +456,11 @@ export const RESTART_REFUSED = "Couldn't restart the preview.";
  * `/restart` (older Studios), so the caller can fall back to `/start`.
  * Throws `Couldn't restart the preview.` when the caller isn't allowed.
  */
-export async function fetchRestart(args: {
-  project: string;
-  signal?: AbortSignal;
-}): Promise<StartResult | null> {
-  const params = new URLSearchParams({ project: args.project });
+export async function fetchRestart(
+  args: { signal?: AbortSignal } = {},
+): Promise<StartResult | null> {
   const { base } = await previewBase();
-  const res = await fetch(`${base}/restart?${params}`, {
+  const res = await fetch(`${base}/restart`, {
     method: "POST",
     headers: await ownerHeaders(),
     signal: args.signal,

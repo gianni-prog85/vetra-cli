@@ -69,10 +69,10 @@ function signedIn(token = "tok-123") {
 
 describe("owner-only preview-server calls carry the user's Renown bearer", () => {
   const ownerCalls: Array<[string, () => Promise<unknown>]> = [
-    ["/project-package", () => c.fetchProjectPackage({ project: "p" })],
-    ["/release-status", () => c.fetchReleaseStatus({ project: "p" })],
-    ["/publish", () => c.publishProject({ project: "p" })],
-    ["/start", () => c.fetchStart({ project: "p" })],
+    ["/project-package", () => c.fetchProjectPackage()],
+    ["/release-status", () => c.fetchReleaseStatus()],
+    ["/publish", () => c.publishProject()],
+    ["/start", () => c.fetchStart()],
     ["/export?workspace=1", () => c.fetchWorkspaceExport()],
     ["/export/status", () => c.fetchExportStatus()],
     ["/auth/status", () => c.fetchAuthStatus()],
@@ -87,6 +87,8 @@ describe("owner-only preview-server calls carry the user's Renown bearer", () =>
     expect(lastAuth(path)).toBe("Bearer tok-123");
     // Bound to this Studio: the aud is its public origin.
     expect(auds).toEqual([STUDIO]);
+    // The routes act on the Studio's own project: no call names one.
+    expect(calls.some((x) => x.url.includes("project="))).toBe(false);
   });
 
   it.each(ownerCalls)(
@@ -109,7 +111,7 @@ describe("owner-only preview-server calls carry the user's Renown bearer", () =>
     c = await loadClient();
     signedIn();
     await expect(c.fetchAuthStatus()).rejects.toThrow(c.LOCAL_API_UNKNOWN);
-    await expect(c.fetchResolve({ project: "p", doc: "d" })).rejects.toThrow(
+    await expect(c.fetchResolve({ doc: "d" })).rejects.toThrow(
       c.LOCAL_API_UNKNOWN,
     );
     expect(calls.map((x) => x.url)).toEqual([
@@ -197,7 +199,7 @@ describe("owner-only preview-server calls carry the user's Renown bearer", () =>
   it("public routes don't need the bearer", async () => {
     signedIn();
     body = { kind: "no-target" };
-    await c.fetchResolve({ project: "p", doc: "d" });
+    await c.fetchResolve({ doc: "d" });
     body = { vetraCli: "1", ph: "2" };
     await c.fetchVersion();
     expect(lastAuth("/resolve")).toBeNull();
@@ -209,28 +211,22 @@ describe("a refused owner call reads as 'sign in as the owner'", () => {
   it("publish and start turn the gate's 401/403 into a failed result", async () => {
     status = 401;
     body = { error: "unauthorized" };
-    expect(await c.publishProject({ project: "p" })).toEqual({
+    expect(await c.publishProject()).toEqual({
       kind: "failed",
-      project: "p",
       error: c.OWNER_REQUIRED,
     });
     status = 403;
     body = { error: "forbidden" };
-    expect(await c.fetchStart({ project: "p" })).toEqual({
+    expect(await c.fetchStart()).toEqual({
       kind: "failed",
-      project: "p",
       error: c.OWNER_REQUIRED,
     });
   });
 
   it("publish still passes the agent's own auth-required result through", async () => {
     status = 401;
-    body = {
-      kind: "auth-required",
-      project: "p",
-      error: "authorize the agent",
-    };
-    expect(await c.publishProject({ project: "p" })).toMatchObject({
+    body = { kind: "auth-required", error: "authorize the agent" };
+    expect(await c.publishProject()).toMatchObject({
       kind: "auth-required",
     });
   });

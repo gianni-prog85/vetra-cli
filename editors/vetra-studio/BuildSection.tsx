@@ -5,7 +5,7 @@ import { PreviewStatusChip } from "./PreviewStatusChip.js";
 import type { ResolvedPreview } from "./hooks/useResolvedPreview.js";
 
 /**
- * Home > Build. Hosts the live preview iframe for the project the agent last
+ * Home > Build. Hosts the live preview iframe for the document the agent last
  * surfaced via `spec-preview-show`, resolved reactively from the
  * preview-server. Falls back to a status readout while the project warms up
  * or when no preview target is bound yet.
@@ -62,7 +62,7 @@ export function previewActivity(preview: ResolvedPreview): string {
 
 /**
  * The preview body: the iframe once the preview is up, else a skeleton with
- * the current activity. While the same project restarts, the last frame
+ * the current activity. While the project restarts, the last frame
  * stays mounted under the skeleton so its scroll position survives; a hot
  * reload inside the frame keeps it too.
  */
@@ -93,17 +93,17 @@ export function PreviewBody({
     return u.toString();
   }, [url, theme]);
 
-  // The last frame shown, kept while its project restarts.
-  const last = useRef<{ project: string; src: string } | null>(null);
+  // The last frame shown, kept while the project restarts.
+  const last = useRef<string | null>(null);
   if (src && preview.kind === "ready") {
-    last.current = { project: preview.project, src };
-  } else if (!(
-    (preview.kind === "starting" || preview.kind === "project-stopped") &&
-    last.current?.project === preview.project
-  )) {
+    last.current = src;
+  } else if (
+    preview.kind !== "starting" &&
+    preview.kind !== "project-stopped"
+  ) {
     last.current = null;
   }
-  const frameSrc = src ?? last.current?.src;
+  const frameSrc = src ?? last.current ?? undefined;
   const frameKey = `${frameSrc ?? ""}#${reloadKey}`;
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const showing = src !== undefined && loadedKey === frameKey;

@@ -93,21 +93,18 @@ describe("extractPreviewTarget", () => {
           type: "TOOL_CALL",
           toolCallId: "x",
           toolName: "spec-preview-create",
-          args: JSON.stringify({ project: "p1" }),
+          args: JSON.stringify({ name: "p1" }),
         }),
       ]),
     ]);
     expect(extractPreviewTarget(session)).toBeUndefined();
   });
 
-  it("extracts project + doc from the latest successful spec-preview-show", () => {
+  it("extracts the doc from the latest successful spec-preview-show", () => {
     const session = makeSession([
-      msg("ASSISTANT", [
-        showCall("c1", { project: "workout-tracker", name: "Bench Day" }),
-      ]),
+      msg("ASSISTANT", [showCall("c1", { name: "Bench Day" })]),
       msg("TOOL", [
         showResult("c1", {
-          projectPath: "/abs/workout-tracker",
           driveId: "preview-abcd1234",
           documentId: "doc-7",
           documentSlug: "bench-day",
@@ -116,8 +113,8 @@ describe("extractPreviewTarget", () => {
         }),
       ]),
     ]);
+    // The project is the Studio's own: the target names none.
     expect(extractPreviewTarget(session)).toEqual({
-      project: "workout-tracker",
       doc: "bench-day",
       callId: "c1",
     });
@@ -125,10 +122,9 @@ describe("extractPreviewTarget", () => {
 
   it("falls back to documentId when documentSlug is null", () => {
     const session = makeSession([
-      msg("ASSISTANT", [showCall("c1", { project: "p1" })]),
+      msg("ASSISTANT", [showCall("c1", {})]),
       msg("TOOL", [
         showResult("c1", {
-          projectPath: "/abs/p1",
           driveId: "preview-x",
           documentId: "doc-only-id",
           documentSlug: null,
@@ -136,7 +132,6 @@ describe("extractPreviewTarget", () => {
       ]),
     ]);
     expect(extractPreviewTarget(session)).toEqual({
-      project: "p1",
       doc: "doc-only-id",
       callId: "c1",
     });
@@ -145,66 +140,50 @@ describe("extractPreviewTarget", () => {
   it("prefers the most recent result and skips errored ones", () => {
     const session = makeSession([
       // older successful call
-      msg("ASSISTANT", [showCall("c1", { project: "old-project" })]),
+      msg("ASSISTANT", [showCall("c1", { name: "Old" })]),
       msg("TOOL", [
-        showResult("c1", {
-          projectPath: "/abs/old",
-          driveId: "preview-old",
-          documentSlug: "old-doc",
-        }),
+        showResult("c1", { driveId: "preview-old", documentSlug: "old-doc" }),
       ]),
       // newer errored call — should be ignored
-      msg("ASSISTANT", [showCall("c2", { project: "errored" })]),
+      msg("ASSISTANT", [showCall("c2", { name: "Errored" })]),
       msg("TOOL", [showResult("c2", null, { isError: true })]),
       // newest successful call — should win
-      msg("ASSISTANT", [showCall("c3", { project: "newest" })]),
+      msg("ASSISTANT", [showCall("c3", { name: "Newest" })]),
       msg("TOOL", [
         showResult("c3", {
-          projectPath: "/abs/newest",
           driveId: "preview-newest",
           documentSlug: "newest-doc",
         }),
       ]),
     ]);
     expect(extractPreviewTarget(session)).toEqual({
-      project: "newest",
       doc: "newest-doc",
       callId: "c3",
     });
   });
 
-  it("ignores results whose matching call can't be found", () => {
-    /* Defensive: if the call message is somehow missing, drop the result
-     * rather than emit an incomplete target. */
+  it("a drive view is a drive target", () => {
     const session = makeSession([
-      msg("TOOL", [
-        showResult("orphan", {
-          projectPath: "/x",
-          driveId: "y",
-          documentSlug: "z",
-        }),
-      ]),
+      msg("ASSISTANT", [showCall("c1", {})]),
+      msg("TOOL", [showResult("c1", { kind: "drive", driveId: "drv-1" })]),
     ]);
-    expect(extractPreviewTarget(session)).toBeUndefined();
+    expect(extractPreviewTarget(session)).toEqual({
+      drive: "drv-1",
+      callId: "c1",
+    });
   });
 
-  it("ignores results whose call args omit `project`", () => {
+  it("ignores results that name no document", () => {
     const session = makeSession([
-      msg("ASSISTANT", [showCall("c1", { name: "no project field" })]),
-      msg("TOOL", [
-        showResult("c1", {
-          projectPath: "/abs",
-          driveId: "drv",
-          documentSlug: "doc",
-        }),
-      ]),
+      msg("ASSISTANT", [showCall("c1", {})]),
+      msg("TOOL", [showResult("c1", { driveId: "drv" })]),
     ]);
     expect(extractPreviewTarget(session)).toBeUndefined();
   });
 
   it("ignores results whose JSON is malformed", () => {
     const session = makeSession([
-      msg("ASSISTANT", [showCall("c1", { project: "p" })]),
+      msg("ASSISTANT", [showCall("c1", {})]),
       msg("TOOL", [
         part({
           id: "broken",
@@ -227,7 +206,7 @@ describe("extractPreviewTarget", () => {
           type: "TOOL_CALL",
           toolCallId: "c1",
           toolName: "spec-preview-create",
-          args: JSON.stringify({ project: "p" }),
+          args: JSON.stringify({}),
         }),
       ]),
       msg("TOOL", [
@@ -244,27 +223,6 @@ describe("extractPreviewTarget", () => {
       ]),
     ]);
     expect(extractPreviewTarget(session)).toBeUndefined();
-  });
-});
-
-describe("extractPreviewTarget without the call's project", () => {
-  it("takes the project from the result (the workspace's only project)", () => {
-    const session = makeSession([
-      msg("ASSISTANT", [showCall("c1", { name: "Bench Day" })]),
-      msg("TOOL", [
-        showResult("c1", {
-          project: "workout-tracker",
-          projectPath: "/abs/workout-tracker",
-          documentId: "doc-7",
-          documentSlug: "bench-day",
-        }),
-      ]),
-    ]);
-    expect(extractPreviewTarget(session)).toEqual({
-      project: "workout-tracker",
-      doc: "bench-day",
-      callId: "c1",
-    });
   });
 });
 
@@ -302,49 +260,43 @@ describe("extractProjectHomeTarget", () => {
     expect(extractProjectHomeTarget(makeSession([]))).toBeUndefined();
   });
 
-  it("is the started project's home, from the result or the call's workdir", () => {
-    const fromResult = makeSession([
+  it("is the project's home once a start succeeded", () => {
+    const session = makeSession([
       msg("ASSISTANT", [startCall("s1", {})]),
       msg("TOOL", [
         startResult("s1", {
           text: "reactor-project ready",
-          data: { project: "todo-list" },
+          data: { projectPath: "/abs/todo-list" },
         }),
       ]),
     ]);
-    expect(extractProjectHomeTarget(fromResult)).toEqual({
-      project: "todo-list",
+    expect(extractProjectHomeTarget(session)).toEqual({
       home: true,
       callId: "s1",
     });
-    const fromArgs = makeSession([
-      msg("ASSISTANT", [startCall("s2", { workdir: "todo-list" })]),
-      msg("TOOL", [startResult("s2", { text: "reactor-project starting" })]),
-    ]);
-    expect(extractProjectHomeTarget(fromArgs)?.project).toBe("todo-list");
   });
 
   it("skips failed starts and falls back to an earlier good one", () => {
     const session = makeSession([
-      msg("ASSISTANT", [startCall("s1", { workdir: "todo-list" })]),
+      msg("ASSISTANT", [startCall("s1", {})]),
       msg("TOOL", [startResult("s1", { text: "ready" })]),
-      msg("ASSISTANT", [startCall("s2", { workdir: "other" })]),
+      msg("ASSISTANT", [startCall("s2", {})]),
       msg("TOOL", [
         startResult("s2", { text: "✗ reactor-project: port in use" }),
       ]),
-      msg("ASSISTANT", [startCall("s3", { workdir: "third" })]),
+      msg("ASSISTANT", [startCall("s3", {})]),
       msg("TOOL", [startResult("s3", "boom", { isError: true })]),
     ]);
-    expect(extractProjectHomeTarget(session)).toMatchObject({
-      project: "todo-list",
+    expect(extractProjectHomeTarget(session)).toEqual({
+      home: true,
       callId: "s1",
     });
   });
 
-  it("is undefined when the project can't be told", () => {
+  it("is undefined when every start failed", () => {
     const session = makeSession([
       msg("ASSISTANT", [startCall("s1", {})]),
-      msg("TOOL", [startResult("s1", { text: "ready" })]),
+      msg("TOOL", [startResult("s1", { text: "✗ The project run is off" })]),
     ]);
     expect(extractProjectHomeTarget(session)).toBeUndefined();
   });

@@ -97,21 +97,14 @@ describe("extractDeployTarget", () => {
     expect(extractDeployTarget(session)).toBeUndefined();
   });
 
-  it("extracts the project from reactor-project-publish --name", () => {
+  it("a reactor-project-publish is the deploy of the Studio's project", () => {
     const session = makeSession([
-      msg("ASSISTANT", [publish("c1", { name: "todo-app", version: "1.2.0" })]),
+      msg("ASSISTANT", [publish("c1", { version: "1.2.0" })]),
     ]);
     expect(extractDeployTarget(session)).toEqual({
-      project: "todo-app",
+      publish: true,
       callId: "c1",
     });
-  });
-
-  it("skips a publish with no name (cwd project can't be pinpointed)", () => {
-    const session = makeSession([
-      msg("ASSISTANT", [publish("c1", { version: "1.0.0" })]),
-    ]);
-    expect(extractDeployTarget(session)).toBeUndefined();
   });
 
   it("extracts a package from deploy-environment-update --addPackage (array)", () => {
@@ -160,11 +153,11 @@ describe("extractDeployTarget", () => {
 
   it("returns the newest matching deploy call, skipping intervening non-deploy ones", () => {
     const session = makeSession([
-      msg("ASSISTANT", [publish("c1", { name: "todo-app" })]),
+      msg("ASSISTANT", [publish("c1", {})]),
       msg("ASSISTANT", [
         envUpdate("c2", { name: "prod", addPackage: ["@acme/todo@2.0.0"] }),
       ]),
-      // the go-live + wait steps that follow carry no project/package
+      // the go-live + wait steps that follow carry no package
       msg("ASSISTANT", [
         envUpdate("c3", { name: "prod", transition: "CHANGES_APPROVED" }),
       ]),
@@ -178,14 +171,14 @@ describe("extractDeployTarget", () => {
     });
   });
 
-  it("skips a deploy call whose args are malformed JSON", () => {
+  it("skips an env update whose args are malformed JSON", () => {
     const session = makeSession([
       msg("ASSISTANT", [
         part({
           id: "broken",
           type: "TOOL_CALL",
           toolCallId: "c1",
-          toolName: "reactor-project-publish",
+          toolName: "deploy-environment-update",
           args: "not valid json {",
         }),
       ]),

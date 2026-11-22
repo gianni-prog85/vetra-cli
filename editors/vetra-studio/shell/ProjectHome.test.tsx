@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoForbiddenWords } from "../test-utils/forbiddenWords.js";
 import { render } from "../test-utils/render.js";
 import { file } from "../test-utils/studioFixtures.js";
-import { NO_SPECS, PROJECT_FALLBACK_NAME, ProjectHome } from "./ProjectHome.js";
+import { PROJECT_FALLBACK_NAME } from "../specify/projects.js";
+import { NO_SPECS, ProjectHome } from "./ProjectHome.js";
 import type { ProjectPackage } from "./useProjectPackage.js";
 
 const hoisted = vi.hoisted(() => ({

@@ -10,7 +10,7 @@ export function ReactorProjectTool(props: ToolRenderProps) {
     <CommandTool
       {...props}
       icon={props.toolName.includes("build") ? Hammer : Package}
-      detail={str(a.name) ?? str(a.project) ?? str(a.package)}
+      detail={str(a.name) ?? str(a.package)}
     />
   );
 }

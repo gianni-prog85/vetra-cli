@@ -1,35 +1,22 @@
 /**
- * Resolve a deploy follow-target to one of the drive's projects (pure,
- * unit-testable). A target names either the project directly (from
- * `reactor-project-publish --name`) or a package (from a
- * `deploy-environment-update --addPackage` install); the latter is matched
- * against each project's resolved package name.
+ * Whether a deploy follow-target is the deploy of the project the Studio runs
+ * in (pure, unit-testable). A `reactor-project-publish` is; a
+ * `deploy-environment-update --addPackage` install is when the package is
+ * the project's own (matched against its resolved package name).
  *
- * Returns `null` when it can't be resolved — the package data hasn't loaded
- * yet, or the package isn't one of this drive's projects (an external dep). The
- * watcher in `DeploySection` distinguishes "not yet" from "no match" via the
- * package-state status.
+ * Returns `null` while that can't be told yet (the package data hasn't
+ * loaded); `false` for a package that isn't the project's (an external dep).
  */
-import type { Project } from "../specify/projects.js";
-import type { ProjectPackageInfo } from "./useProjectPackages.js";
+import type { ProjectPackageInfo } from "./useProjectPackageInfo.js";
 import type { DeployTarget } from "../hooks/useSessionDeployTarget.js";
 
 export function resolveDeployProject(
   target: DeployTarget,
-  projects: readonly Project[],
-  byProject: ReadonlyMap<string, ProjectPackageInfo | null> | undefined,
-): Project | null {
-  // A directly-named project (folder name == publish --name) wins.
-  if (target.project) {
-    const byName = projects.find((p) => p.name === target.project);
-    if (byName) return byName;
-  }
-  // Otherwise map the installed package back to the project that produces it.
-  if (target.packageName && byProject) {
-    const match = projects.find(
-      (p) => byProject.get(p.name)?.name === target.packageName,
-    );
-    if (match) return match;
-  }
-  return null;
+  /** The project's package; undefined while loading, null when it has none. */
+  pkg: ProjectPackageInfo | null | undefined,
+): boolean | null {
+  if (target.publish) return true;
+  if (!target.packageName) return false;
+  if (pkg === undefined) return null;
+  return pkg?.name === target.packageName;
 }

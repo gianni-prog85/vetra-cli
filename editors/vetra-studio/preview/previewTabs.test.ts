@@ -77,49 +77,46 @@ describe("screenPreviews", () => {
     const messages = [
       toolTurn(
         "spec-preview-create",
-        { project: "hotel", type: "hotel/order", name: "Breakfast for 2" },
+        { type: "hotel/order", name: "Breakfast for 2" },
         'Created hotel/order "Breakfast for 2"  id: doc-o1  (drive d1)',
       ),
       toolTurn(
         "spec-preview-create",
-        { project: "hotel", type: "hotel/menu", name: "Menu" },
+        { type: "hotel/menu", name: "Menu" },
         "boom",
         true,
       ),
       toolTurn(
         "spec-preview-show",
-        { project: "hotel", name: "Breakfast for 2" },
+        { name: "Breakfast for 2" },
         { data: { documentId: "doc-o1", documentSlug: "breakfast-for-2" } },
       ),
       toolTurn(
         "spec-preview-show",
-        { project: "hotel", drive: "drv-app", app: "kitchen-queue" },
+        { drive: "drv-app", app: "kitchen-queue" },
         { data: { kind: "drive", driveId: "drv-app" } },
       ),
       toolTurn(
         "mastra_workspace_write_file",
-        { path: "hotel/editors/menu-editor/editor.tsx" },
+        { path: "editors/menu-editor/editor.tsx" },
         "ok",
       ),
     ];
     const found = screenPreviews(messages, screens);
-    expect(found.targets.get("ed-order")).toMatchObject({
-      project: "hotel",
+    // The project is the Studio's own: no target names one.
+    expect(found.targets.get("ed-order")).toEqual({
       doc: "breakfast-for-2",
+      callId: "screen-3",
     });
-    expect(found.targets.get("app-1")).toMatchObject({
-      project: "hotel",
+    expect(found.targets.get("app-1")).toEqual({
       drive: "drv-app",
+      callId: "screen-4",
     });
     expect(found.targets.has("ed-menu")).toBe(false);
     // Writing the menu screen's files: the agent is on it now.
     expect(found.activeScreenId).toBe("ed-menu");
     expect(
-      tabForTarget(found.targets, {
-        project: "hotel",
-        doc: "breakfast-for-2",
-        callId: "x",
-      }),
+      tabForTarget(found.targets, { doc: "breakfast-for-2", callId: "x" }),
     ).toBe("ed-order");
     expect(tabForTarget(found.targets, undefined)).toBeNull();
   });

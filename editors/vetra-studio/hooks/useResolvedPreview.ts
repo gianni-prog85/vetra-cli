@@ -26,13 +26,12 @@ import type { PreviewTarget } from "./useSessionPreviewTarget.js";
 export type ResolvedPreview =
   | { kind: "no-target" }
   | { kind: "loading" }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "project-stopped"; project: string }
-  | { kind: "preview-off"; project: string }
-  | { kind: "starting"; project: string; driveId?: string }
+  | { kind: "unknown-project"; error: string }
+  | { kind: "project-stopped" }
+  | { kind: "preview-off" }
+  | { kind: "starting"; driveId?: string }
   | {
       kind: "ready";
-      project: string;
       driveId: string;
       documentId: string;
       url: string;
@@ -48,11 +47,10 @@ export function useResolvedPreview(
     target ? { kind: "loading" } : { kind: "no-target" },
   );
 
-  /* Track which project we've already auto-started this lifecycle. Reset on
-   * target.project change so a different session can start its own project,
-   * and on `ready` so a future stop/start cycle within the same target
-   * doesn't get suppressed. */
-  const autoStartedFor = useRef<string | undefined>(undefined);
+  /* Whether this lifecycle already auto-started the project. Reset when the
+   * target goes away, and on `ready` so a future stop/start cycle doesn't get
+   * suppressed. */
+  const autoStarted = useRef(false);
 
   useEffect(() => {
     if (!target) {
@@ -66,7 +64,6 @@ export function useResolvedPreview(
     const refresh = async () => {
       try {
         const r: ResolveResult = await fetchResolve({
-          project: target.project,
           doc: target.doc ?? "",
           drive: target.drive,
           home: target.home,
@@ -96,35 +93,34 @@ export function useResolvedPreview(
       ac.abort();
       unsubscribe();
     };
-  }, [target?.project, target?.doc, target?.drive, target?.home]);
+  }, [target?.doc, target?.drive, target?.home]);
 
-  /* Auto-start: when we land on `project-stopped` for a target we haven't
-   * started yet, fire POST /start. The server is idempotent and the SSE
+  /* Auto-start: when we land on `project-stopped` and haven't started the
+   * project yet, fire POST /start. The server is idempotent and the SSE
    * stream will deliver the resulting service:starting / service:ready
    * events, which our refresh subscriber turns into state transitions. */
+  const hasTarget = target !== undefined;
   useEffect(() => {
-    if (!target) {
-      autoStartedFor.current = undefined;
+    if (!hasTarget) {
+      autoStarted.current = false;
       return;
     }
     if (state.kind === "ready") {
       // Reset so a future stop can be auto-recovered.
-      autoStartedFor.current = undefined;
+      autoStarted.current = false;
       return;
     }
     if (state.kind !== "project-stopped") return;
     if (!autoStart) return;
-    if (autoStartedFor.current === target.project) return;
+    if (autoStarted.current) return;
 
-    autoStartedFor.current = target.project;
+    autoStarted.current = true;
     const ac = new AbortController();
-    void fetchStart({ project: target.project, signal: ac.signal }).catch(
-      () => {
-        // Errors surface via the next /resolve; nothing to do here.
-      },
-    );
+    void fetchStart({ signal: ac.signal }).catch(() => {
+      // Errors surface via the next /resolve; nothing to do here.
+    });
     return () => ac.abort();
-  }, [state.kind, target?.project, autoStart]);
+  }, [state.kind, hasTarget, autoStart]);
 
   return state;
 }

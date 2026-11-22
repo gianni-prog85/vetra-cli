@@ -2,7 +2,7 @@ import { isStudioEnvironment } from "../../../cloud-client/index.js";
 import type { EnvironmentSummary } from "./cloudGraphql.js";
 import { CLOUD_BASE_DOMAIN } from "./config.js";
 import type { EnvInstall } from "./useInstalledPackages.js";
-import type { ReleaseStatus } from "./useReleaseStatuses.js";
+import type { ReleaseStatus } from "./useReleaseStatus.js";
 
 /** Per-(project, environment) freshness, folding "source changed since publish"
  * and "env runs an older version" into one user-facing notion. */

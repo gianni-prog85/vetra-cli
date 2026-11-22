@@ -271,7 +271,7 @@ export function VetraStudio({
   }, [documents, openDoc, openDocument]);
 
   /* The session doc is the source of truth for the BUILD preview: its tool
-   * history names the project and document the agent last surfaced via
+   * history names the document the agent last surfaced via
    * `spec-preview-show`. We re-resolve the URL each render from the live
    * preview-server so reactor restarts don't strand the iframe. Resolve via
    * the non-throwing safe hook so an unsynced `?session=<id>` doesn't suspend
@@ -389,7 +389,8 @@ export function VetraStudio({
   // Same per-session new-callId decision as the preview-follow (shared via
   // `deployFollowAction`), but the signal is the agent's own deploy commands
   // — there's no explicit "show". A new deploy call switches to DEPLOY and
-  // hands the target down to DeploySection, which resolves it to a project.
+  // hands the target down to DeploySection, which opens the project's deploy
+  // view when the target is the project.
   const deployMarkRef = useRef<DeployMark | null>(null);
   const [deployFocus, setDeployFocus] = useState<DeployTarget | null>(null);
   useEffect(() => {

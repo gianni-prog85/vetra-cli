@@ -1,33 +1,31 @@
 import type { OpenTarget } from "../ideation/types.js";
 import { SPECIFY_TYPES } from "./projects.js";
-import { useProjects } from "./useProjects.js";
+import { useSpecDocuments } from "./useSpecDocuments.js";
 
-/** Home > Specify > <project>: the project's spec documents. */
-export function ProjectDocuments({
-  projectId,
+/** Home > Specify: the project's spec documents (one set: the Studio runs in
+ * one project). */
+export function SpecDocuments({
   onOpen,
 }: {
-  projectId: string;
   onOpen: (target: OpenTarget) => void;
 }) {
-  const projects = useProjects();
-  const project = projects.find((p) => p.id === projectId);
+  const documents = useSpecDocuments();
 
   return (
     <section>
       <h3 className="mb-3 text-base font-semibold text-foreground">
-        Documents
+        Specifications
       </h3>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="border-b border-border bg-accent px-4 py-2 text-xs font-medium text-muted-foreground">
           Name
         </div>
-        {!project || project.documents.length === 0 ? (
+        {documents.length === 0 ? (
           <div className="px-4 py-6 text-sm text-muted-foreground">
-            No documents in this project.
+            No specification documents yet. Ask the agent to specify one.
           </div>
         ) : (
-          project.documents.map((doc) => (
+          documents.map((doc) => (
             <button
               key={doc.id}
               type="button"

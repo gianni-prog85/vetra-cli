@@ -33,7 +33,7 @@ import type {
   ProjectEnvDeployment,
 } from "./projectDeployments.js";
 import { StatusDot } from "./StatusBadge.js";
-import type { ReleaseStatus } from "./useReleaseStatuses.js";
+import type { ReleaseStatus } from "./useReleaseStatus.js";
 import { errorMessage } from "./utils.js";
 
 /** Tracks the single in-flight deploy push: which target (env id or "new") and
@@ -232,7 +232,6 @@ export function ProjectDeployDetail({
     setBusy({ key, phase: "publishing" });
     try {
       const outcome = await deployProject({
-        project: project.name,
         driveId,
         signer,
         target,
