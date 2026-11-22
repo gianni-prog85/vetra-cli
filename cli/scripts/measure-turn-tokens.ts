@@ -16,12 +16,15 @@
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const CLI_PATH = path.join(ROOT, 'src', 'main.ts');
-const TSX = path.join(ROOT, '..', 'node_modules', '.bin', 'tsx');
+// tsx's own entry, run by this node: the `.bin/tsx` shim is a shell script,
+// which Windows cannot spawn without a shell.
+const TSX_CLI = createRequire(import.meta.url).resolve('tsx/cli');
 
 export const DEFAULT_PROMPT =
   'Build a todo list app with a title, due date and done flag; editor with add, complete and delete';
@@ -83,9 +86,9 @@ async function main(): Promise<void> {
   let stderrTail = '';
   const code = await new Promise<number | null>((resolve, reject) => {
     const child = spawn(
-      TSX,
+      process.execPath,
       [
-        CLI_PATH, '-w', workdir, 'vetra-agent-run',
+        TSX_CLI, CLI_PATH, '-w', workdir, 'vetra-agent-run',
         '--prompt', prompt,
         // Observational memory is thread-scoped: a turn needs a thread.
         '--threadId', `measure-${Date.now()}`,
@@ -93,6 +96,7 @@ async function main(): Promise<void> {
       ],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
         env: { ...process.env, VETRA_MODEL: model, VETRA_MODEL_FALLBACKS: fallbacks },
       },
     );

@@ -298,7 +298,12 @@ async function git(workdir: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
     ["-c", "core.quotepath=false", ...workspaceSafeDirectory(workdir), ...args],
-    { cwd: workdir, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, maxBuffer: 64 * 1024 * 1024 },
+    {
+      cwd: workdir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      maxBuffer: 64 * 1024 * 1024,
+      windowsHide: true,
+    },
   );
   return stdout;
 }

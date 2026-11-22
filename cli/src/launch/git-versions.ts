@@ -95,6 +95,7 @@ export async function workspaceGit(
       cwd: workdir,
       env: gitEnv(opts.env),
       maxBuffer: 64 * 1024 * 1024,
+      windowsHide: true,
       ...(opts.timeoutMs ? { timeout: opts.timeoutMs, killSignal: "SIGKILL" as const } : {}),
     });
     return stdout.trim();
@@ -612,6 +613,7 @@ export function changedFiles(
     env: gitEnv(),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    windowsHide: true,
   });
   return out.split("\n").filter(Boolean);
 }

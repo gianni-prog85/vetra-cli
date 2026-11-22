@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { defineCommand } from '../../framework.js';
@@ -10,14 +10,20 @@ import { phInitNodeOptions } from '../../helpers/node-memory.js';
 import { federationPinTarget, withFederationOverrides } from './federation-pin.js';
 import { DEFAULT_PH_VERSION } from '../../constants.js';
 
+const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const NAME_PATTERN = /^[a-zA-Z0-9-_]+$/;
 
 /** True when a `pnpm` bin resolves — used to prefer pnpm for fresh scaffolds.
- * Short timeout so a stalled corepack shim degrades to npm quickly. */
-async function pnpmAvailable(): Promise<boolean> {
+ * Short timeout so a stalled corepack shim degrades to npm quickly. Windows'
+ * pnpm is a `.cmd` shim, which only a shell starts. */
+export async function pnpmAvailable(
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  const opts = { timeout: 5_000, windowsHide: true };
   try {
-    await execFileAsync('pnpm', ['--version'], { timeout: 5_000 });
+    if (platform === 'win32') await execAsync('pnpm --version', opts);
+    else await execFileAsync('pnpm', ['--version'], opts);
     return true;
   } catch {
     return false;

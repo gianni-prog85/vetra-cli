@@ -13,7 +13,8 @@
  *
  * The write itself always succeeds first — the throw is feedback, not a
  * rollback. eslint/tsc are resolved from the edited file's own project
- * (`node_modules/.bin`); if a project has neither, the file is left alone.
+ * (`node_modules/.bin`, see `projectBin`); if a project has neither, the file
+ * is left alone.
  * Infra failures (missing binary, eslint/tsc crash) are logged and ignored —
  * only real lint/type diagnostics block the agent.
  *
@@ -27,6 +28,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { LifecycleHook } from "@powerhousedao/clint";
+import { projectBin, type BinCommand } from "../helpers/project-bin.js";
 import { extractPath, isCodegenPath } from "./gen-guard.js";
 
 /** Minimal slice of ph-clint's Logger the hook uses (not re-exported). */
@@ -74,15 +76,16 @@ function findUp(start: string, marker: string): string | undefined {
 
 /** Run a project-local binary, resolving exit code + combined output. */
 async function runBin(
-  bin: string,
+  bin: BinCommand,
   binArgs: string[],
   cwd: string,
 ): Promise<{ code: number; output: string }> {
   try {
-    const { stdout, stderr } = await execFileAsync(bin, binArgs, {
+    const { stdout, stderr } = await execFileAsync(bin.file, [...bin.args, ...binArgs], {
       cwd,
       timeout: CHECK_TIMEOUT_MS,
       maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
     });
     return { code: 0, output: `${stdout}${stderr}` };
   } catch (err) {
@@ -94,7 +97,8 @@ async function runBin(
   }
 }
 
-async function lintAndTypecheck(
+/** The eslint and tsc problems left in `absFile`, with paths as `rel`. */
+export async function lintAndTypecheck(
   absFile: string,
   rel: string,
   log: LogLike | undefined,
@@ -104,10 +108,8 @@ async function lintAndTypecheck(
 
   // eslint — resolved from the file's project; --fix first, report remainder.
   const eslintRoot = findUp(fileDir, "eslint.config.js");
-  const eslintBin = eslintRoot
-    ? path.join(eslintRoot, "node_modules", ".bin", "eslint")
-    : undefined;
-  if (eslintBin && existsSync(eslintBin)) {
+  const eslintBin = eslintRoot ? projectBin(eslintRoot, "eslint") : null;
+  if (eslintBin) {
     const { code, output } = await runBin(
       eslintBin,
       ["--fix", "--cache", absFile],
@@ -124,10 +126,8 @@ async function lintAndTypecheck(
 
   // tsc — whole-project --noEmit, keep only this file's diagnostics.
   const tscRoot = findUp(fileDir, "tsconfig.json");
-  const tscBin = tscRoot
-    ? path.join(tscRoot, "node_modules", ".bin", "tsc")
-    : undefined;
-  if (tscBin && existsSync(tscBin)) {
+  const tscBin = tscRoot ? projectBin(tscRoot, "tsc", "typescript") : null;
+  if (tscBin) {
     const { output } = await runBin(
       tscBin,
       ["--noEmit", "--pretty", "false"],
