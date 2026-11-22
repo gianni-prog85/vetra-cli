@@ -1,8 +1,22 @@
+import type * as ReactorBrowser from "@powerhousedao/reactor-browser";
 import { signaturePolicyOf, type PHDocument } from "document-model";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BrandSheet } from "../../document-models/brand-sheet/v1/module.js";
 import { addAgentWritableDocument } from "./addAgentWritableDocument.js";
 import { SignInRequiredError } from "./studioWrite.js";
+
+// The app's client as reactor-browser hands it out (getFullReactorClient).
+const appClient = vi.hoisted((): { current: unknown } => ({
+  current: undefined,
+}));
+vi.mock("@powerhousedao/reactor-browser", async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactorBrowser>()),
+  getFullReactorClient: () => appClient.current,
+}));
+
+afterEach(() => {
+  appClient.current = undefined;
+});
 
 function setup(policy: "legacy" | "v2-required" = "legacy") {
   const addDocument = vi.fn(
@@ -96,5 +110,46 @@ describe("addAgentWritableDocument", () => {
 
     expect(deps.addDocument).not.toHaveBeenCalled();
     expect(deps.getDocumentModelModule).not.toHaveBeenCalled();
+  });
+
+  it("reads the model and the create policy from the app's client (remote Connect)", async () => {
+    const client = {
+      getDocumentModelModule: vi.fn(() => Promise.resolve(BrandSheet)),
+      getCreateSignaturePolicy: vi.fn(() => Promise.resolve("legacy")),
+    };
+    appClient.current = client;
+    const { addDocument, signInRequired, isSignedIn } = setup();
+
+    await addAgentWritableDocument(
+      "drive-1",
+      "Session 1",
+      "powerhouse/brand-sheet",
+      { addDocument, signInRequired, isSignedIn },
+    );
+
+    expect(client.getDocumentModelModule).toHaveBeenCalledWith(
+      "powerhouse/brand-sheet",
+    );
+    expect(client.getCreateSignaturePolicy).toHaveBeenCalledTimes(1);
+    const document = addDocument.mock.calls[0][4];
+    expect(signaturePolicyOf(document!.header)).toBe("legacy");
+  });
+
+  it("refuses without a client", async () => {
+    const { addDocument, signInRequired, isSignedIn } = setup();
+
+    await expect(
+      addAgentWritableDocument(
+        "drive-1",
+        "Session 1",
+        "powerhouse/brand-sheet",
+        {
+          addDocument,
+          signInRequired,
+          isSignedIn,
+        },
+      ),
+    ).rejects.toThrow("ReactorClient not initialized");
+    expect(addDocument).not.toHaveBeenCalled();
   });
 });

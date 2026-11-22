@@ -1,7 +1,9 @@
+import type * as ReactorBrowser from "@powerhousedao/reactor-browser";
 import type { Node } from "@powerhousedao/shared/document-drive";
 import type { Action, PHDocument } from "document-model";
 import { describe, expect, it, vi } from "vitest";
 import {
+  defaultStartDeps,
   ideaStartStatus,
   sessionToOpen,
   startProduct,
@@ -9,6 +11,15 @@ import {
   type StartProductDrive,
   UPGRADING_PRODUCT_NAME,
 } from "./startProduct.js";
+
+// The app's client as reactor-browser hands it out (getFullReactorClient).
+const appClient = vi.hoisted((): { current: unknown } => ({
+  current: undefined,
+}));
+vi.mock("@powerhousedao/reactor-browser", async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactorBrowser>()),
+  getFullReactorClient: () => appClient.current,
+}));
 
 const PRODUCT_TYPE = "vetra/studio-product";
 const CHAT_TYPE = "powerhouse/chat-session";
@@ -502,5 +513,29 @@ describe("the binding started rule (fix round 3)", () => {
     expect(s.dispatched).toEqual([
       { id: "linked", types: ["ADD_USER_MESSAGE"] },
     ]);
+  });
+});
+
+describe("defaultStartDeps.getDocument", () => {
+  it("reads through the app's client (remote Connect)", async () => {
+    const product = doc("p", { changes: [] });
+    const get = vi.fn(() => Promise.resolve(product));
+    appClient.current = { get };
+    try {
+      await expect(defaultStartDeps.getDocument("p")).resolves.toBe(product);
+      expect(get).toHaveBeenCalledWith("p");
+    } finally {
+      appClient.current = undefined;
+    }
+  });
+
+  it("reads nothing without a client, or when the read fails", async () => {
+    await expect(defaultStartDeps.getDocument("p")).resolves.toBeUndefined();
+    appClient.current = { get: () => Promise.reject(new Error("gone")) };
+    try {
+      await expect(defaultStartDeps.getDocument("p")).resolves.toBeUndefined();
+    } finally {
+      appClient.current = undefined;
+    }
   });
 });

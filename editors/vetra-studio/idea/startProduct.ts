@@ -12,7 +12,10 @@
  * first message starts nothing and is returned as is.
  */
 import { actions as chatActions } from "@powerhousedao/clint-common/document-models/chat-session";
-import { dispatchActions } from "@powerhousedao/reactor-browser";
+import {
+  dispatchActions,
+  getFullReactorClient,
+} from "@powerhousedao/reactor-browser";
 import type { FileNode, Node } from "@powerhousedao/shared/document-drive";
 import { generateId, type Action, type PHDocument } from "document-model";
 import {
@@ -75,7 +78,7 @@ async function dispatchOrThrow(
 }
 
 async function readDocument(id: string): Promise<PHDocument | undefined> {
-  const client = window.ph?.reactorClientModule?.client;
+  const client = getFullReactorClient();
   if (!client) return undefined;
   try {
     return await client.get(id);

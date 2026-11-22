@@ -1,4 +1,7 @@
-import { addDocument } from "@powerhousedao/reactor-browser";
+import {
+  addDocument,
+  getFullReactorClient,
+} from "@powerhousedao/reactor-browser";
 import { withSignaturePolicy, type PHDocument } from "document-model";
 import {
   assertStudioWritable,
@@ -27,17 +30,17 @@ export interface AgentWritableDocumentDeps extends StudioWriteGateDeps {
   ): ReturnType<typeof addDocument>;
 }
 
+// The app's client: Connect's remote client (no reactor in the tab), or the
+// in-process one.
 const defaultDeps: AgentWritableDocumentDeps = {
   getDocumentModelModule(documentType) {
-    const client = window.ph?.reactorClientModule?.client;
+    const client = getFullReactorClient();
     if (!client) throw new Error("ReactorClient not initialized");
     return client.getDocumentModelModule(documentType);
   },
   async getCreateSignaturePolicy() {
-    const client = window.ph?.reactorClientModule?.client as
-      | { getCreateSignaturePolicy?: () => Promise<SignaturePolicy> }
-      | undefined;
-    if (!client?.getCreateSignaturePolicy) return "v2-required";
+    const client = getFullReactorClient();
+    if (!client) return "v2-required";
     return client.getCreateSignaturePolicy();
   },
   addDocument,
@@ -62,7 +65,7 @@ export async function addAgentWritableDocument(
   driveId: string,
   name: string,
   documentType: string,
-  deps: AgentWritableDocumentDeps = defaultDeps,
+  deps: Partial<AgentWritableDocumentDeps> = defaultDeps,
 ): ReturnType<typeof addDocument> {
   const resolved = { ...defaultDeps, ...deps };
   await assertStudioWritable(resolved);
@@ -71,11 +74,5 @@ export async function addAgentWritableDocument(
   const module = await resolved.getDocumentModelModule(documentType);
   const document = withSignaturePolicy(module.utils.createDocument(), policy);
   document.state.document.version = module.version ?? 1;
-  return resolved.addDocument(
-    driveId,
-    name,
-    documentType,
-    undefined,
-    document,
-  );
+  return resolved.addDocument(driveId, name, documentType, undefined, document);
 }
