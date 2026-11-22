@@ -16,6 +16,10 @@ const ignoredFiles = [
   "**/.vite/",
   "**/coverage/",
   "gen/",
+  // written by `ph-cli generate hosts`
+  "hosts/types.d.ts",
+  "hosts/*/outputs.*",
+  "powerhouse.config.d.json.ts",
 ];
 
 /** Global configs for eslint ignores */

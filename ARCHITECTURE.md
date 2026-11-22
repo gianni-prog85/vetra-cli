@@ -60,8 +60,9 @@ models and editors in the standard folders, the Cli in `cli/`, exported as
 `./cli` (`cli/index.ts`, built by `ph build` to `dist/node/cli/index.mjs`).
 The Cli runs three ways, all through clint's Cli runner (`runCli`):
 
-- a host: `ph run <cli host>` loads `./cli` and hands it the drive address
-  of the switchboard host it is composed with (B2);
+- a host: `ph run studio` (the compound in `hosts/studio`, see "Hosts")
+  starts the Studio switchboard and Connect, then loads `./cli` and hands it
+  the switchboard's drive address;
 - the `vetra` bin (`bin/vetra.mjs`) over the built `./cli`;
 - `pnpm dev` (`tsx cli/src/main.ts --workdir ../vetra-test`) from source.
 
@@ -95,6 +96,54 @@ Internally:
   `workspace/local-link/link.sh`; published versions come from the
   `pnpm-workspace.yaml` catalog.
 
+## Hosts
+
+Four host files under `hosts/` (shipped in the package, `files`). Each
+host's `name` is its folder name: `ph run <host> --stop` finds the run
+record by the word typed. None imports `outputs.js` or
+`powerhouse.config.json`; cross-host values are literal `$output` tokens, so
+the files read the same when the package supplies them to another project.
+
+| Host | Runner | What it is |
+|---|---|---|
+| `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (the Cli attaches without a signer until B3). Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
+| `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: dist/connect` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only |
+| `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
+| `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
+
+The drive slug is `studio`, not `vetra` or `vetra-*`: loading
+`@powerhousedao/vetra` registers its codegen processor, which attaches to
+those. The Cli finds the drive by its name, `Home` (clint's `ensureDrive`),
+so the switchboard must declare that name or the Cli creates a second drive.
+
+`ph run studio -- --workdir <dir>` passes `--workdir` to the Cli; without it
+the Cli works in the project root. `ph run studio dev` runs the members at
+`dev` (the Cli still at `run`, from the built `./cli`).
+
+Ports: 8090 Connect (the Studio's address), 8091 the switchboard, 5180 the
+vetra local API, 8092-8093 kept free for a preview run. Neither runner sets
+`strictPort`, so a taken port moves to the next free one and the outputs
+carry the real one.
+
+Stores: `${userData}/.ph/vetra/reactor-storage` and
+`${userData}/.ph/vetra/read-storage` (PGlite). `${userData}` is
+`PH_USER_DATA_DIR`, else the project root. Under the same `.ph` tree: the
+run records `.ph/run/{studio,switchboard,connect}.json` and the member logs
+`.ph/services/{switchboard,connect}/`.
+
+The switchboard loads this package (from `dist/node` at `serve`, through
+the Vite loader at `dev`) and the packages of the project's
+`powerhouse.config.json` (clint-common, `@powerhousedao/vetra`,
+`vetra-cloud-package`). From another project
+(`ph run @powerhousedao/vetra-cli/studio`) that and Connect's `outDir` are
+read against the project, not the package: not supported yet.
+
+`hosts/tsconfig.json` type-checks the host files (`tsc -p hosts`, part of
+`pnpm typecheck`); `hosts/types.d.ts`, the two `outputs.js`/`outputs.d.ts`
+and `powerhouse.config.d.json.ts` are written by `ph-cli generate hosts`.
+The `@satisfies {PHHost}` tag sits on the exported expression: in front of
+`export default` TypeScript ignores it.
+
 ## Components, in detail
 
 ### Reactor (remote attach)
@@ -118,16 +167,18 @@ cloud v2 signing mode is off (`STUDIO_V2_SIGNING` in
 
 ### Switchboard
 
-Not started by the Cli. The switchboard is its own host (B2: the Studio
-drive, its slug and preferred editor are host data); the Cli reaches it
-over GraphQL at the drive address the runner hands over. `proxyEnabled` and
-`proxyRoutes` stay in `cli.ts` until B3.
+Not started by the Cli. The switchboard is its own host,
+`hosts/switchboard` (see "Hosts": the Studio drive, its slug and preferred
+editor are host data); the Cli reaches it over GraphQL at the drive address
+the runner hands over. `proxyEnabled` and `proxyRoutes` stay in `cli.ts`
+until B3.
 
 ### Connect (Vetra Studio)
 
 Static SPA built from this package (`dist/connect/`), served by its own
-host (B2: `hosts/connect`, the former `build:connect` flags). See
-"Build-output split" below for how that directory is produced.
+host, `hosts/connect` (the former `build:connect` flags are its `runner`
+and `config`). See "Build-output split" below for how that directory is
+produced.
 
 **Build-output split — two independent commands.** The package ships
 two artifact families and they are built separately:
@@ -763,6 +814,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 ├── prompts/                   ← agent sections and skill templates
 ├── cloud-client/              ← Vetra Cloud environment client
 ├── bin/vetra.mjs              ← the `vetra` bin over dist/node/cli
+├── hosts/                     ← switchboard, connect, cli, studio (compound)
 ├── cli/
 │   ├── index.ts               ← ./cli: startup guards, `cli`, `ensureModelAuth`
 │   ├── src/
@@ -784,7 +836,10 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   └── e2e/                   ← playwright suite
 └── dist/                      ← ph build output; dist/connect from build:connect
 
-<workdir>/.ph/vetra/           ← runtime state: logs, service manager state
+<project>/.ph/vetra/           ← the Studio switchboard's stores
+                                 (reactor-storage, read-storage)
+<project>/.ph/run/             ← run records of the studio stack
+<workdir>/.ph/vetra/           ← the Cli's runtime state: logs, service state
 ```
 
 ## Open gaps
@@ -830,10 +885,11 @@ These are limitations of the current direction; not bugs.
   `ctx.attachments` is unset on the runner path, so chat attachments are
   skipped.
 
-- **Hosts (B2).** The Studio switchboard and its drive, Connect and its
-  stamping (drive URL, create policy into `dist/connect`), and the skill
-  and agent-profile build (`ph run <cli host> build`; until then
-  `prompts.artifacts` points at a `gen/skills` that nothing writes).
+- **Hosts (B2).** The hosts exist (see "Hosts"). Still open in B2: the
+  builds (`build:connect` through `hosts/connect`, the skill and
+  agent-profile build through `ph run cli build`; until then
+  `prompts.artifacts` points at a `gen/skills` that nothing writes) and the
+  Cli in the stack (`studioUrlTrigger`, the embedded proxy's port).
 
 The live publish path — `commands/reactor-project/publish.ts` and
 `publish-status.ts` — is unaffected: those are the deploy-flow tools that

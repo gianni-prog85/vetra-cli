@@ -59,7 +59,7 @@
   "scripts": {
     "build": "tsx cli/scripts/build-assets.ts && ph-cli build",
     "build:connect": "ph-cli connect build --outDir dist/connect --app-name \"Vetra Studio\" --favicon ./branding/vetra.ico --default-drives-url http://__ph_drive_url__ --dynamic-base --renown-namespace vetra-studio",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p hosts",
     "tsc": "tsc",
     "tsc:watch": "tsc --watch",
     "test": "vitest run",
