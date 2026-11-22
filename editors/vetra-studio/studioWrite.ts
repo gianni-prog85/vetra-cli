@@ -30,16 +30,14 @@ export interface StudioWriteGateDeps {
 }
 
 function signedInNow(): boolean {
-  const renown = (globalThis as { ph?: { renown?: { user?: { address?: string } } } })
-    .ph?.renown;
+  const renown = (
+    globalThis as { ph?: { renown?: { user?: { address?: string } } } }
+  ).ph?.renown;
   return Boolean(renown?.user?.address);
 }
 
 /** The pure decision, kept apart from the browser globals for tests. */
-export function writeRefused(
-  required: boolean,
-  signedIn: boolean,
-): boolean {
+export function writeRefused(required: boolean, signedIn: boolean): boolean {
   return required && !signedIn;
 }
 

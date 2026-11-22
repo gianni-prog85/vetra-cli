@@ -4,7 +4,11 @@ import { sectionForDocumentType } from "../auto-nav.js";
 export type ActivePhase = "ideate" | "specify" | "build" | "deploy";
 
 type Part = { toolCallId?: string | null };
-type Message = { role?: string; finishedAt?: unknown; content?: readonly Part[] };
+type Message = {
+  role?: string;
+  finishedAt?: unknown;
+  content?: readonly Part[];
+};
 
 /** The follow signals, keyed by the tool-result callId of the latest action of
  * each kind: `edit*` → ideation/spec edits, preview → BUILD, deploy → DEPLOY.
@@ -32,7 +36,8 @@ function isResponding(messages: readonly Message[]): boolean {
   }
   if (lastUser === -1) return false;
   for (let i = lastUser + 1; i < messages.length; i++) {
-    if (messages[i].role === "ASSISTANT" && messages[i].finishedAt) return false;
+    if (messages[i].role === "ASSISTANT" && messages[i].finishedAt)
+      return false;
   }
   return true;
 }
@@ -52,9 +57,16 @@ function callIndex(messages: readonly Message[], callId: string): number {
  * pulses that phase continuously and switches as the agent moves between
  * phases. Null when idle or when no action maps to a phase yet.
  */
-export function useActivePhase(signals: ActivePhaseSignals): ActivePhase | null {
-  const { messages, editDocumentType, editCallId, previewCallId, deployCallId } =
-    signals;
+export function useActivePhase(
+  signals: ActivePhaseSignals,
+): ActivePhase | null {
+  const {
+    messages,
+    editDocumentType,
+    editCallId,
+    previewCallId,
+    deployCallId,
+  } = signals;
   return useMemo(() => {
     if (!messages || !isResponding(messages)) return null;
 
@@ -63,8 +75,10 @@ export function useActivePhase(signals: ActivePhaseSignals): ActivePhase | null 
       const phase = sectionForDocumentType(editDocumentType ?? "");
       if (phase) candidates.push({ callId: editCallId, phase });
     }
-    if (previewCallId) candidates.push({ callId: previewCallId, phase: "build" });
-    if (deployCallId) candidates.push({ callId: deployCallId, phase: "deploy" });
+    if (previewCallId)
+      candidates.push({ callId: previewCallId, phase: "build" });
+    if (deployCallId)
+      candidates.push({ callId: deployCallId, phase: "deploy" });
 
     let phase: ActivePhase | null = null;
     let bestIdx = -1;
@@ -87,8 +101,13 @@ export function useActivePhase(signals: ActivePhaseSignals): ActivePhase | null 
  * action (null once a preview/deploy supersedes it, i.e. the agent moved on).
  */
 export function useActiveEditType(signals: ActivePhaseSignals): string | null {
-  const { messages, editDocumentType, editCallId, previewCallId, deployCallId } =
-    signals;
+  const {
+    messages,
+    editDocumentType,
+    editCallId,
+    previewCallId,
+    deployCallId,
+  } = signals;
   return useMemo(() => {
     if (!messages || !isResponding(messages)) return null;
     if (!editCallId || !editDocumentType) return null;

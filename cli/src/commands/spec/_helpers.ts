@@ -924,7 +924,7 @@ function validateStateSchemaSdl(
   }
   if (otherStateTypes.length > 0) {
     hints.push(
-      `found \`type ${otherStateTypes.join("\`, \`type ")}\` — rename to ` +
+      `found \`type ${otherStateTypes.join("`, `type ")}\` — rename to ` +
         `\`type ${expected}\` (the name must match the model)`,
     );
   }

@@ -28,7 +28,10 @@ function stepSelector(step: TourStep): string | undefined {
 
 /** Resolve once the selector is in the DOM (or null after `timeout`) — covers the
  * gap while a newly-navigated section or freshly-opened session mounts. */
-function waitForElement(selector: string, timeout = 4000): Promise<Element | null> {
+function waitForElement(
+  selector: string,
+  timeout = 4000,
+): Promise<Element | null> {
   return new Promise((resolve) => {
     const start = performance.now();
     const tick = () => {
@@ -47,7 +50,9 @@ function waitForElement(selector: string, timeout = 4000): Promise<Element | nul
  * target to mount, then highlights it with a condensed popover. A missing target
  * degrades to a centered popover rather than wedging the tour.
  */
-export function useProductTour(controls: TourControls): { startTour: () => void } {
+export function useProductTour(controls: TourControls): {
+  startTour: () => void;
+} {
   const driverRef = useRef<Driver | null>(null);
   // One fresh session per tour run, cached so revisiting the input step (prev/next)
   // reuses it instead of creating another.

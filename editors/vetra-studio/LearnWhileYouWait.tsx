@@ -46,7 +46,10 @@ export function LearnWhileYouWait({
         <X size={14} />
       </button>
       <div className="flex items-start gap-2.5">
-        <GraduationCap size={18} className="mt-0.5 shrink-0 text-vetra-primary" />
+        <GraduationCap
+          size={18}
+          className="mt-0.5 shrink-0 text-vetra-primary"
+        />
         <div className="flex flex-col items-start gap-2 pr-2">
           <p className="text-sm text-foreground">{lesson.teaser}</p>
           <button
