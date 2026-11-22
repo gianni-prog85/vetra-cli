@@ -6,8 +6,8 @@ defaults — don't guess options. `spec-create` returns every action of its
 type with its input shape: use that for `spec-update`, not a `spec-schema`
 call per action (`spec-schema` takes several comma-separated actions).
 
-Specs under `specs/` — workspace root for product specs, `<project>/specs/`
-for project specs — are the source of truth: read and edit them
+Specs under `specs/` in the project (your workdir; no tool takes a
+project) are the source of truth: read and edit them
 only through the `spec-*` tools. The `gen/` subtree inside every regenerated
 module (`document-models/<m>/v1/gen/`, `editors/<e>/gen/`, …) is rewritten
 by `spec-generate` — never hand-edit it; fix the spec instead.

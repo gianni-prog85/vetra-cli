@@ -51,8 +51,8 @@ outside Studio). The project's run is opt-in: without
 the `spec-*` tools and the checks, and say the preview comes with the
 Preview run.
 
-Product specs live at the workspace root — `spec-create { type, name }` with
-no `project`. Only an explicit spec-only request skips the build. Studio
+Product specs live in the project with the other specs —
+`spec-create { type, name }`. Only an explicit spec-only request skips the build. Studio
 products go live by themselves: load the `deploy` skill only for an explicit
 "deploy to my environment X" request.
 

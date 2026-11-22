@@ -130,7 +130,7 @@ export const cli = defineCli({
         description: 'Tests step: write the product\'s example documents (seed/<document-type>.json, names starting "Example — delete me") from the preview sample data. They fill the live product the first time it launches and are checked with the preview smoke check. Ends the step with `product-progress suggest` (2–3 next improvements).',
       },
       'product-specs': {
-        description: 'Create and refine product specs at the workspace root — brand, problem and audience sheets, features and their work breakdown structure (ordering, outcome links, feature bets, WBS tasks). For a product/app request, write them alongside the build, never instead of it.',
+        description: 'Create and refine product specs in the project — brand, problem and audience sheets, features and their work breakdown structure (ordering, outcome links, feature bets, WBS tasks). For a product/app request, write them alongside the build, never instead of it.',
       },
       'reactor-project-management': {
         description: "Start (when its run is on), build, and publish the Reactor Package project Studio runs in",
