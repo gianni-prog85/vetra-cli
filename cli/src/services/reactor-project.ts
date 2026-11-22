@@ -1,240 +1,126 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
-import {
-  checkWorkdir,
-  checkCommand,
-  checkPort,
-  type LifecycleHook,
-  type ServiceInstanceStatus,
-  type ServiceProxyRouteSpec,
-} from '@powerhousedao/clint';
+import { checkWorkdir, type EndpointType } from '@powerhousedao/clint';
+import type { RunRecord } from '@powerhousedao/host-core';
 import { defineService } from '../framework.js';
-import {
-  REACTOR_PROJECT_CONNECT_PROXY_PATH,
-  REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH,
-  PREVIEW_RENOWN_NAMESPACE,
-} from '../constants.js';
 import { reactorProjectNodeOptions } from '../helpers/node-memory.js';
-import { connectExternalizeVendorEnv } from '../helpers/connect-vendor.js';
 
-// Readiness wait for the inner `ph vetra` dev server; env-overridable for slow
-// runners where cold Vite start exceeds the default. A fresh Studio's first
-// start installs and pre-bundles the project (measured ~2–4 min on staging);
-// the old 90 s killed it mid-install, the agent retried, and the Plan step was
-// left "needs you" (M3 acceptance). 300 s lets one attempt finish.
+// Readiness wait for the project's `ph run vetra dev`; env-overridable for
+// slow runners where a cold Vite start exceeds the default. A fresh Studio's
+// first start pre-bundles the project (measured ~2–4 min on staging), so one
+// attempt gets 300 s.
 const READINESS_TIMEOUT_MS =
   Number(process.env.VETRA_REACTOR_READINESS_TIMEOUT_MS) || 300_000;
 
-// Switchboard mount relative to the `/reactor-project/` service prefix that
-// ph-clint prepends to every proxyRoutes spec (e.g. 'switchboard').
-const SWITCHBOARD_MOUNT = REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH.replace(
-  /^\/reactor-project\//,
-  '',
-);
+/** The project's compound the preview runs, and its members the Cli reads. */
+export const PREVIEW_HOST = 'vetra';
+export const PREVIEW_SWITCHBOARD_MEMBER = 'vetra-switchboard';
+export const PREVIEW_CONNECT_MEMBER = 'vetra-studio';
+/** The preview drive's declared slug on the switchboard member. */
+export const PREVIEW_DRIVE_SLUG = 'vetra-preview';
+
+interface SwitchboardMemberOutputs {
+  endpoints?: { graphql?: string; mcp?: string };
+  drives?: Record<string, { id?: string; url?: string }>;
+}
+
+interface ConnectMemberOutputs {
+  endpoints?: { connect?: string };
+}
 
 /**
- * Mirror the embedded `/switchboard/*` proxy scheme for the project's
- * switchboard, under /reactor-project/switchboard. The `/d/`-aligned route
- * shape makes the proxy send the X-Forwarded-Prefix the switchboard needs to
- * announce proxied follow-up endpoints, so the drive URLs ph vetra rebases
- * via --drives-public-base resolve through the proxy.
- *
- * A service proxyRoutes hook so ph-clint re-asserts these on every
- * `service:ready` — including auto-restart and boot-adoption — alongside the
- * readiness-capture routes, not just on the start command.
+ * The preview's endpoints from the project's `.ph/run/vetra.json`, under the
+ * names the Studio reads: `vetra-studio` (the project's Connect),
+ * `vetra-switchboard` (its GraphQL), `mcp-server`, the Vetra and preview
+ * drives' URLs and the preview drive's id. Throws naming what the record
+ * lacks: a project whose vetra host names its members otherwise cannot
+ * preview yet.
  */
-export function switchboardProxyRoutes(
-  instance: ServiceInstanceStatus,
-): ServiceProxyRouteSpec[] {
-  const sbUrl = instance.endpoints?.['vetra-switchboard'];
-  const mcpUrl = instance.endpoints?.['mcp-server'];
-  if (!sbUrl) return [];
-
-  const base = SWITCHBOARD_MOUNT;
-  return [
-    { prefix: `${base}/d/`, upstream: new URL('/d/', sbUrl), ws: false },
-    { prefix: `${base}/graphql`, upstream: new URL('/graphql', sbUrl), ws: false },
-    {
-      prefix: `${base}/attachments/`,
-      upstream: new URL('/attachments/', sbUrl),
-      ws: false,
-    },
-    ...(mcpUrl
-      ? [{ prefix: `${base}/mcp`, upstream: new URL('/mcp', mcpUrl), ws: true }]
-      : []),
-  ];
-}
-
-// Normalize a proxy publicUrl into the mount base path: '' for an
-// unset/invalid/root URL, else a leading-slash no-trailing-slash form
-// ('/myagent'). Mirrors ph-clint's proxy deriveBasePath so the dev-server
-// --base lines up with the prefix stripBase removes before route matching.
-export function deployBasePath(publicUrl: string | undefined): string {
-  const raw = publicUrl?.trim();
-  if (!raw) return '';
-  try {
-    return new URL(raw).pathname.replace(/\/+$/, '');
-  } catch {
-    return '';
+export function previewEndpoints(
+  record: RunRecord,
+): Record<string, { url: string; type?: EndpointType }> {
+  const members = record.members ?? {};
+  const switchboard = members[PREVIEW_SWITCHBOARD_MEMBER]?.outputs as
+    | SwitchboardMemberOutputs
+    | undefined;
+  const connect = members[PREVIEW_CONNECT_MEMBER]?.outputs as
+    | ConnectMemberOutputs
+    | undefined;
+  if (!switchboard || !connect) {
+    const names = Object.keys(members);
+    throw new Error(
+      `the project's ${PREVIEW_HOST} host has no "${PREVIEW_SWITCHBOARD_MEMBER}" and "${PREVIEW_CONNECT_MEMBER}" members (it has ${names.length > 0 ? names.map((n) => `"${n}"`).join(', ') : 'none'})`,
+    );
   }
-}
-
-// Resolved mount base for the embedded proxy. Set at boot by
-// proxyBasePathHook from the layered-config proxyPublicUrl (flag > config
-// file > VETRA_PROXY_PUBLIC_URL env) — the same value ph-clint mounts the
-// proxy under — so a config-file-supplied publicUrl reaches the dev-server
-// --base too. ServiceDefinition.command only receives params, so the value
-// is captured here rather than read from context at command-build time.
-let resolvedDeployBasePath = '';
-
-// Configured public proxy URL (no trailing slash), '' when none is set.
-// Takes precedence over the live proxy origin for --drives-public-base.
-let resolvedProxyPublicUrl = '';
-
-export function proxyBasePathHook(): LifecycleHook {
+  const studioUrl = connect.endpoints?.connect;
+  const graphql = switchboard.endpoints?.graphql;
+  const preview = switchboard.drives?.[PREVIEW_DRIVE_SLUG];
+  if (!studioUrl) throw new Error(`"${PREVIEW_CONNECT_MEMBER}" reports no endpoints.connect`);
+  if (!graphql) throw new Error(`"${PREVIEW_SWITCHBOARD_MEMBER}" reports no endpoints.graphql`);
+  if (!preview?.id || !preview.url) {
+    throw new Error(`"${PREVIEW_SWITCHBOARD_MEMBER}" serves no "${PREVIEW_DRIVE_SLUG}" drive`);
+  }
+  const mcp = switchboard.endpoints?.mcp;
+  const vetraDrive = switchboard.drives?.vetra?.url;
   return {
-    name: 'reactor-project-proxy-base',
-    onInit(ctx) {
-      const raw = (ctx.config.proxyPublicUrl as string | undefined)?.trim();
-      resolvedProxyPublicUrl = '';
-      if (raw) {
-        try {
-          new URL(raw);
-          resolvedProxyPublicUrl = raw.replace(/\/+$/, '');
-        } catch {
-          // invalid publicUrl — fall through to the proxy origin
-        }
-      }
-      resolvedDeployBasePath = deployBasePath(
-        ctx.config.proxyPublicUrl as string | undefined,
-      );
-      return {};
-    },
+    'vetra-studio': { url: studioUrl, type: 'website' },
+    'vetra-switchboard': { url: graphql, type: 'api-graphql' },
+    ...(mcp ? { 'mcp-server': { url: mcp, type: 'api-mcp' } } : {}),
+    ...(vetraDrive ? { 'vetra-drive-url': { url: vetraDrive, type: 'other' } } : {}),
+    'vetra-preview-drive-url': { url: preview.url, type: 'other' },
+    'vetra-preview-drive-id': { url: preview.id, type: 'other' },
   };
 }
 
-const reactorProjectParams = z.object({
-  watch: z.boolean().default(true).describe('Enable file watching'),
-  connectPort: z.coerce.number().optional().describe('Connect Studio port'),
-  switchboardPort: z.coerce.number().optional().describe('Vetra Switchboard port'),
-  proxyPublicUrl: z
-    .string()
-    .url()
-    .optional()
-    .describe('Live public proxy origin for advertised drive URLs'),
-});
+function isProjectFolder(p: string): boolean {
+  return (
+    fs.existsSync(path.join(p, 'powerhouse.config.json')) ||
+    fs.existsSync(path.join(p, 'powerhouse.config.ts'))
+  );
+}
 
+/**
+ * The builder's project run: `ph run vetra dev` in the project, its stores
+ * and run record the project's own (`.ph/`). Ready once `.ph/run/vetra.json`
+ * is live; stopped through its stdin.
+ */
 export const reactorProject = defineService({
   id: 'reactor-project',
   name: 'Reactor Project',
-  description: 'Vetra Studio server for reactor project development',
-  command: ({params, config}) => {
-    const parts = ['ph', 'vetra'];
-    if (params?.watch !== false) parts.push('--watch');
-    if (typeof params?.connectPort === 'number') parts.push('--connect-port', String(params.connectPort));
-    if (typeof params?.switchboardPort === 'number') parts.push('--switchboard-port', String(params.switchboardPort));
-    // Serve Connect under the deploy base + proxy prefix so the BUILD iframe
-    // loads it through the embedded proxy; Vite emits all asset URLs under
-    // this base. Under a proxy subpath the base carries that prefix too, so
-    // the captured upstream matches the path stripBase forwards.
-    parts.push('--base', `${resolvedDeployBasePath}${REACTOR_PROJECT_CONNECT_PROXY_PATH}/`);
-    // Its own Renown namespace: sharing the Studio's would let the preview's
-    // revalidation (against a different Renown) log the Studio out.
-    parts.push('--renown-namespace', PREVIEW_RENOWN_NAMESPACE);
-    // Bind the Vite Connect dev server to IPv4 loopback. Without this it binds
-    // [::1] only; ph-clint builds the proxy upstream from the captured Local:
-    // URL via new URL(), whose `localhost` host resolves IPv4-first to
-    // 127.0.0.1 where nothing then listens -> ECONNREFUSED. env.HOST is not
-    // applied to the dev server, so the --host flag is the only lever.
-    parts.push('--host', '127.0.0.1');
-    // Advertise drives via the public proxy origin (localhost switchboard is
-    // unreachable remotely). publicUrl > live origin from start > default port.
-    const proxyBase =
-      resolvedProxyPublicUrl ||
-      (params?.proxyPublicUrl as string | undefined)?.replace(/\/+$/, '') ||
-      `http://localhost:${Number((config as Record<string, unknown>).proxyPort) || 8090}`;
-    parts.push(
-      '--drives-public-base',
-      `${proxyBase}${REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH}`,
-    );
-    return parts.join(' ');
-  },
-  paramsSchema: reactorProjectParams,
-  proxyRoutes: switchboardProxyRoutes,
-  env: ({params}) => ({
-    // PORT workaround: https://github.com/powerhouse-inc/powerhouse/commit/9830c16b
-    PORT: String(params?.switchboardPort),
-    HOST: '0.0.0.0',
-    NODE_ENV: 'development',
-    // Heap cap is per-fork; each ph vetra child inherits it. See node-memory.ts.
+  description: "The project's Vetra host (ph run vetra dev) for previews",
+  run: { host: PREVIEW_HOST, verb: 'dev' },
+  endpoints: previewEndpoints,
+  env: () => ({
+    // Heap cap per fork; each child of the run inherits it. See node-memory.ts.
     NODE_OPTIONS: reactorProjectNodeOptions(),
-    // Opt-in: serve Connect's heavy stable deps from a prebuilt vendor bundle so
-    // the long-lived Vite dev server never dep-optimizes them (~1 GB resident).
-    // Off unless a vetra-level signal is set. See connect-vendor.ts.
-    ...connectExternalizeVendorEnv(),
     // The preview reactor is a PUBLIC, no-login reactor. Override the auth env
-    // the pod injects (inherited via process.env) so this child boots OPEN.
-    // The main Studio switchboard is started in-process and keeps its auth.
+    // a pod injects (inherited through this process) so it boots OPEN.
     AUTH_ENABLED: 'false',
     DOCUMENT_PERMISSIONS_ENABLED: 'false', // required or reactor-api throws at boot
     DEFAULT_PROTECTION: 'false',
     SKIP_CREDENTIAL_VERIFICATION: 'false',
     ADMINS: '',
   }),
-  readiness: {
-    patterns: [
-      {
-        // Capture the full URL including the --base path: the proxy forwards
-        // the matched prefix verbatim, so the upstream must carry the base.
-        // With --host 127.0.0.1 Vite prints the bound IP rather than
-        // `localhost`, so accept either host.
-        name: 'vetra-studio',
-        pattern: /Local:\s*(http:\/\/(?:localhost|127\.0\.0\.1):\d+[^\s]*)/,
-        captures: { 'vetra-studio': { group: 1, type: 'website' } },
-      },
-      {
-        name: 'vetra-drive-url',
-        pattern: /(?<!Preview )Drive URL:\s*(https?:\/\/[^\s]+)/,
-        captures: { 'vetra-drive-url': { group: 1, type: 'other' } },
-      },
-      {
-        name: 'vetra-preview-drive-url',
-        pattern: /Preview Drive URL:\s*(https?:\/\/[^\s]+)/,
-        captures: { 'vetra-preview-drive-url': { group: 1, type: 'other' } },
-      },
-      {
-        name: 'vetra-switchboard',
-        pattern: /Switchboard:\s*(https?:\/\/[^\s]+)/,
-        captures: { 'vetra-switchboard': { group: 1, type: 'api-graphql' } },
-      },
-      {
-        name: 'mcp-server',
-        pattern: /MCP server available at (https?:\/\/[^\s]+)/,
-        captures: { 'mcp-server': { group: 1, type: 'api-mcp' } },
-      },
-    ],
-    timeout: READINESS_TIMEOUT_MS,
-  },
+  readiness: { timeout: READINESS_TIMEOUT_MS },
   preflight: [
     checkWorkdir(
-      (cwd) =>
-        fs.existsSync(path.join(cwd, 'powerhouse.config.ts')) ||
-        fs.existsSync(path.join(cwd, 'powerhouse.config.json')),
+      isProjectFolder,
       'Not a Reactor Package project',
       'Run reactor-project-start --workdir <project>, or create one with /reactor-project-init',
     ),
-    checkCommand('ph', {
-      hint: 'Install the Powerhouse CLI: npm install -g ph-cmd',
-    }),
-    checkPort((ctx) => (ctx.params?.connectPort as number) ?? 3000, 'Connect Studio'),
-    checkPort((ctx) => (ctx.params?.switchboardPort as number) ?? 4001, 'Switchboard'),
+    checkWorkdir(
+      (cwd) => fs.existsSync(path.join(cwd, 'hosts', PREVIEW_HOST, 'host.js')),
+      `The project has no ${PREVIEW_HOST} host (hosts/${PREVIEW_HOST}/host.js)`,
+      'Projects scaffolded by ph init on Powerhouse 6.4 have it; an older project cannot preview yet',
+    ),
+    checkWorkdir(
+      (cwd) =>
+        fs.existsSync(
+          path.join(cwd, 'node_modules', '@powerhousedao', 'ph-cli', 'dist', 'cli.mjs'),
+        ),
+      "The project's ph-cli is not installed",
+      'Install the project: pnpm install in its folder',
+    ),
   ],
-  shutdown: { signal: 'SIGTERM', timeout: 10_000 },
-  restart: { enabled: true, maxRetries: 3, delay: 5_000 },
-  projectScanner: {
-    isProjectFolder: (p) =>
-      fs.existsSync(path.join(p, 'powerhouse.config.json')) ||
-      fs.existsSync(path.join(p, 'powerhouse.config.ts')),
-  },
+  projectScanner: { isProjectFolder },
 });

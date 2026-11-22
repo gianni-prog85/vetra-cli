@@ -188,6 +188,10 @@ processes: `--stop` stops the members in order.
 - **Ports (8090 / 8091 / 5180).** Connect (the Studio's address) is 8090,
 its switchboard 8091, the vetra local API 5180. A taken port moves to the
 next free one; the Cli prints the address it got (`Vetra Studio: <url>`).
+- **The BUILD pane's preview** is the project's own `ph run vetra dev`
+(its Connect on 3001 and switchboard on 4001 unless the project's hosts
+say otherwise). It needs the project's `hosts/vetra/host.js`, which `ph init`
+on Powerhouse 6.4 scaffolds; its run record is `<project>/.ph/run/vetra.json`.
 - **A build runs out of memory.** `pnpm build` and `pnpm build:connect` may
 need `NODE_OPTIONS=--max-old-space-size=4096`. Run them one at a time.
 - **Agent types but never replies / a profile is missing.** Agent profiles and

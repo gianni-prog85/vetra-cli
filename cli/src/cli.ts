@@ -20,7 +20,7 @@ import { deployCommands } from './commands/deploy/index.js';
 import { authCommands } from './commands/auth/index.js';
 import { reactorProjectCommands } from './commands/reactor-project/index.js';
 import { productCommands } from './commands/product/index.js';
-import { reactorProject, proxyBasePathHook } from './services/reactor-project.js';
+import { reactorProject } from './services/reactor-project.js';
 import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
@@ -210,9 +210,9 @@ export const cli = defineCli({
     },
     'service:failed': (event, log) => {
       log.error(`✗ ${event.name} failed: ${event.error}`);
-      if (event.id === 'reactor-project' && /exited before becoming ready/.test(event.error ?? '')) {
+      if (event.id === 'reactor-project' && /exited .*before writing its run record/.test(event.error ?? '')) {
         log.info(
-          '  Hint: Is the working directory a Reactor package project? Try: reactor-project-start --workdir <project-name>',
+          "  Hint: the project's vetra host stopped while starting; reactor-project-logs shows why.",
         );
       }
       if (/max instances/.test(event.error ?? '')) {
@@ -244,8 +244,6 @@ export const cli = defineCli({
 
   // @clint:begin lifecycle
   lifecycle: [
-    // Captures the resolved proxyPublicUrl for the reactor-project --base.
-    proxyBasePathHook(),
     genGuard(),
     // The shell is for installs: checks, builds and git go through recorded tools.
     shellGuard(),

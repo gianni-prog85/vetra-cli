@@ -3,9 +3,17 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolvePreview } from "../../src/preview-server/resolver.js";
-import { getPreviewDriveId } from "../../src/helpers/reactor-project-preview.js";
 import { REACTOR_PROJECT_CONNECT_PROXY_PATH } from "../../src/constants.js";
 import { makeWorkdir } from "../spec/_fixtures.js";
+import { recordedEndpoints } from "../services/run-record.js";
+
+/** A ready instance's endpoints, from the recorded run; the project's
+ * Connect at `connect`. */
+function readyEndpoints(connect = "http://localhost:3001"): Record<string, string> {
+  return { ...recordedEndpoints(), "vetra-studio": connect };
+}
+
+const driveId = recordedEndpoints()["vetra-preview-drive-id"];
 
 interface FakeInstance {
   workdir: string;
@@ -84,7 +92,7 @@ describe("preview-server resolver", () => {
     expect(result.kind).toBe("project-stopped");
   });
 
-  it("returns starting when the matching instance is starting", async () => {
+  it("returns starting, with no drive yet, while the run record is not live", async () => {
     const services = makeServices([
       { workdir: projectPath, status: "starting" },
     ]);
@@ -98,14 +106,12 @@ describe("preview-server resolver", () => {
       kind: "starting",
       project: PROJECT,
       projectPath,
-      driveId: getPreviewDriveId(projectPath),
     });
   });
 
-  it("returns starting when ready but Connect endpoint not yet captured", async () => {
-    /* A reactor-project can flip to `ready` before the Connect endpoint has
-     * been parsed from stdout — without it, we can't build a URL, so the
-     * editor should keep showing the starting state. */
+  it("returns starting when ready without the Connect endpoint or the preview drive", async () => {
+    /* Without both, no URL can be built: the editor keeps showing the
+     * starting state. */
     const services = makeServices([
       { workdir: projectPath, status: "ready", endpoints: {} },
     ]);
@@ -118,15 +124,11 @@ describe("preview-server resolver", () => {
     expect(result.kind).toBe("starting");
   });
 
-  it("returns ready with a fully-formed URL when the instance is up", async () => {
+  it("returns ready with a fully-formed URL on the recorded preview drive", async () => {
     const services = makeServices([
-      {
-        workdir: projectPath,
-        status: "ready",
-        endpoints: { "vetra-studio": "http://localhost:3001" },
-      },
+      { workdir: projectPath, status: "ready", endpoints: readyEndpoints() },
     ]);
-    const driveId = getPreviewDriveId(projectPath);
+    expect(driveId).toBe("vetra-preview-1a2b3c4d");
     const result = await resolvePreview({
       services,
       workdir,
@@ -146,13 +148,8 @@ describe("preview-server resolver", () => {
 
   it("home: the preview drive's root once the project is up", async () => {
     const services = makeServices([
-      {
-        workdir: projectPath,
-        status: "ready",
-        endpoints: { "vetra-studio": "http://localhost:3001/" },
-      },
+      { workdir: projectPath, status: "ready", endpoints: readyEndpoints("http://localhost:3001/") },
     ]);
-    const driveId = getPreviewDriveId(projectPath);
     const result = await resolvePreview({
       services,
       workdir,
@@ -172,7 +169,6 @@ describe("preview-server resolver", () => {
   });
 
   it("home: starting / project-stopped while the project isn't up", async () => {
-    const driveId = getPreviewDriveId(projectPath);
     expect(
       await resolvePreview({
         services: makeServices([{ workdir: projectPath, status: "starting" }]),
@@ -181,7 +177,7 @@ describe("preview-server resolver", () => {
         doc: "",
         home: true,
       }),
-    ).toEqual({ kind: "starting", project: PROJECT, projectPath, driveId });
+    ).toEqual({ kind: "starting", project: PROJECT, projectPath });
     expect(
       await resolvePreview({
         services: makeServices([]),
@@ -195,13 +191,8 @@ describe("preview-server resolver", () => {
 
   it("strips a trailing slash from the Connect endpoint and encodes the doc segment", async () => {
     const services = makeServices([
-      {
-        workdir: projectPath,
-        status: "ready",
-        endpoints: { "vetra-studio": "http://localhost:3001/" },
-      },
+      { workdir: projectPath, status: "ready", endpoints: readyEndpoints("http://localhost:3001/") },
     ]);
-    const driveId = getPreviewDriveId(projectPath);
     const result = await resolvePreview({
       services,
       workdir,
@@ -220,7 +211,10 @@ describe("preview-server resolver", () => {
       {
         workdir: projectPath,
         status: "ready",
-        endpoints: { "vetra-studio": "http://localhost:3001" },
+        endpoints: {
+          "vetra-studio": "http://localhost:3001",
+          "vetra-preview-drive-id": driveId,
+        },
       },
     ]);
     const appDriveId = "app-drive-123";

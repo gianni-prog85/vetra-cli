@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceInstanceStatus } from "@powerhousedao/clint";
 
 import { restartPreview, startPreview } from "../../src/preview-server/starter.js";
-import { getPreviewDriveId } from "../../src/helpers/reactor-project-preview.js";
 import { makeWorkdir } from "../spec/_fixtures.js";
+import { recordedEndpoints } from "../services/run-record.js";
+
+const DRIVE_ID = recordedEndpoints()["vetra-preview-drive-id"];
 
 interface FakeInstance {
   workdir: string;
   status: ServiceInstanceStatus["status"];
   instanceId?: string;
+  endpoints?: Record<string, string>;
 }
 
 function makeServices(args: {
@@ -57,7 +60,9 @@ describe("preview-server starter", () => {
 
   it("returns already-running without starting when an instance is ready", async () => {
     const { services, start } = makeServices({
-      initial: [{ workdir: projectPath, status: "ready", instanceId: "i-1" }],
+      initial: [
+        { workdir: projectPath, status: "ready", instanceId: "i-1", endpoints: recordedEndpoints() },
+      ],
     });
     const result = await startPreview({
       services,
@@ -70,7 +75,7 @@ describe("preview-server starter", () => {
       project: PROJECT,
       projectPath,
       instanceId: "i-1",
-      driveId: getPreviewDriveId(projectPath),
+      driveId: DRIVE_ID,
       status: "ready",
     });
   });
@@ -88,10 +93,20 @@ describe("preview-server starter", () => {
     expect(result.kind).toBe("already-running");
   });
 
-  it("calls services.start when no live instance exists and returns the new instanceId", async () => {
+  it("calls services.start when no live instance exists and returns the new instance's drive", async () => {
+    const initial: FakeInstance[] = [];
     const { services, start } = makeServices({
-      initial: [],
-      startImpl: async () => "new-instance",
+      initial,
+      // Ready: its run record is live.
+      startImpl: async (_id, opts) => {
+        initial.push({
+          workdir: opts.workdir,
+          status: "ready",
+          instanceId: "new-instance",
+          endpoints: recordedEndpoints(),
+        });
+        return "new-instance";
+      },
     });
     const result = await startPreview({
       services,
@@ -108,7 +123,7 @@ describe("preview-server starter", () => {
       project: PROJECT,
       projectPath,
       instanceId: "new-instance",
-      driveId: getPreviewDriveId(projectPath),
+      driveId: DRIVE_ID,
     });
   });
 
@@ -161,12 +176,12 @@ describe("preview-server starter", () => {
     expect(stop.mock.invocationCallOrder[0]).toBeLessThan(
       start.mock.invocationCallOrder[0],
     );
+    // No ready instance listed after the start: no drive to report.
     expect(result).toEqual({
       kind: "started",
       project: PROJECT,
       projectPath,
       instanceId: "fresh",
-      driveId: getPreviewDriveId(projectPath),
     });
   });
 

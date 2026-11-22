@@ -8,6 +8,7 @@ import { specPreviewUpdate } from "../../src/commands/spec-preview/update.js";
 import { makeCtx, makeWorkdir } from "../spec/_fixtures.js";
 
 const SWITCHBOARD_URL = "http://localhost:5555/graphql";
+const PREVIEW_DRIVE_ID = "vetra-preview-1a2b3c4d";
 
 function withLiveReactorProject(workdir: string) {
   return {
@@ -17,7 +18,10 @@ function withLiveReactorProject(workdir: string) {
         {
           status: "ready",
           workdir,
-          endpoints: { "vetra-switchboard": SWITCHBOARD_URL },
+          endpoints: {
+            "vetra-switchboard": SWITCHBOARD_URL,
+            "vetra-preview-drive-id": PREVIEW_DRIVE_ID,
+          },
         },
       ],
     } as never,
@@ -220,15 +224,16 @@ describe("spec-preview commands against a live (mocked) reactor-project", () => 
     const createBody = JSON.parse(
       String(gqlCalls(fetchSpy)[0]?.[1]?.body ?? "{}"),
     ) as { query: string; variables: Record<string, unknown> };
-    expect(createBody.query).toMatch(/createEmptyDocument/);
+    expect(createBody.query).toMatch(/createEmptyDocument\(documentType: \$documentType, parentIdOrSlug:/);
     expect(createBody.variables.documentType).toBe("powerhouse/workout-tracker");
-    expect(createBody.variables.parentIdentifier).toBeDefined();
+    // The preview drive the run record names.
+    expect(createBody.variables.parentIdOrSlug).toBe(PREVIEW_DRIVE_ID);
     const renameBody = JSON.parse(
       String(gqlCalls(fetchSpy)[1]?.[1]?.body ?? "{}"),
     ) as { query: string; variables: Record<string, unknown> };
-    expect(renameBody.query).toMatch(/renameDocument/);
+    expect(renameBody.query).toMatch(/renameDocument\(documentIdOrSlug:/);
     expect(renameBody.variables.name).toBe("Alpha");
-    expect(renameBody.variables.documentIdentifier).toBe("doc-1");
+    expect(renameBody.variables.documentIdOrSlug).toBe("doc-1");
   });
 
   it("specPreviewUpdate looks up the doc then posts mutateDocument", async () => {
@@ -274,5 +279,10 @@ describe("spec-preview commands against a live (mocked) reactor-project", () => 
     );
     expect(result.text).toMatch(/Deleted "Alpha"/);
     expect(gqlCalls(fetchSpy)).toHaveLength(2);
+    const deleteBody = JSON.parse(
+      String(gqlCalls(fetchSpy)[1]?.[1]?.body ?? "{}"),
+    ) as { query: string; variables: Record<string, unknown> };
+    expect(deleteBody.query).toMatch(/deleteDocument\(idOrSlug:/);
+    expect(deleteBody.variables.idOrSlug).toBe("doc-1");
   });
 });

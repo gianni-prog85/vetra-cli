@@ -17,7 +17,7 @@ import {
   browserDriveRemoteUrl,
   buildPreviewDocPath,
   buildPreviewDriveRootPath,
-  getPreviewDriveId,
+  previewDriveIdOf,
 } from "../helpers/reactor-project-preview.js";
 import type { ResolveResult } from "./config.js";
 
@@ -45,8 +45,6 @@ export async function resolvePreview(args: {
     };
   }
 
-  const defaultDriveId = getPreviewDriveId(projectPath);
-  const targetDriveId = args.drive ?? defaultDriveId;
   const instance = args.services
     .list("reactor-project")
     .find((i) => i.workdir === projectPath);
@@ -54,17 +52,22 @@ export async function resolvePreview(args: {
   if (!instance) {
     return { kind: "project-stopped", project: args.project, projectPath };
   }
-  if (instance.status === "starting") {
-    return { kind: "starting", project: args.project, projectPath, driveId: targetDriveId };
-  }
+  // The preview drive's id comes with the run record, once it is live.
+  const defaultDriveId = previewDriveIdOf(instance);
+  const targetDriveId = args.drive ?? defaultDriveId;
+  const starting = (): ResolveResult => ({
+    kind: "starting",
+    project: args.project,
+    projectPath,
+    ...(targetDriveId ? { driveId: targetDriveId } : {}),
+  });
+  if (instance.status === "starting") return starting();
   if (instance.status !== "ready") {
     return { kind: "project-stopped", project: args.project, projectPath };
   }
 
   const connectUrl = instance.endpoints?.["vetra-studio"];
-  if (!connectUrl) {
-    return { kind: "starting", project: args.project, projectPath, driveId: targetDriveId };
-  }
+  if (!connectUrl) return starting();
 
   const base = connectUrl.replace(/\/+$/, "");
 
@@ -94,6 +97,7 @@ export async function resolvePreview(args: {
   }
 
   // The preview drive is Connect's own drive: no remote URL to register.
+  if (!defaultDriveId) return starting();
   const docPath = args.doc
     ? buildPreviewDocPath(defaultDriveId, args.doc)
     : buildPreviewDriveRootPath(defaultDriveId);

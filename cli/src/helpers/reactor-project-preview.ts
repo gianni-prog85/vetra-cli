@@ -1,10 +1,10 @@
 /**
  * Helpers for interacting with the preview drive of a running reactor-project.
  *
- * Each reactor-project (a `ph vetra` instance) provisions a hardcoded preview
- * drive whose id is derived from the project's filesystem path. The same
- * derivation runs in `monorepo/clis/ph-cli/src/utils.ts` (`generateProjectDriveId`)
- * so Switchboard, Connect, and the agent agree on the id without coordination.
+ * A reactor-project is the project's own `ph run vetra dev`; its switchboard
+ * member serves the preview drive (declared slug `vetra-preview`). The
+ * service reads the drive's id and URL, and the members' URLs, from the run
+ * record (`services/reactor-project.ts` `previewEndpoints`).
  *
  * The `spec-preview-*` commands target this drive through the project's
  * Switchboard GraphQL endpoint rather than the on-disk reactor store — the
@@ -13,49 +13,18 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ServiceManager } from "@powerhousedao/clint";
+import type { ServiceInstanceStatus, ServiceManager } from "@powerhousedao/clint";
 import { getBearerToken } from "../auth/renown.js";
 import { resolveCloudConfig } from "../cloud/config.js";
 import { REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH } from "../constants.js";
 import type { Config } from "../framework.js";
 import { formatLines, unknownValueError } from "./cli-errors.js";
 
-const PREVIEW_DRIVE_PREFIX = "preview";
-
-/**
- * Compute the preview drive id for a reactor-project rooted at `projectPath`.
- *
- * Mirrors `generateProjectDriveId("preview")` from
- * `monorepo/clis/ph-cli/src/utils.ts`: short sha256 of the project root path.
- * Keep the two implementations in sync — diverging here silently sends
- * mutations to a non-existent drive.
- *
- * Resolve symlinks before hashing because the reactor side uses
- * `process.cwd()`, which on macOS normalises `/var/...` to `/private/var/...`
- * automatically. Without realpath here, a workdir under `mkdtemp(tmpdir())`
- * hashes to a different id on each side and `createEmptyDocument` fails with
- * "Document not found: preview-…".
- */
-export function getPreviewDriveId(projectPath: string): string {
-  const canonical = canonicalProjectPath(projectPath);
-  const hash = crypto
-    .createHash("sha256")
-    .update(canonical)
-    .digest("hex")
-    .slice(0, 8);
-  return `${PREVIEW_DRIVE_PREFIX}-${hash}`;
-}
-
-function canonicalProjectPath(projectPath: string): string {
-  try {
-    return fs.realpathSync(projectPath);
-  } catch {
-    /* If the path doesn't exist yet (rare — callers go through
-     * resolveReactorProjectPath which already validates), fall back to the
-     * raw string. Better to attempt the request and surface a clear GQL
-     * error than to throw something cryptic from here. */
-    return projectPath;
-  }
+/** The preview drive's id, as the ready instance reports it. */
+export function previewDriveIdOf(
+  instance: Pick<ServiceInstanceStatus, "endpoints">,
+): string | undefined {
+  return instance.endpoints?.["vetra-preview-drive-id"];
 }
 
 /**
@@ -90,15 +59,16 @@ export function resolvePreviewEndpoint(
     );
   }
   const switchboardUrl = live.endpoints?.["vetra-switchboard"];
-  if (!switchboardUrl) {
+  const driveId = previewDriveIdOf(live);
+  if (!switchboardUrl || !driveId) {
     throw new Error(
-      `Reactor project "${projectLabel}" is starting up — Switchboard endpoint not yet captured. Retry shortly.`,
+      `Reactor project "${projectLabel}" is starting up — its run record is not live yet. Retry shortly.`,
     );
   }
   return {
     switchboardUrl,
     connectUrl: live.endpoints?.["vetra-studio"],
-    driveId: getPreviewDriveId(projectPath),
+    driveId,
   };
 }
 
@@ -254,8 +224,8 @@ const FIND_DOCUMENTS_QUERY = /* GraphQL */ `
 `;
 
 const GET_DOCUMENT_QUERY = /* GraphQL */ `
-  query GetPreviewDocument($identifier: String!) {
-    document(identifier: $identifier) {
+  query GetPreviewDocument($idOrSlug: String!) {
+    document(idOrSlug: $idOrSlug) {
       document {
         id
         slug
@@ -270,8 +240,8 @@ const GET_DOCUMENT_QUERY = /* GraphQL */ `
 `;
 
 const CREATE_EMPTY_DOCUMENT_MUTATION = /* GraphQL */ `
-  mutation CreateEmptyPreviewDocument($documentType: String!, $parentIdentifier: String) {
-    createEmptyDocument(documentType: $documentType, parentIdentifier: $parentIdentifier) {
+  mutation CreateEmptyPreviewDocument($documentType: String!, $parentIdOrSlug: String) {
+    createEmptyDocument(documentType: $documentType, parentIdOrSlug: $parentIdOrSlug) {
       id
       slug
       name
@@ -284,8 +254,8 @@ const CREATE_EMPTY_DOCUMENT_MUTATION = /* GraphQL */ `
 `;
 
 const RENAME_DOCUMENT_MUTATION = /* GraphQL */ `
-  mutation RenamePreviewDocument($documentIdentifier: String!, $name: String!) {
-    renameDocument(documentIdentifier: $documentIdentifier, name: $name) {
+  mutation RenamePreviewDocument($documentIdOrSlug: String!, $name: String!) {
+    renameDocument(documentIdOrSlug: $documentIdOrSlug, name: $name) {
       id
       slug
       name
@@ -312,14 +282,14 @@ const MUTATE_DOCUMENT_MUTATION = /* GraphQL */ `
 `;
 
 const DELETE_DOCUMENT_MUTATION = /* GraphQL */ `
-  mutation DeletePreviewDocument($identifier: String!) {
-    deleteDocument(identifier: $identifier)
+  mutation DeletePreviewDocument($idOrSlug: String!) {
+    deleteDocument(idOrSlug: $idOrSlug)
   }
 `;
 
 const SET_PREFERRED_EDITOR_MUTATION = /* GraphQL */ `
-  mutation SetPreferredEditor($documentIdentifier: String!, $preferredEditor: String) {
-    setPreferredEditor(documentIdentifier: $documentIdentifier, preferredEditor: $preferredEditor) {
+  mutation SetPreferredEditor($documentIdOrSlug: String!, $preferredEditor: String) {
+    setPreferredEditor(documentIdOrSlug: $documentIdOrSlug, preferredEditor: $preferredEditor) {
       id
       slug
       name
@@ -367,7 +337,7 @@ export async function getPreviewDocument(
 ): Promise<PreviewDocumentFull | null> {
   const data = await gqlRequest<{
     document: { document: PreviewDocumentFull } | null;
-  }>(switchboardUrl, GET_DOCUMENT_QUERY, { identifier }, token);
+  }>(switchboardUrl, GET_DOCUMENT_QUERY, { idOrSlug: identifier }, token);
   return data.document?.document ?? null;
 }
 
@@ -396,7 +366,7 @@ export async function createEmptyPreviewDocument(
       created = await gqlRequest<{ createEmptyDocument: PreviewDocumentFull }>(
         switchboardUrl,
         CREATE_EMPTY_DOCUMENT_MUTATION,
-        { documentType, parentIdentifier: driveId },
+        { documentType, parentIdOrSlug: driveId },
         token,
       );
       break;
@@ -416,7 +386,7 @@ export async function createEmptyPreviewDocument(
   const renamed = await gqlRequest<{ renameDocument: PreviewDocumentFull }>(
     switchboardUrl,
     RENAME_DOCUMENT_MUTATION,
-    { documentIdentifier: created.createEmptyDocument.id, name },
+    { documentIdOrSlug: created.createEmptyDocument.id, name },
     token,
   );
   return renamed.renameDocument;
@@ -467,7 +437,7 @@ export async function deletePreviewDocument(
   const data = await gqlRequest<{ deleteDocument: boolean }>(
     switchboardUrl,
     DELETE_DOCUMENT_MUTATION,
-    { identifier },
+    { idOrSlug: identifier },
     token,
   );
   return data.deleteDocument;
@@ -594,7 +564,7 @@ export async function setDrivePreferredEditor(
     switchboardUrl,
     SET_PREFERRED_EDITOR_MUTATION,
     {
-      documentIdentifier: driveId,
+      documentIdOrSlug: driveId,
       preferredEditor,
     },
     token,
@@ -649,14 +619,14 @@ export async function createPreviewDrive(
   const created = await gqlRequest<{ createEmptyDocument: PreviewDocumentFull }>(
     switchboardUrl,
     CREATE_EMPTY_DOCUMENT_MUTATION,
-    { documentType: "powerhouse/document-drive", parentIdentifier: null },
+    { documentType: "powerhouse/document-drive", parentIdOrSlug: null },
     token,
   );
   const driveId = created.createEmptyDocument.id;
   const renamed = await gqlRequest<{ renameDocument: PreviewDocumentFull }>(
     switchboardUrl,
     RENAME_DOCUMENT_MUTATION,
-    { documentIdentifier: driveId, name },
+    { documentIdOrSlug: driveId, name },
     token,
   );
   const resolvedEditor = preferredEditor

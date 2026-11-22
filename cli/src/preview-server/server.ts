@@ -55,7 +55,7 @@ interface PreviewServerDeps {
    * applies the rest of the precedence (env > project config > built-in). */
   registryUrl?: string;
   port: number;
-  /** Live public proxy origin, forwarded to reactor-project starts. */
+  /** Live public proxy origin: the base of the browser's drive URLs. */
   proxyPublicUrl?: string;
   /** Running versions surfaced to the studio UI via `GET /version`. */
   versions: { vetraCli: string; ph: string };
@@ -263,7 +263,6 @@ export async function startPreviewServer(
           services,
           workdir,
           project: q.get("project") ?? "",
-          proxyPublicUrl,
         });
         const status =
           result.kind === "unknown-project"
@@ -283,7 +282,6 @@ export async function startPreviewServer(
           services,
           workdir,
           project: q.get("project") ?? "",
-          proxyPublicUrl,
         });
         const status =
           result.kind === "unknown-project"

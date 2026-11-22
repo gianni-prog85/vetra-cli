@@ -1,122 +1,114 @@
-import { readFileSync } from 'node:fs';
-import { describe, it, expect } from 'vitest';
-import type { LifecycleInitContext, ServiceBuildContext } from '@powerhousedao/clint';
+/**
+ * The reactor-project service is the project's own `ph run vetra dev`: a host
+ * service whose endpoints come from the project's `.ph/run/vetra.json`. The
+ * record here is the shape a 6.4 scaffold's vetra compound writes.
+ */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { PreflightContext, ServiceBuildContext } from '@powerhousedao/clint';
 import type { Config } from '../../src/framework.js';
-import {
-  deployBasePath,
-  proxyBasePathHook,
-  reactorProject,
-} from '../../src/services/reactor-project.js';
+import { previewEndpoints, reactorProject } from '../../src/services/reactor-project.js';
 import { defaultConfig } from '../spec/_fixtures.js';
+import { recordFixture } from './run-record.js';
 
-/** A ServiceBuildContext as the service manager builds it (no proxy mount). */
-function buildCtx(params?: Record<string, unknown>): ServiceBuildContext<Config> {
-  return { ...(params ? { params } : {}), config: defaultConfig(), proxy: { basePath: '' } };
+function buildCtx(): ServiceBuildContext<Config> {
+  return { config: defaultConfig(), proxy: { basePath: '' } };
 }
 
-// ── deployBasePath ─────────────────────────────────────────────────
-
-describe('deployBasePath', () => {
-  it('returns "" when unset', () => {
-    expect(deployBasePath(undefined)).toBe('');
-    expect(deployBasePath('')).toBe('');
-    expect(deployBasePath('   ')).toBe('');
+describe('reactor-project as a host service', () => {
+  it('runs the project\'s vetra host at dev, readiness from its run record', () => {
+    expect(reactorProject.run).toEqual({ host: 'vetra', verb: 'dev' });
+    expect(reactorProject.command).toBeUndefined();
+    expect(reactorProject.readiness?.patterns).toBeUndefined();
   });
 
-  it('returns "" for a root-path URL', () => {
-    expect(deployBasePath('https://studio.example.com')).toBe('');
-    expect(deployBasePath('https://studio.example.com/')).toBe('');
-  });
-
-  it('returns the pathname without trailing slashes', () => {
-    expect(deployBasePath('https://example.com/myagent')).toBe('/myagent');
-    expect(deployBasePath('https://example.com/myagent/')).toBe('/myagent');
-    expect(deployBasePath('https://example.com/a/b///')).toBe('/a/b');
-  });
-
-  it('returns "" for an invalid URL', () => {
-    expect(deployBasePath('not a url')).toBe('');
-  });
-});
-
-// ── proxyBasePathHook → command --base ─────────────────────────────
-
-function initHook(proxyPublicUrl: string | undefined): void {
-  void proxyBasePathHook().onInit({
-    config: { proxyPublicUrl },
-  } as unknown as LifecycleInitContext);
-}
-
-function baseFlag(): string {
-  const { command } = reactorProject;
-  if (typeof command !== 'function') throw new Error('expected command function');
-  const match = /--base (\S+)/.exec(command(buildCtx()));
-  if (!match?.[1]) throw new Error('--base flag not found in command');
-  return match[1];
-}
-
-describe('reactor-project --base', () => {
-  it('uses the proxy prefix alone when no publicUrl is configured', () => {
-    initHook(undefined);
-    expect(baseFlag()).toBe('/reactor-project/vetra-studio/');
-  });
-
-  it('prefixes the resolved publicUrl pathname', () => {
-    initHook('https://example.com/myagent/');
-    expect(baseFlag()).toBe('/myagent/reactor-project/vetra-studio/');
-    initHook(undefined);
-  });
-});
-
-describe('reactor-project --renown-namespace', () => {
-  // The Studio Connect and the preview Connect are same-origin apps. A shared
-  // Renown namespace means one localStorage session for both, but the preview
-  // Connect verifies it against the project's Renown (www.renown.id), not the
-  // Studio's (RENOWN_URL / cloud Renown). Where those differ, the preview's
-  // boot-time revalidation finds no credential and logs out the shared session:
-  // the Studio's sync goes anonymous mid-session and the switchboard answers
-  // Forbidden (staging 2026-10-20, zesty-ibis). The preview reactor is public
-  // and needs no login, so it gets a namespace of its own.
-  // The Studio's namespace is the Connect host's `config.renown.namespace`.
-  const studioNamespace = (): string => {
-    const host = readFileSync(
-      new URL('../../../hosts/connect/host.js', import.meta.url),
-      'utf8',
-    );
-    const match = /renown:\s*\{\s*namespace:\s*"([^"]+)"/.exec(host);
-    if (!match) throw new Error('hosts/connect/host.js sets no config.renown.namespace');
-    return match[1];
-  };
-
-  it('keeps the preview Connect out of the Studio Renown session', () => {
-    const { command } = reactorProject;
-    if (typeof command !== 'function')
-      throw new Error('expected command function');
-    const cmd = command(buildCtx());
-    const previewNamespace = /--renown-namespace\s+(\S+)/.exec(cmd)?.[1];
-    expect(previewNamespace).toBeDefined();
-    expect(previewNamespace).not.toBe(studioNamespace());
-  });
-});
-
-// ── reactorProject env — public preview reactor ────────────────────
-
-describe('reactor-project env — public preview reactor', () => {
-  it('disables auth so the preview reactor boots OPEN', () => {
+  it('keeps the preview reactor open and caps the heap; ports are host data', () => {
     const { env } = reactorProject;
     if (typeof env !== 'function') throw new Error('expected env function');
-    const e = env(buildCtx({ switchboardPort: 4001 }));
+    const e = env(buildCtx());
+    expect(e.NODE_OPTIONS).toMatch(/--max-old-space-size=/);
     expect(e.AUTH_ENABLED).toBe('false');
     expect(e.DOCUMENT_PERMISSIONS_ENABLED).toBe('false');
-    expect(e.PORT).toBe('4001');
-  });
-
-  it('clears admin/credential/protection hygiene keys', () => {
-    const { env } = reactorProject;
-    if (typeof env !== 'function') throw new Error('expected env function');
-    const e = env(buildCtx({ switchboardPort: 4001 }));
     expect(e.DEFAULT_PROTECTION).toBe('false');
     expect(e.SKIP_CREDENTIAL_VERIFICATION).toBe('false');
     expect(e.ADMINS).toBe('');
+    expect(e.PORT).toBeUndefined();
+  });
+});
+
+describe('previewEndpoints', () => {
+  it('maps the members\' outputs to the names the Studio reads', () => {
+    expect(previewEndpoints(recordFixture())).toEqual({
+      'vetra-studio': { url: 'http://localhost:3001/', type: 'website' },
+      'vetra-switchboard': { url: 'http://localhost:4001/graphql', type: 'api-graphql' },
+      'mcp-server': { url: 'http://localhost:4001/mcp', type: 'api-mcp' },
+      'vetra-drive-url': { url: 'http://localhost:4001/d/vetra-1a2b3c4d', type: 'other' },
+      'vetra-preview-drive-url': {
+        url: 'http://localhost:4001/d/vetra-preview-1a2b3c4d',
+        type: 'other',
+      },
+      'vetra-preview-drive-id': { url: 'vetra-preview-1a2b3c4d', type: 'other' },
+    });
+  });
+
+  it('names the members it expects when the host has others', () => {
+    const record = recordFixture();
+    record.members = { switchboard: record.members!['vetra-switchboard']! };
+    expect(() => previewEndpoints(record)).toThrow(
+      /no "vetra-switchboard" and "vetra-studio" members \(it has "switchboard"\)/,
+    );
+  });
+
+  it('refuses a switchboard member that serves no preview drive', () => {
+    const record = recordFixture();
+    const outputs = record.members!['vetra-switchboard']!.outputs as {
+      drives: Record<string, unknown>;
+    };
+    delete outputs.drives['vetra-preview'];
+    expect(() => previewEndpoints(record)).toThrow(/serves no "vetra-preview" drive/);
+  });
+
+  it('leaves out an MCP endpoint the switchboard does not mount', () => {
+    const record = recordFixture();
+    const outputs = record.members!['vetra-switchboard']!.outputs as {
+      endpoints: { mcp?: string };
+    };
+    delete outputs.endpoints.mcp;
+    expect(previewEndpoints(record)['mcp-server']).toBeUndefined();
+  });
+});
+
+describe('reactor-project preflight', () => {
+  let project: string;
+  beforeEach(() => {
+    project = mkdtempSync(path.join(tmpdir(), 'reactor-project-'));
+  });
+  afterEach(() => rmSync(project, { recursive: true, force: true }));
+
+  async function failures(): Promise<string[]> {
+    const ctx = { cwd: project } as PreflightContext<Config>;
+    const messages: string[] = [];
+    for (const check of reactorProject.preflight ?? []) {
+      const result = await check(ctx);
+      if (!result.ok) messages.push(result.message);
+    }
+    return messages;
+  }
+
+  it('needs a project with a vetra host and its ph-cli installed', async () => {
+    writeFileSync(path.join(project, 'powerhouse.config.json'), '{}');
+    expect(await failures()).toEqual([
+      expect.stringContaining('no vetra host (hosts/vetra/host.js)'),
+      expect.stringContaining("ph-cli is not installed"),
+    ]);
+
+    mkdirSync(path.join(project, 'hosts', 'vetra'), { recursive: true });
+    writeFileSync(path.join(project, 'hosts', 'vetra', 'host.js'), 'export default {};');
+    const cli = path.join(project, 'node_modules', '@powerhousedao', 'ph-cli', 'dist');
+    mkdirSync(cli, { recursive: true });
+    writeFileSync(path.join(cli, 'cli.mjs'), '');
+    expect(await failures()).toEqual([]);
   });
 });

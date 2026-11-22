@@ -264,7 +264,7 @@ export type ResolveResult =
   | { kind: "no-target" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "project-stopped"; project: string }
-  | { kind: "starting"; project: string; driveId: string }
+  | { kind: "starting"; project: string; driveId?: string }
   | {
       kind: "ready";
       project: string;
@@ -280,14 +280,14 @@ export type StartResult =
       project: string;
       projectPath: string;
       instanceId: string;
-      driveId: string;
+      driveId?: string;
     }
   | {
       kind: "already-running";
       project: string;
       projectPath: string;
       instanceId: string;
-      driveId: string;
+      driveId?: string;
       status: "starting" | "ready";
     }
   | { kind: "unknown-project"; project: string; error: string }

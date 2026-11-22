@@ -4,10 +4,6 @@ import { formatStatus } from "@powerhousedao/clint";
 import { defineCommand } from "../../framework.js";
 import { resolveReactorProjectPath } from "../../helpers/project.js";
 
-// The `/reactor-project/switchboard/*` proxy routes are declared on the
-// reactor-project service (proxyRoutes hook), so ph-clint re-asserts them on
-// every service:ready — including auto-restart — not just on this command.
-
 /**
  * Idempotent `reactor-project-start`. Overrides the ph-clint auto-injected
  * version (user-defined commands win in `defineCli`'s command map) so that
@@ -15,9 +11,9 @@ import { resolveReactorProjectPath } from "../../helpers/project.js";
  * instance instead of failing with "Service has reached max instances (1)".
  *
  * The system prompt promises this behaviour ("idempotent and a no-op when
- * already running"); previously a trigger that auto-starts the reactor on
- * the first spec change would race with the agent's explicit start call
- * and force a stop/start dance.
+ * already running"): a start the Studio's preview pane makes and the agent's
+ * explicit one never race into a stop/start dance. Ports and reloads are the
+ * project's host data (`hosts/vetra`).
  */
 export const reactorProjectStart = defineCommand({
   id: "reactor-project-start",
@@ -27,15 +23,6 @@ export const reactorProjectStart = defineCommand({
       .string()
       .optional()
       .describe("Working directory for the service"),
-    watch: z.boolean().optional().describe("Enable file watching"),
-    connectPort: z.coerce
-      .number()
-      .optional()
-      .describe("Connect Studio port"),
-    switchboardPort: z.coerce
-      .number()
-      .optional()
-      .describe("Vetra Switchboard port"),
   }),
   execute: async (input, context) => {
     const services = context.services;
@@ -63,20 +50,10 @@ export const reactorProjectStart = defineCommand({
       return { text: formatStatus(existing), data };
     }
 
-    const params: Record<string, unknown> = {};
-    if (input.watch !== undefined) params.watch = input.watch;
-    if (input.connectPort !== undefined) params.connectPort = input.connectPort;
-    if (input.switchboardPort !== undefined)
-      params.switchboardPort = input.switchboardPort;
-    // The live proxy origin (with any auto-assigned port) is only knowable
-    // here; the service builder can't read it. Drives are advertised under it.
-    if (context.proxy?.url) params.proxyPublicUrl = context.proxy.url;
-
     try {
       const instanceId = await services.start("reactor-project", {
         workdir: resolvedWorkdir,
         cwd: resolvedWorkdir,
-        params: Object.keys(params).length > 0 ? params : undefined,
       });
       const status = services
         .list("reactor-project")

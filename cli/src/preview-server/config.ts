@@ -15,7 +15,8 @@ export type ResolveResult =
   | { kind: "no-target" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "project-stopped"; project: string; projectPath: string }
-  | { kind: "starting"; project: string; projectPath: string; driveId: string }
+  /** `driveId`: absent until the run record names the preview drive. */
+  | { kind: "starting"; project: string; projectPath: string; driveId?: string }
   | {
       kind: "ready";
       project: string;
@@ -28,9 +29,10 @@ export type ResolveResult =
       proxiedUrl: string;
     };
 
+/** `driveId`: the preview drive, absent until the run record names it. */
 export type StartResult =
-  | { kind: "started"; project: string; projectPath: string; instanceId: string; driveId: string }
-  | { kind: "already-running"; project: string; projectPath: string; instanceId: string; driveId: string; status: "starting" | "ready" }
+  | { kind: "started"; project: string; projectPath: string; instanceId: string; driveId?: string }
+  | { kind: "already-running"; project: string; projectPath: string; instanceId: string; driveId?: string; status: "starting" | "ready" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "failed"; project: string; error: string };
 

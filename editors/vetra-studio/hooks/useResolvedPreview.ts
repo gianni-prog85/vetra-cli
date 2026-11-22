@@ -27,7 +27,7 @@ export type ResolvedPreview =
   | { kind: "loading" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "project-stopped"; project: string }
-  | { kind: "starting"; project: string; driveId: string }
+  | { kind: "starting"; project: string; driveId?: string }
   | {
       kind: "ready";
       project: string;

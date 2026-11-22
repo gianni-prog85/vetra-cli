@@ -57,7 +57,7 @@ preview document via the project's Switchboard, and points the
 scaffold's BUILD card at a deep link into that project's Connect.
 
 No dynamic package loading. No local registry. Specs are codegen
-targets; Vite HMR + `ph vetra` dev-mode is the live-reload mechanism.
+targets; Vite HMR + `ph run vetra dev` is the live-reload mechanism.
 
 ## Architecture decisions
 
@@ -149,10 +149,12 @@ against.
     CRUD documents in the project's preview drive. They do **not**
     set the iframe — that's a workflow-tool concern.
 
-11. **Each reactor-project has a preview drive with a hardcoded slug.**
-    Shared by the project's Switchboard, its Connect, the agent's
-    `spec-preview-*` tools, and the scaffold's URL resolver.
-    `reactor-project-init` creates it on bootstrap.
+11. **Each reactor-project has a preview drive, declared by its host.**
+    The project's `hosts/vetra` switchboard member serves it (slug
+    `vetra-preview`, project-hashed id); the run is `ph run vetra dev`
+    and its id and URL come from `.ph/run/vetra.json`, read by the
+    `spec-preview-*` tools and the scaffold's URL resolver through the
+    service's endpoints (`vetra-preview-drive-id`).
 
 12. **Mastra workflow engine deferred to V2.** For MVP, the agent
     drives the workflow registry directly via tool calls. The local
@@ -270,19 +272,16 @@ Suggested order. Each step is independently demoable.
 
 ## Things NOT done that could matter
 
-- **Project Connect's drive URLs still bypass the proxy.** The iframe
-  Connect syncs `PH_CONNECT_DEFAULT_DRIVES_URL` straight to the project
-  switchboard (`:4001`) — fine locally, broken deployed. `ph vetra`
-  computes those URLs internally; needs an upstream override or
-  relative-drive-URL support in Connect.
+- **The project run is local-only.** The iframe opens the project's own
+  Connect, which syncs straight to the project switchboard (its loopback
+  ports from the run record) — fine on this machine, unreachable for a
+  remote browser. One public origin is C2/C4 (a Preview host with fixed
+  ports) or Labs.
 
-- **Stamped drive URL bakes the proxy's localhost origin.** A deployed
-  agent needs a public-origin config (or relative drive URLs) before
-  the stamp is correct remotely.
-
-- **Monorepo PR #2676 not merged/published.** Until the stack ships it,
-  `--base` doesn't reach Vite in real projects; the kanban-board
-  node_modules patch is the only thing making the iframe leg work.
+- **Only a 6.4 scaffold's project can preview.** The run needs
+  `hosts/vetra/host.js` with members `vetra-switchboard` and
+  `vetra-studio` (the scaffold's names); another project gets one error
+  naming them, until C2.
 
 - **Workflow persistence.** In-memory registry; vetra restart =
   lost workflows. Editor reconnects to a fresh registry. Persistence
@@ -404,10 +403,10 @@ curl -sS -N http://127.0.0.1:5180/events
   `instanceId`. One per session can be `primary`.
 - **Workflow engine (V2)** — Mastra workflow runner that drives a
   workflow instance's state machine. Not in MVP.
-- **Reactor-project** — a `ph vetra` dev-mode child process spawned
-  by the agent to host preview surfaces. One per active build in a
-  chat session.
-- **Preview drive** — the hardcoded-slug drive inside a reactor-
+- **Reactor-project** — the project's `ph run vetra dev`, a child
+  process spawned by the agent to host preview surfaces. One per active
+  build in a chat session.
+- **Preview drive** — the `vetra-preview` drive inside a reactor-
   project, used for ephemeral preview document instances. Shared by
   the project's Switchboard, Connect, the agent's `spec-preview-*`
   tools, and the scaffold's URL resolver.

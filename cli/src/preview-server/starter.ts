@@ -9,15 +9,13 @@
  */
 import type { ServiceManager } from "@powerhousedao/clint";
 import { resolveReactorProjectPath } from "../helpers/project.js";
-import { getPreviewDriveId } from "../helpers/reactor-project-preview.js";
+import { previewDriveIdOf } from "../helpers/reactor-project-preview.js";
 import type { StartResult } from "./config.js";
 
 export async function startPreview(args: {
   services: ServiceManager;
   workdir: string;
   project: string;
-  /** Live public proxy origin; advertised as the base of the project's drive URLs. */
-  proxyPublicUrl?: string;
 }): Promise<StartResult> {
   // The browser always names the project; an empty one never picks the
   // workspace's only project.
@@ -37,7 +35,6 @@ export async function startPreview(args: {
     };
   }
 
-  const driveId = getPreviewDriveId(projectPath);
   const existing = args.services
     .list("reactor-project")
     .find(
@@ -46,38 +43,40 @@ export async function startPreview(args: {
         (i.status === "ready" || i.status === "starting"),
     );
   if (existing) {
+    const driveId = previewDriveIdOf(existing);
     return {
       kind: "already-running",
       project: args.project,
       projectPath,
       instanceId: existing.instanceId ?? "",
-      driveId,
+      ...(driveId ? { driveId } : {}),
       status: existing.status as "starting" | "ready",
     };
   }
 
-  return spawn(args, projectPath, driveId);
+  return spawn(args, projectPath);
 }
 
 async function spawn(
-  args: { services: ServiceManager; project: string; proxyPublicUrl?: string },
+  args: { services: ServiceManager; project: string },
   projectPath: string,
-  driveId: string,
 ): Promise<StartResult> {
   try {
     const instanceId = await args.services.start("reactor-project", {
       workdir: projectPath,
       cwd: projectPath,
-      params: args.proxyPublicUrl
-        ? { proxyPublicUrl: args.proxyPublicUrl }
-        : undefined,
     });
+    // Ready: the run record named the preview drive.
+    const ready = args.services
+      .list("reactor-project")
+      .find((i) => i.instanceId === instanceId);
+    const driveId = ready ? previewDriveIdOf(ready) : undefined;
     return {
       kind: "started",
       project: args.project,
       projectPath,
       instanceId,
-      driveId,
+      ...(driveId ? { driveId } : {}),
     };
   } catch (err) {
     return {
@@ -105,7 +104,6 @@ export function restartPreview(args: {
   services: ServiceManager;
   workdir: string;
   project: string;
-  proxyPublicUrl?: string;
 }): Promise<StartResult> {
   // Keyed before any await, so a second call can't slip past the first.
   const key = `${args.workdir}\0${args.project}`;
@@ -120,7 +118,6 @@ async function restartProject(args: {
   services: ServiceManager;
   workdir: string;
   project: string;
-  proxyPublicUrl?: string;
 }): Promise<StartResult> {
   // The browser always names the project; an empty one never picks the
   // workspace's only project.
@@ -151,7 +148,7 @@ async function restartProject(args: {
 }
 
 async function stopThenSpawn(
-  args: { services: ServiceManager; project: string; proxyPublicUrl?: string },
+  args: { services: ServiceManager; project: string },
   projectPath: string,
 ): Promise<StartResult> {
   const running = (instanceId?: string) =>
@@ -176,5 +173,5 @@ async function stopThenSpawn(
       };
     }
   }
-  return spawn(args, projectPath, getPreviewDriveId(projectPath));
+  return spawn(args, projectPath);
 }

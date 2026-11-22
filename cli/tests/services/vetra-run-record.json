@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "host": "vetra",
+  "projectName": "todo-list",
+  "kind": "compound",
+  "verb": "dev",
+  "pid": 41000,
+  "startedAt": "2026-11-22T10:00:00.000Z",
+  "members": {
+    "vetra-switchboard": {
+      "host": "switchboard",
+      "runnerModule": "@powerhousedao/ph-cli/runners/switchboard",
+      "kind": "reactor",
+      "verb": "dev",
+      "outputs": {
+        "origin": "http://localhost:4001",
+        "endpoints": {
+          "graphql": "http://localhost:4001/graphql",
+          "mcp": "http://localhost:4001/mcp"
+        },
+        "drives": {
+          "powerhouse": {
+            "id": "powerhouse",
+            "url": "http://localhost:4001/d/powerhouse"
+          },
+          "vetra": {
+            "id": "vetra-1a2b3c4d",
+            "url": "http://localhost:4001/d/vetra-1a2b3c4d"
+          },
+          "vetra-preview": {
+            "id": "vetra-preview-1a2b3c4d",
+            "url": "http://localhost:4001/d/vetra-preview-1a2b3c4d"
+          }
+        }
+      }
+    },
+    "vetra-studio": {
+      "host": "connect",
+      "runnerModule": "@powerhousedao/ph-cli/runners/connect",
+      "kind": "reactor",
+      "verb": "dev",
+      "outputs": {
+        "origin": "http://localhost:3001",
+        "endpoints": { "connect": "http://localhost:3001/" }
+      }
+    }
+  }
+}

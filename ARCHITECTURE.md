@@ -44,7 +44,7 @@ of the open work.
        ┌──────────────────┐  ┌─────────────────────┐
        │ Connect          │  │ reactor-project(s)  │
        │ (static SPA      │  │ per-chat-session    │
-       │ serving this     │  │ ph vetra dev-mode   │
+       │ serving this     │  │ ph run vetra dev:   │
        │ package's        │  │ Switchboard +       │
        │ editors)         │  │ Connect with Vite   │
        │ Drive editor =   │  │ HMR. Preview docs   │
@@ -471,17 +471,27 @@ Composition:
 
 ### reactor-project service
 
-Per-project `ph vetra` instance running its own full Switchboard +
-Connect in dev mode (Vite HMR for editors). Spawned by the agent via
-the `reactor-project-start` tool. Each project lives at a known
-workdir under `<workdir>/projects/<project-name>/` and exposes its
-own ports.
+The project's own `ph run vetra dev` (`services/reactor-project.ts`, a
+clint host service): the compound the 6.4 scaffold writes to
+`hosts/vetra`, its `vetra-switchboard` and `vetra-studio` members each in
+their own process, Vite HMR for editors. Spawned by the agent via the
+`reactor-project-start` tool or the BUILD pane's `POST /start`, in the
+project folder (a subfolder of the workdir), with the project as its data
+dir: its stores and `.ph/run/vetra.json` are the project's own. Ready once
+that record is live; stopped through its stdin (the compound shuts its
+members down; its tree is killed only after 30 s). Ports are the
+project's host data. A project without `hosts/vetra/host.js` cannot
+preview (until C2 supplies a Preview host).
 
-Each reactor-project has a **preview drive** with a hardcoded slug
-shared by its Switchboard and Connect. Preview documents (instances
-of in-progress document models) live in this drive. The agent's
-`spec-preview-*` tools target this drive by default. The editor
-composes iframe URLs as deep links into this drive's editor route.
+The service's endpoints come from the record (`previewEndpoints`):
+`vetra-studio` = the Connect member's `endpoints.connect`,
+`vetra-switchboard` = the switchboard member's `endpoints.graphql`,
+`mcp-server`, `vetra-drive-url`, and the **preview drive** (declared slug
+`vetra-preview`, a project-hashed id) as `vetra-preview-drive-url` and
+`vetra-preview-drive-id`. Preview documents (instances of in-progress
+document models) live in this drive. The agent's `spec-preview-*` tools
+target it by default. The editor composes iframe URLs as deep links into
+this drive's editor route.
 
 A chat session may associate with a reactor-project throughout its
 lifecycle, and may also switch projects mid-session if the agent
@@ -626,10 +636,11 @@ in the drive (the product document, chat sessions) use
 
 ### Services
 
-- `reactor-project` — `ph vetra` in dev mode for the preview surface.
-  Persistent state at `<workdir>/.ph/vetra-cli/services/reactor-project/
-  <instance>.json` (read by `reactor-project-ls` and projected over
-  the local API).
+- `reactor-project` — the project's `ph run vetra dev` for the preview
+  surface (see "reactor-project service"). Persistent state at
+  `<workdir>/.ph/vetra-cli/services/reactor-project/<instance>.json`
+  (read by `reactor-project-ls` and projected over the local API); the
+  run's own record is `<project>/.ph/run/vetra.json`.
 
 ## Boot sequence
 
@@ -696,13 +707,11 @@ What happens when the agent previews an in-progress document model.
   spec-create / spec-update
     ├─→ specs/*.phd  (filesystem, codegen source of truth)
     │       │ also feeds reactor-project tree (project source)
-    │       ↓ (ph vetra dev mode, Vite HMR)
+    │       ↓ (ph run vetra dev, Vite HMR)
     │   reactor-project picks up new document model (codegen)
-    └─→ vetra drive  (direct, synchronous when reactor running;
+    └─→ Studio drive  (direct, synchronous when the reactor is attached;
                           specFsSyncTrigger is the fallback for
                           external edits)
-                              ↓ (ph vetra dev mode, Vite HMR)
-                       reactor-project picks up new document model
     │
     ▼
   spec-preview-create({ projectId, specSlug })
@@ -761,35 +770,11 @@ Browser-facing URL policy, per consumer. Nothing stamps the proxy's
 address into the Studio bundle, so the Studio SPA and the preview server
 are reached directly:
 
-- **BUILD iframe (reactor-project Connect)** — the service passes
-  `ph vetra --base /reactor-project/vetra-studio/` (see
-  `REACTOR_PROJECT_CONNECT_PROXY_PATH`) so Vite emits self-contained
-  URLs under the proxy prefix; the readiness capture keeps the base path
-  in the endpoint URL so the proxy forwards verbatim. `/resolve` returns
-  both `url` (direct) and `proxiedUrl` (proxy-relative); the client
-  resolves `proxiedUrl` against the stamped proxy origin (detected by
-  the stamp's `/preview` pathname).
-
-- **Project switchboard (drive sync for the BUILD iframe)** — when a
-  public proxy URL is configured, the service passes
-  `ph vetra --drives-public-base <publicUrl>/reactor-project/switchboard`
-  so the nested studio's defaultDrives carry the proxy origin
-  (`<publicUrl>/reactor-project/switchboard/d/<slug>`) instead of the
-  unreachable `http://localhost:<sbPort>`; `reactor-project-start`
-  registers the matching proxy routes
-  (`/reactor-project/switchboard/{d/,graphql,attachments/,mcp}` →
-  project switchboard, source `service:reactor-project`), whose
-  `/d/`-aligned shape yields the X-Forwarded-Prefix the switchboard
-  needs to announce proxied follow-up endpoints. Without a publicUrl the
-  drive URLs stay local (current dev behavior).
-
-Known gaps: `--base` only reaches Vite once monorepo PR #2676
-(builder-tools `base: env.PH_CONNECT_BASE_PATH`) is in the published
-stack; `--drives-public-base` requires a published ph-cli that knows the
-flag (an older project-local ph-cli rejects it and the service fails to
-start — only when a publicUrl is configured); and the stamped drive
-URL bakes the proxy's localhost origin, so deployed agents need either a
-public-origin config or relative drive-URL support in Connect.
+- **BUILD iframe (reactor-project Connect)** — the project's own Connect,
+  at the URL its run record gives (`/resolve` `url`). It serves at its
+  root; the `proxiedUrl` `/resolve` still returns names a prefix nothing
+  serves, and the client resolves it only against a stamped proxy
+  origin, which nothing writes.
 
 ## Workflow scaffolds
 

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import crypto from "node:crypto";
 
 import {
   browserDriveRemoteUrl,
@@ -9,10 +8,10 @@ import {
   driveRemoteUrl,
   findPreviewByName,
   findPreviewDriveByPreferredEditor,
-  getPreviewDriveId,
   listPreviewDocuments,
   resolvePreviewEndpoint,
 } from "../../src/helpers/reactor-project-preview.js";
+import { recordedEndpoints } from "../services/run-record.js";
 
 const PROJECT_PATH = "/tmp/some-reactor-project";
 const SWITCHBOARD_URL = "http://localhost:5555/graphql";
@@ -26,27 +25,6 @@ function makeServices(instances: Array<{
     list: () => instances,
   } as never;
 }
-
-describe("getPreviewDriveId", () => {
-  it("matches the ph-cli generateProjectDriveId('preview') derivation", () => {
-    const expectedHash = crypto
-      .createHash("sha256")
-      .update(PROJECT_PATH)
-      .digest("hex")
-      .slice(0, 8);
-    expect(getPreviewDriveId(PROJECT_PATH)).toBe(`preview-${expectedHash}`);
-  });
-
-  it("is deterministic for the same path", () => {
-    const a = getPreviewDriveId(PROJECT_PATH);
-    const b = getPreviewDriveId(PROJECT_PATH);
-    expect(a).toBe(b);
-  });
-
-  it("differs for different paths", () => {
-    expect(getPreviewDriveId("/a")).not.toBe(getPreviewDriveId("/b"));
-  });
-});
 
 describe("resolvePreviewEndpoint", () => {
   it("throws when no service manager is available", () => {
@@ -74,17 +52,22 @@ describe("resolvePreviewEndpoint", () => {
     ).toThrow(/starting up/i);
   });
 
-  it("returns the switchboard URL and computed driveId for a ready instance", () => {
+  it("returns the switchboard, Connect and preview drive the run record names", () => {
     const services = makeServices([
-      {
-        status: "ready",
-        workdir: PROJECT_PATH,
-        endpoints: { "vetra-switchboard": SWITCHBOARD_URL },
-      },
+      { status: "ready", workdir: PROJECT_PATH, endpoints: recordedEndpoints() },
     ]);
-    const result = resolvePreviewEndpoint(services, PROJECT_PATH, "demo");
-    expect(result.switchboardUrl).toBe(SWITCHBOARD_URL);
-    expect(result.driveId).toBe(getPreviewDriveId(PROJECT_PATH));
+    expect(resolvePreviewEndpoint(services, PROJECT_PATH, "demo")).toEqual({
+      switchboardUrl: "http://localhost:4001/graphql",
+      connectUrl: "http://localhost:3001/",
+      driveId: "vetra-preview-1a2b3c4d",
+    });
+  });
+
+  it("treats a ready instance without the preview drive as still starting", () => {
+    const services = makeServices([
+      { status: "ready", workdir: PROJECT_PATH, endpoints: { "vetra-switchboard": SWITCHBOARD_URL } },
+    ]);
+    expect(() => resolvePreviewEndpoint(services, PROJECT_PATH, "demo")).toThrow(/starting up/i);
   });
 });
 
