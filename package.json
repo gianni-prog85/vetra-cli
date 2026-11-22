@@ -9,7 +9,8 @@
   },
   "files": [
     "/dist",
-    "/bin"
+    "/bin",
+    "/hosts"
   ],
   "bin": {
     "vetra": "./bin/vetra.mjs"
@@ -76,7 +77,10 @@
   },
   "peerDependencies": {
     "@powerhousedao/clint": "catalog:",
+    "@powerhousedao/host-core": "catalog:",
+    "@powerhousedao/ph-cli": "catalog:",
     "@powerhousedao/reactor-browser": "catalog:",
+    "@powerhousedao/switchboard": "catalog:",
     "document-model": "catalog:",
     "graphql": "^16",
     "graphql-tag": "^2",
@@ -113,11 +117,13 @@
     "@powerhousedao/connect": "catalog:",
     "@powerhousedao/design-system": "catalog:",
     "@powerhousedao/document-engineering": "1.40.5",
+    "@powerhousedao/host-core": "catalog:",
     "@powerhousedao/ph-cli": "catalog:",
     "@powerhousedao/powerhouse-vetra-packages": "catalog:",
     "@powerhousedao/reactor": "catalog:",
     "@powerhousedao/reactor-attachments": "catalog:",
     "@powerhousedao/reactor-browser": "catalog:",
+    "@powerhousedao/switchboard": "catalog:",
     "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "catalog:",
