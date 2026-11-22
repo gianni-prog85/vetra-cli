@@ -452,7 +452,7 @@ describe("requests", () => {
     await makeReady(h);
     await launch(h.octx, { changeId: "change-1", trigger: LAUNCH_TRIGGER });
     h.calls.length = 0;
-    const markerPath = path.join(h.workdir, ".ph", "product-drive.json");
+    const markerPath = path.join(h.workdir, ".ph", "vetra", "product-drive.json");
     await fs.writeFile(
       markerPath,
       JSON.stringify({
@@ -490,7 +490,7 @@ describe("requests", () => {
     await launch(h.octx, { changeId: "change-1", trigger: LAUNCH_TRIGGER });
     h.calls.length = 0;
     await fs.writeFile(
-      path.join(h.workdir, ".ph", "product-drive.json"),
+      path.join(h.workdir, ".ph", "vetra", "product-drive.json"),
       JSON.stringify({
         switchboardUrl: "https://team-todo-switchboard.vetra.io/graphql",
         driveId: "drive-1",

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { whoami } from "../../src/commands/auth/whoami.js";
 
 // A throwaway workdir builds its own (unauthenticated) Renown identity under
-// <workdir>/.ph — keypair generation is local. No network, no browser.
+// <workdir>/.ph/vetra/agent — keypair generation is local. No network, no browser.
 function freshCtx() {
   const workdir = mkdtempSync(join(tmpdir(), "vetra-cloud-test-"));
   return { workdir, config: {} } as never;

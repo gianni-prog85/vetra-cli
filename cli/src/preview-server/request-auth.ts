@@ -31,9 +31,6 @@ import {
 } from "@renown/sdk/node";
 import { isAdminAddress } from "../auth/renown.js";
 
-/** The store of recently verified keys, under the agent's `.ph/` data dir. */
-export const TRUSTED_KEYS_FILE = "preview-trusted-keys.json";
-
 export type OwnerCheck =
   | { ok: true; via: "operator" | "owner" | "local"; address?: string }
   | { ok: false; status: 401; error: string };

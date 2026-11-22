@@ -374,7 +374,7 @@ describe("product drive (D21)", () => {
     const result = await ensureProductDrive(ctx, base());
     expect(result.failedExamples).toEqual(["Example — delete me: Weekend chores"]);
     expect(lines.some((l) => l.includes("refused") && l.includes("Weekend chores"))).toBe(true);
-    const marker = JSON.parse(await fs.readFile(path.join(workdir, ".ph", "product-drive.json"), "utf-8")) as {
+    const marker = JSON.parse(await fs.readFile(path.join(workdir, ".ph", "vetra", "product-drive.json"), "utf-8")) as {
       examples: Array<{ name: string; status: string; error?: string }>;
     };
     expect(marker.examples.map((e) => [e.name, e.status])).toEqual([
@@ -408,7 +408,7 @@ describe("product drive (D21)", () => {
     expect(err).toBeInstanceOf(LaunchError);
     expect((err as LaunchError).reason).toBe("your product's data space couldn't be set up");
     // Nothing recorded: the next try looks the drive up again.
-    await expect(fs.access(path.join(workdir, ".ph", "product-drive.json"))).rejects.toThrow();
+    await expect(fs.access(path.join(workdir, ".ph", "vetra", "product-drive.json"))).rejects.toThrow();
   });
 
   it("a refused default access is reported, not recorded as applied, and retried", async () => {

@@ -163,7 +163,7 @@ is needed: a switchboard without a keypair generates one at
    and 5180 free.
 2. Start it from this package's root (Git Bash); keep the data dir apart
    from the workdir, so the switchboard's keypair and the agent's
-   (`<workdir>/.ph/.keypair.json`) stay two identities:
+   (`<workdir>/.ph/vetra/agent/.keypair.json`) stay two identities:
 
    ```sh
    export PH_USER_DATA_DIR=<fresh data dir>
@@ -210,7 +210,7 @@ is needed: a switchboard without a keypair generates one at
    ```
 
    The agent's operations name your address and the agent's `did:key` (its
-   keypair under `<workdir>/.ph/`), each with a signature.
+   keypair under `<workdir>/.ph/vetra/agent/`), each with a signature.
 6. Stop: `pnpm exec ph-cli run studio-signed --stop`.
 
 ## Components, in detail
@@ -479,8 +479,9 @@ session.
 The API surfaces two kinds of state:
 
 - **Project runtime state** — projection of the service manager.
-  Source of truth remains `<workdir>/.ph/<cli>/services/
-  reactor-project/<instance>.json`; the API is a fanout. `/resolve`
+  Source of truth remains clint's service state,
+  `~/.ph/vetra/services/reactor-project/<instance>.json` (instances
+  keyed by a hash of the project path); the API is a fanout. `/resolve`
   is a per-target slice; the planned `/projects` endpoints would
   expose the full list.
 - **Workflow registry state (planned)** — in-memory map of workflow
@@ -620,8 +621,9 @@ Two Renown identities are involved: the user's wallet identity (browser, on
 delegates the user's wallet to that `did:key`.
 
 - **Identity.** `@renown/sdk/node` `RenownBuilder` gives the agent a stable
-  `did:key`. The keypair persists to `<workdir>/.ph/.keypair.json` and the
-  delegated credential to `<workdir>/.ph/.renown.json` (workdir-scoped); `PH_RENOWN_PRIVATE_KEY` overrides the keypair
+  `did:key`. The keypair persists to `<workdir>/.ph/vetra/agent/.keypair.json` and the
+  delegated credential to `<workdir>/.ph/vetra/agent/.renown.json` (workdir-scoped,
+  apart from the project's own `ph login` pair at `.ph/` root); `PH_RENOWN_PRIVATE_KEY` overrides the keypair
   for pre-provisioned deployed agents. `src/auth/renown.ts` caches one
   `IRenown` per workdir and exposes `getBearerToken` (no `aud` — the
   switchboard's verifier rejects it), `getSigner`, the auth state machine
@@ -718,8 +720,8 @@ in the drive (the product document, chat sessions) use
 
 - `reactor-project` — the project's `ph run vetra dev` for the preview
   surface (see "reactor-project service"). Persistent state at
-  `<workdir>/.ph/vetra-cli/services/reactor-project/<instance>.json`
-  (read by `reactor-project-ls` and projected over the local API); the
+  `~/.ph/vetra/services/reactor-project/<instance>.json` (clint's user
+  store; read by `reactor-project-ps` and projected over the local API); the
   run's own record is `<project>/.ph/run/vetra.json`.
 
 ## Boot sequence
@@ -904,8 +906,18 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
                                  (reactor-storage, read-storage)
 <project>/.ph/vetra-signed/    ← the same for hosts/studio-signed
 <project>/.ph/run/             ← run records of the studio stack
-<workdir>/.ph/vetra/           ← the Cli's runtime state: logs, service state
+<workdir>/.ph/vetra/           ← the Cli's own files (helpers/studio-paths.ts):
+                                 clint's store (.mastra, logs), the agent's
+                                 identity (agent/.keypair.json, .renown.json),
+                                 downloads/ (files from chat messages), the
+                                 local API's preview-trusted-keys.json,
+                                 codegen.lock, launch.json, product-drive.json,
+                                 upgrade-existing.json
+~/.ph/vetra/services/          ← clint's service state (reactor-project)
 ```
+
+Nothing the Cli writes on its own account lands at `.ph/` root, where a
+project keeps its own `ph login` identity (`.keypair.json`, `.renown.json`).
 
 ## Open gaps
 

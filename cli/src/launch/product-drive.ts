@@ -41,6 +41,7 @@ import path from "node:path";
 import type { Action, ISigner } from "document-model";
 import { getBearerToken, getRenown } from "../auth/renown.js";
 import { resolveCloudConfig } from "../cloud/config.js";
+import { studioPath } from "../helpers/studio-paths.js";
 import { redact, type CloudContext } from "./cloud-launch.js";
 import { LaunchError } from "./errors.js";
 import { EXAMPLE_PREFIX, validateSeeds, type SeedAction, type SeedDocument } from "./seed.js";
@@ -156,10 +157,8 @@ interface Marker {
   done: boolean;
 }
 
-const MARKER_FILE = path.join(".ph", "product-drive.json");
-
 function markerPath(workdir: string): string {
-  return path.join(workdir, MARKER_FILE);
+  return studioPath(workdir, "productDriveMarker");
 }
 
 function readMarker(workdir: string): Marker | null {

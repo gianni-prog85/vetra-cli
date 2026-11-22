@@ -183,8 +183,11 @@ test.describe("Vetra studio — chat round trip", () => {
       })
       .toBe(true);
     const base = attachment.fileName.replace(/\.[^.]+$/, "");
+    // The Cli's own folder, never the project's tree.
     const extracted = path.join(
       workdir,
+      ".ph",
+      "vetra",
       "downloads",
       `${base}_${filePartId.slice(0, 6)}${path.extname(attachment.fileName)}`,
     );

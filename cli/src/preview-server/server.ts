@@ -25,7 +25,6 @@
  * cookie.
  */
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import path from "node:path";
 import type { ServiceManager } from "@powerhousedao/clint";
 import { PREVIEW_SERVER_HOST, type ResolveResult } from "./config.js";
 import { createSseBroadcaster } from "./events.js";
@@ -34,7 +33,8 @@ import { publishProjectForDeploy } from "./publish-project.js";
 import { checkReleaseStatus } from "./release-status.js";
 import { resolvePreview } from "./resolver.js";
 import { restartPreview, startPreview } from "./starter.js";
-import { createRequestAuthorizer, TRUSTED_KEYS_FILE, type RequestAuthorizer } from "./request-auth.js";
+import { createRequestAuthorizer, type RequestAuthorizer } from "./request-auth.js";
+import { studioPath } from "../helpers/studio-paths.js";
 import { buildSessionExport, listSessions } from "./session-export.js";
 import { streamWorkspaceExport, WORKSPACE_ZIP_FILENAME } from "./workspace-export.js";
 import type { EmbeddedDrive } from "../helpers/embedded-drive.js";
@@ -155,9 +155,9 @@ export async function startPreviewServer(
       renownUrl: deps.gateRenownUrl,
       cloud,
       audience: () => deps.getStudioUrl?.(),
-      // The agent's data dir (outside exports and git): verified owner keys
+      // The Cli's folder (outside exports and git): verified owner keys
       // survive a restart.
-      trustedStorePath: path.join(workdir, ".ph", TRUSTED_KEYS_FILE),
+      trustedStorePath: studioPath(workdir, "trustedKeys"),
     });
 
   // Owner gate for a route: false (and the 401/403 written) when refused.

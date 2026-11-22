@@ -11,7 +11,7 @@
  * it, the product gets a new address and the old environments stay as they
  * are, listed in Settings › Advanced (E10). Environments are only read, never
  * changed. Which path a launch took is logged and kept in
- * `.ph/upgrade-existing.json`.
+ * `.ph/vetra/upgrade-existing.json`.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -24,6 +24,7 @@ import {
 import type { StudioProductState } from "document-models/studio-product";
 import type { Config } from "../framework.js";
 import { listReactorProjects } from "../helpers/project.js";
+import { studioPath } from "../helpers/studio-paths.js";
 import { resolveLaunchRegistryUrl } from "../cloud/registry-url.js";
 import {
   NOT_AUTHENTICATED,
@@ -43,8 +44,6 @@ const TAG = "[upgrade]";
 
 /** Environment statuses that no longer serve anything. */
 const GONE_STATUSES = new Set(["ARCHIVED", "DESTROYED", "TERMINATING", "DRAFT"]);
-/** The record of the path Version 1 took, next to the launch record. */
-export const UPGRADE_RECORD = path.join(".ph", "upgrade-existing.json");
 
 /* ------------------------------------------------------------------------ */
 /* Context                                                                   */
@@ -121,7 +120,7 @@ export interface UpgradeRecord {
 
 export function readUpgradeRecord(workdir: string): UpgradeRecord {
   try {
-    return JSON.parse(fs.readFileSync(path.join(workdir, UPGRADE_RECORD), "utf-8")) as UpgradeRecord;
+    return JSON.parse(fs.readFileSync(studioPath(workdir, "upgradeRecord"), "utf-8")) as UpgradeRecord;
   } catch {
     return {};
   }
@@ -129,7 +128,7 @@ export function readUpgradeRecord(workdir: string): UpgradeRecord {
 
 function writeUpgradeRecord(ctx: UpgradeContext, patch: UpgradeRecord): void {
   try {
-    const file = path.join(ctx.workdir, UPGRADE_RECORD);
+    const file = studioPath(ctx.workdir, "upgradeRecord");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ ...readUpgradeRecord(ctx.workdir), ...patch }, null, 2));
   } catch (err) {

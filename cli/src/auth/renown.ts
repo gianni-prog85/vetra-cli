@@ -8,11 +8,12 @@
  * Renown-protected service.
  *
  * Keyed by workdir so each workdir owns its identity: the keypair and the
- * stored credential live under `<workdir>/.ph/`, alongside the embedded
- * reactor's state. `PH_RENOWN_PRIVATE_KEY` overrides the on-disk keypair for
- * pre-provisioned deployed agents.
+ * stored credential live under `<workdir>/.ph/vetra/agent/`, apart from the
+ * project's own `ph login` identity at `.ph/` root. `PH_RENOWN_PRIVATE_KEY`
+ * overrides the on-disk keypair for pre-provisioned deployed agents.
  */
 import path from "node:path";
+import { studioPath } from "../helpers/studio-paths.js";
 import {
   RenownBuilder,
   generateAccessToken,
@@ -63,8 +64,8 @@ function entryFor(workdir: string, renownUrl: string): CloudAuthEntry {
   let entry = entries.get(key);
   if (!entry) {
     const renown = new RenownBuilder(APP_NAME, {
-      keyPath: path.join(key, ".ph", ".keypair.json"),
-      storagePath: path.join(key, ".ph", ".renown.json"),
+      keyPath: studioPath(key, "agentKeypair"),
+      storagePath: studioPath(key, "agentRenown"),
       baseUrl: renownUrl,
     }).build();
     entry = { renown };

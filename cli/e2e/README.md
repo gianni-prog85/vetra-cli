@@ -11,7 +11,7 @@ and the Cli, booted once per run by `ph-cli run studio` in a temp dir.
   the spec is in the Studio drive with spec-update's state (`findDocuments(search:
   { type, parentId })` on `<baseUrl>/graphql`); then a file is sent into the
   build's conversation and the Cli logs `extracted 1 attachment(s)` and writes it
-  to `<workdir>/downloads/`. The build page's message box takes text only, so the
+  to `<workdir>/.ph/vetra/downloads/`. The build page's message box takes text only, so the
   spec sends the file as the chat box does: reserve and upload through Connect's
   origin (`/attachments`), then `ADD_USER_MESSAGE` with a `FILE` part naming the
   `attachment://v1:<sha256>` ref (GraphQL `execute`).

@@ -39,7 +39,7 @@ describe("withProjectCodegenLock", () => {
     expect(second).toBe("second");
     // Lock dir removed after release.
     await expect(
-      fs.stat(path.join(base, ".ph", "codegen.lock")),
+      fs.stat(path.join(base, ".ph", "vetra", "codegen.lock")),
     ).rejects.toBeTruthy();
   }, 15_000);
 

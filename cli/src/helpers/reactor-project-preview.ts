@@ -80,7 +80,7 @@ export function resolvePreviewEndpoint(
  * when the preview reactor runs without auth.
  *
  * Mint from the daemon `workdir`, NOT the reactor-project path: the credential
- * is keyed to the daemon's identity (`<workdir>/.ph/.renown.json`).
+ * is keyed to the daemon's identity (`<workdir>/.ph/vetra/agent/.renown.json`).
  */
 export async function getPreviewAuthToken(
   workdir: string,

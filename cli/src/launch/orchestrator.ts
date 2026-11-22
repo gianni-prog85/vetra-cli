@@ -50,6 +50,7 @@ import type {
 } from "document-models/studio-product";
 import type { Config } from "../framework.js";
 import { listReactorProjects } from "../helpers/project.js";
+import { studioPath } from "../helpers/studio-paths.js";
 import {
   dispatchProduct,
   getProductDoc,
@@ -421,11 +422,9 @@ interface LaunchRecord {
   trigger: string;
 }
 
-const LAUNCH_RECORD = path.join(".ph", "launch.json");
-
 function writeLaunchRecord(workdir: string, record: LaunchRecord): void {
   try {
-    const file = path.join(workdir, LAUNCH_RECORD);
+    const file = studioPath(workdir, "launchRecord");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(record));
   } catch {
@@ -435,7 +434,7 @@ function writeLaunchRecord(workdir: string, record: LaunchRecord): void {
 
 function readLaunchRecord(workdir: string, number: number): LaunchRecord | null {
   try {
-    const r = JSON.parse(fs.readFileSync(path.join(workdir, LAUNCH_RECORD), "utf-8")) as LaunchRecord;
+    const r = JSON.parse(fs.readFileSync(studioPath(workdir, "launchRecord"), "utf-8")) as LaunchRecord;
     return r.number === number && typeof r.launchedBy === "string" ? r : null;
   } catch {
     return null;
@@ -443,7 +442,7 @@ function readLaunchRecord(workdir: string, number: number): LaunchRecord | null 
 }
 
 function clearLaunchRecord(workdir: string): void {
-  fs.rmSync(path.join(workdir, LAUNCH_RECORD), { force: true });
+  fs.rmSync(studioPath(workdir, "launchRecord"), { force: true });
 }
 
 /**

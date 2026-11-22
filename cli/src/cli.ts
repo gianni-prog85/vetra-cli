@@ -12,7 +12,8 @@ import { documentModels } from './vetra-app-models.js';
 import { documentModels as vetraModels } from '@powerhousedao/vetra';
 import { documentModels as extModels } from '@powerhousedao/clint-common';
 import { createAgent } from './agents/agent.js';
-import { chatSessionWatchTrigger } from '@powerhousedao/clint-common/chat';
+import { createChatSessionWatchTrigger } from '@powerhousedao/clint-common/chat';
+import { STUDIO_FILES } from './helpers/studio-paths.js';
 import { agentRun } from './commands/agent-run.js';
 import { specCommands } from './commands/spec/index.js';
 import { specPreviewCommands } from './commands/spec-preview/index.js';
@@ -77,7 +78,8 @@ export const cli = defineCli({
 
   // @clint:begin triggers
   triggers: [
-    chatSessionWatchTrigger,
+    // Files from chat messages go to the Cli's folder, not the project's tree.
+    createChatSessionWatchTrigger({ downloadsDir: STUDIO_FILES.downloads }),
     specSyncTrigger,
     specFsSyncTrigger,
     previewServerTrigger,

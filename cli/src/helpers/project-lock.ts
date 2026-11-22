@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { lock, type LockOptions } from "proper-lockfile";
+import { studioPath } from "./studio-paths.js";
 
 // mtime is refreshed while held, so a live run never reads as stale; only a
 // dead holder's lock expires after `stale`.
@@ -17,7 +18,7 @@ export async function withProjectCodegenLock<T>(
   base: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const lockfilePath = path.join(base, ".ph", "codegen.lock");
+  const lockfilePath = studioPath(base, "codegenLock");
   await mkdir(path.dirname(lockfilePath), { recursive: true });
 
   let release: () => Promise<void>;
