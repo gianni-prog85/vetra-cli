@@ -98,11 +98,12 @@ Internally:
 
 ## Hosts
 
-Four host files under `hosts/` (shipped in the package, `files`). Each
+Five host files under `hosts/` (shipped in the package, `files`). Each
 host's `name` is its folder name: `ph run <host> --stop` finds the run
 record by the word typed. None imports `outputs.js` or
 `powerhouse.config.json`; cross-host values are literal `$output` tokens, so
 the files read the same when the package supplies them to another project.
+A host may import a sibling host file (`connect` and `studio-signed` do).
 
 | Host | Runner | What it is |
 |---|---|---|
@@ -110,6 +111,7 @@ the files read the same when the package supplies them to another project.
 | `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: dist/connect` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only |
 | `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
+| `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` replaces the host's whole section; only `runner` key-merges), and the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store. Auth stays off. Not run by anything; see "The signed check" |
 
 The drive slug is `studio`, not `vetra` or `vetra-*`: loading
 `@powerhousedao/vetra` registers its codegen processor, which attaches to
@@ -147,6 +149,69 @@ read against the project, not the package: not supported yet.
 and `powerhouse.config.d.json.ts` are written by `ph-cli generate hosts`.
 The `@satisfies {PHHost}` tag sits on the exported expression: in front of
 `export default` TypeScript ignores it.
+
+### The signed check (`hosts/studio-signed`, by hand)
+
+What a person runs to see a signed Studio on this machine (design B3,
+acceptance A10). It needs a wallet that can sign in on Renown; no `ph login`
+is needed: a switchboard without a keypair generates one at
+`${userData}/.ph/.keypair.json` and signs with it. It cannot run next to a
+`studio` stack (same ports, and the members' run records
+`.ph/run/{switchboard,connect}.json` share names).
+
+1. Build once: `pnpm build`, then `pnpm build:connect`. Ports 8090, 8091
+   and 5180 free.
+2. Start it from this package's root (Git Bash); keep the data dir apart
+   from the workdir, so the switchboard's keypair and the agent's
+   (`<workdir>/.ph/.keypair.json`) stay two identities:
+
+   ```sh
+   export PH_USER_DATA_DIR=<fresh data dir>
+   export PORTLE_AUTOSTART=0
+   export VETRA_ENVIRONMENT_ID=local-signed-check   # any value: the Cli signs as the agent
+   export ADMINS=<your wallet address>              # the only wallet the agent may act for
+   export VETRA_SESSION_EXPORT_SECRET=<long random string>
+   # optional, a chat without an LLM key:
+   export VETRA_REPLAY_FIXTURE=$PWD/cli/e2e/fixtures/chat-spec.replay.json
+   pnpm exec ph-cli run studio-signed -- --workdir <fresh workdir>
+   ```
+
+   Expect `Switchboard identity initialized: did:key:…` and no `No signer is
+   configured` warning in `$PH_USER_DATA_DIR/.ph/services/switchboard/*.log`,
+   and no `[signing]` error from the Cli. With an environment id the cloud
+   triggers (product requests, live health) also run and log their failures
+   against the made-up id.
+3. Authorize the agent before the first message. The tab's "Authorize
+   agent" gets 401: with an environment id the local API takes no loopback
+   pass, and the tab sends no bearer, because nothing writes
+   `studio.config.json`. The operator secret passes the gate instead:
+
+   ```sh
+   S=$VETRA_SESSION_EXPORT_SECRET
+   curl -s -X POST -H "Authorization: Bearer $S" http://127.0.0.1:5180/auth/start
+   # open pending.loginUrl from the answer, approve with the ADMINS wallet
+   curl -s -X POST -H "Authorization: Bearer $S" "http://127.0.0.1:5180/auth/confirm?wait=60000"
+   # {"authenticated":true,"address":"0x…"}; "not-owner": that wallet is not in ADMINS
+   ```
+
+4. Open the printed `Vetra Studio: http://127.0.0.1:8090/d/<id>` and sign in
+   with Renown in the tab (the account menu) with the same wallet before
+   Build it: the tab creates the product and the conversation, and a
+   `v2-required` document refuses an unsigned create. On `127.0.0.1` the tab
+   does not ask for the sign-in itself.
+5. Send the idea. Expect the agent's answer, then every operation the agent
+   wrote carrying its key: find the conversation with
+   `findDocuments(search: { type: "powerhouse/chat-session", parentId: "<id>" })`,
+   then on `http://127.0.0.1:8090/graphql`:
+
+   ```graphql
+   { document(idOrSlug: "<session id>") { document { operations { items {
+       index action { type context { signer { user { address } app { key } signatures } } } } } } } }
+   ```
+
+   The agent's operations name your address and the agent's `did:key` (its
+   keypair under `<workdir>/.ph/`), each with a signature.
+6. Stop: `pnpm exec ph-cli run studio-signed --stop`.
 
 ## Components, in detail
 
@@ -798,7 +863,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 ├── prompts/                   ← agent sections and skill templates
 ├── cloud-client/              ← Vetra Cloud environment client
 ├── bin/vetra.mjs              ← the `vetra` bin over dist/node/cli
-├── hosts/                     ← switchboard, connect, cli, studio (compound)
+├── hosts/                     ← switchboard, connect, cli, studio and studio-signed (compounds)
 ├── cli/
 │   ├── index.ts               ← ./cli: startup guards, `cli`, `ensureModelAuth`
 │   ├── src/
@@ -822,6 +887,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 
 <project>/.ph/vetra/           ← the Studio switchboard's stores
                                  (reactor-storage, read-storage)
+<project>/.ph/vetra-signed/    ← the same for hosts/studio-signed
 <project>/.ph/run/             ← run records of the studio stack
 <workdir>/.ph/vetra/           ← the Cli's runtime state: logs, service state
 ```
@@ -853,10 +919,14 @@ These are limitations of the current direction; not bugs.
   bundle), served by its own host from B2. The live preview path is
   reactor-project + Vite HMR, not dynamic package loading.
 
-- **The remote path.** No host here runs a signed switchboard: a cloud
-  Studio's signing is checked by unit tests only (a `v2-required`
-  switchboard needs the project's `ph login` identity to create its
-  drive). `ReactorContext.client` is typed as the full client, so a call
+- **The remote path.** A cloud Studio's signing is checked by unit tests
+  only: `hosts/studio-signed` runs a `v2-required` switchboard, but its
+  check needs a wallet and has not been run (see "The signed check"). Its
+  tab cannot authorize the agent: with an environment id the local API
+  refuses the tab's owner calls (no loopback pass, no bearer without
+  `studio.config.json`, and a bearer's `aud` would have to be the Studio's
+  origin, not `127.0.0.1:5180`), until per-project config (C1) names the
+  Studio's origin to the tab. `ReactorContext.client` is typed as the full client, so a call
   `GraphQLReactorClient` lacks would fail at run time, not in the type
   check; the Cli, the spec sync and clint's folder operations use only
   calls both clients have. Studios from before the product page are not
