@@ -17,7 +17,7 @@ import type { ServiceInstanceStatus, ServiceManager } from "@powerhousedao/clint
 import { getBearerToken } from "../auth/renown.js";
 import { resolveCloudConfig } from "../cloud/config.js";
 import type { Config } from "../framework.js";
-import { formatLines, unknownValueError } from "./cli-errors.js";
+import { unknownValueError } from "./cli-errors.js";
 
 /** The preview drive's id, as the ready instance reports it. */
 export function previewDriveIdOf(
@@ -27,16 +27,16 @@ export function previewDriveIdOf(
 }
 
 /**
- * Resolve the running reactor-project instance for `projectPath` and return the
- * Switchboard GraphQL URL plus the preview drive id.
+ * Resolve the running reactor-project instance for `projectPath` (the project
+ * the Cli works in) and return the Switchboard GraphQL URL plus the preview
+ * drive id.
  *
- * Errors with a runnable hint if no live instance is registered for the path.
- * Does not attempt to start the service — lifecycle stays explicit.
+ * Errors with a runnable hint if the project's run is not live. Does not
+ * attempt to start the service — lifecycle stays explicit.
  */
 export function resolvePreviewEndpoint(
   services: ServiceManager | undefined,
   projectPath: string,
-  projectLabel: string,
 ): { switchboardUrl: string; connectUrl: string | undefined; driveId: string } {
   if (!services) {
     throw new Error(
@@ -51,17 +51,14 @@ export function resolvePreviewEndpoint(
   );
   if (!live) {
     throw new Error(
-      formatLines(
-        `Reactor project "${projectLabel}" is not running. Start it with \`reactor-project-start ${projectLabel}\`.`,
-        runningProjectsHint(instances),
-      ),
+      "The project's run is not running: start it with `reactor-project-start` (only while the Studio's project run is on; otherwise the preview comes with the Preview run).",
     );
   }
   const switchboardUrl = live.endpoints?.["vetra-switchboard"];
   const driveId = previewDriveIdOf(live);
   if (!switchboardUrl || !driveId) {
     throw new Error(
-      `Reactor project "${projectLabel}" is starting up — its run record is not live yet. Retry shortly.`,
+      "The project's run is starting up — its run record is not live yet. Retry shortly.",
     );
   }
   return {
@@ -88,25 +85,6 @@ export async function getPreviewAuthToken(
 ): Promise<string | undefined> {
   const { renownUrl } = resolveCloudConfig(config);
   return (await getBearerToken(workdir, renownUrl)) ?? undefined;
-}
-
-/**
- * Enumerate the reactor-project instances currently running, labelled by
- * workdir basename (what `--project` accepts). Returns undefined when none are
- * live so the caller's leading message stands alone.
- */
-function runningProjectsHint(
-  instances: ReturnType<ServiceManager["list"]>,
-): string | undefined {
-  const running = instances
-    .filter(
-      (i) =>
-        i.workdir && (i.status === "ready" || i.status === "starting"),
-    )
-    .map((i) => path.basename(i.workdir as string))
-    .sort();
-  if (running.length === 0) return undefined;
-  return `Running reactor projects: ${running.join(", ")}`;
 }
 
 /**

@@ -69,9 +69,9 @@ const SAMPLE_FULL = {
 };
 
 describe("spec-preview command shapes", () => {
-  it("specPreviewList exposes id and project field", () => {
+  it("specPreviewList exposes id and type, and no project (the workdir is the project)", () => {
     expect(specPreviewList.id).toBe("spec-preview-list");
-    expect(specPreviewList.inputSchema.shape).toHaveProperty("project");
+    expect(specPreviewList.inputSchema.shape).not.toHaveProperty("project");
     expect(specPreviewList.inputSchema.shape).toHaveProperty("type");
   });
 

@@ -16,7 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { listReactorProjects } from "../helpers/project.js";
+import { workspaceProjectDirs } from "./workspace-layout.js";
 import { ensureWorkspaceGitignore, workspaceSafeDirectory } from "../helpers/workspace-git.js";
 import { LaunchError } from "./errors.js";
 
@@ -133,14 +133,13 @@ async function treeOf(workdir: string, rev: string): Promise<string> {
 }
 
 /**
- * A reactor project's own `.git` (left by `ph init` when it fails before
- * reactor-project-init removes it) would be staged as an embedded repository
+ * A workspace project's own `.git` (left by `ph init`) would be staged as an embedded repository
  * instead of its files. One with no refs at all (no branch, tag or stash,
  * whatever HEAD points at) holds no commits and is removed; any other, or one
  * git can't read, is refused and kept.
  */
 async function absorbProjectRepos(workdir: string): Promise<void> {
-  for (const dir of await listReactorProjects(workdir)) {
+  for (const dir of await workspaceProjectDirs(workdir)) {
     const projectGit = path.join(workdir, dir, ".git");
     if (!fs.existsSync(projectGit)) continue;
     const projectPath = path.join(workdir, dir);
@@ -482,7 +481,7 @@ export async function projectDirs(
   rev: string | null,
   opts: { onDisk?: boolean } = {},
 ): Promise<string[]> {
-  const dirs = new Set(opts.onDisk === false ? [] : await listReactorProjects(workdir));
+  const dirs = new Set(opts.onDisk === false ? [] : await workspaceProjectDirs(workdir));
   if (rev) {
     const files = await git(workdir, ["ls-tree", "-r", "--name-only", rev]);
     for (const file of files.split("\n")) {

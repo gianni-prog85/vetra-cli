@@ -27,35 +27,33 @@ function makeServices(instances: Array<{
 
 describe("resolvePreviewEndpoint", () => {
   it("throws when no service manager is available", () => {
-    expect(() => resolvePreviewEndpoint(undefined, PROJECT_PATH, "demo")).toThrow(
+    expect(() => resolvePreviewEndpoint(undefined, PROJECT_PATH)).toThrow(
       /service manager not available/i,
     );
   });
 
-  it("throws with a start-hint when no live instance matches the path", () => {
+  it("throws with a start-hint when the project's run is not live", () => {
     const services = makeServices([
       { status: "stopped", workdir: PROJECT_PATH },
       { status: "ready", workdir: "/other/path" },
     ]);
-    expect(() =>
-      resolvePreviewEndpoint(services, PROJECT_PATH, "demo"),
-    ).toThrow(/reactor-project-start demo/);
+    expect(() => resolvePreviewEndpoint(services, PROJECT_PATH)).toThrow(
+      /project's run is not running: start it with `reactor-project-start` \(only while the Studio's project run is on/,
+    );
   });
 
   it("treats 'starting' instances as live but errors when endpoint not captured yet", () => {
     const services = makeServices([
       { status: "starting", workdir: PROJECT_PATH },
     ]);
-    expect(() =>
-      resolvePreviewEndpoint(services, PROJECT_PATH, "demo"),
-    ).toThrow(/starting up/i);
+    expect(() => resolvePreviewEndpoint(services, PROJECT_PATH)).toThrow(/starting up/i);
   });
 
   it("returns the switchboard, Connect and preview drive the run record names", () => {
     const services = makeServices([
       { status: "ready", workdir: PROJECT_PATH, endpoints: recordedEndpoints() },
     ]);
-    expect(resolvePreviewEndpoint(services, PROJECT_PATH, "demo")).toEqual({
+    expect(resolvePreviewEndpoint(services, PROJECT_PATH)).toEqual({
       switchboardUrl: "http://localhost:4001/graphql",
       connectUrl: "http://localhost:3001/",
       driveId: "vetra-preview-1a2b3c4d",
@@ -66,7 +64,7 @@ describe("resolvePreviewEndpoint", () => {
     const services = makeServices([
       { status: "ready", workdir: PROJECT_PATH, endpoints: { "vetra-switchboard": SWITCHBOARD_URL } },
     ]);
-    expect(() => resolvePreviewEndpoint(services, PROJECT_PATH, "demo")).toThrow(/starting up/i);
+    expect(() => resolvePreviewEndpoint(services, PROJECT_PATH)).toThrow(/starting up/i);
   });
 });
 

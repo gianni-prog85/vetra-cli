@@ -25,110 +25,77 @@ function makeServices(instances: FakeInstance[]) {
   return { list: () => instances } as never;
 }
 
-describe("preview-server resolver", () => {
+describe("preview-server resolver (the workdir is the project)", () => {
   let workdir: string;
   let cleanup: () => void;
   let projectPath: string;
-  const PROJECT = "demo-project";
 
   beforeEach(() => {
     ({ workdir, cleanup } = makeWorkdir());
-    projectPath = join(workdir, PROJECT);
-    mkdirSync(projectPath);
-    writeFileSync(join(projectPath, "powerhouse.config.json"), "{}\n");
+    writeFileSync(join(workdir, "powerhouse.config.json"), "{}\n");
+    projectPath = workdir;
   });
   afterEach(() => cleanup());
 
-  it("returns no-target when project or doc is empty", async () => {
+  it("returns no-target without a doc, drive or home", async () => {
     const services = makeServices([]);
+    expect(await resolvePreview({ services, workdir, doc: "" })).toEqual({
+      kind: "no-target",
+    });
     expect(
-      await resolvePreview({ services, workdir, project: "", doc: "x" }),
-    ).toEqual({ kind: "no-target" });
-    expect(
-      await resolvePreview({ services, workdir, project: "x", doc: "" }),
+      await resolvePreview({ services, workdir, doc: "", drive: undefined }),
     ).toEqual({ kind: "no-target" });
   });
 
-  it("returns unknown-project when the sub-directory isn't a reactor package", async () => {
-    const services = makeServices([]);
+  it("returns unknown-project when the workdir is no Reactor package (a project in a subfolder is not picked)", async () => {
+    const workspace = join(workdir, "workspace");
+    mkdirSync(join(workspace, "todo"), { recursive: true });
+    writeFileSync(join(workspace, "todo", "powerhouse.config.json"), "{}\n");
     const result = await resolvePreview({
-      services,
-      workdir,
-      project: "not-a-project",
+      services: makeServices([]),
+      workdir: workspace,
       doc: "doc-1",
+      projectRun: true,
     });
     expect(result.kind).toBe("unknown-project");
     const unknown = result as Extract<typeof result, { kind: "unknown-project" }>;
-    expect(unknown.project).toBe("not-a-project");
-    expect(unknown.error).toMatch(/not found|not a Reactor package/i);
+    expect(unknown.error).toMatch(/not a Reactor Package project/);
   });
 
-  it("returns project-stopped when no ServiceManager instance matches the projectPath", async () => {
-    const services = makeServices([
-      { workdir: "/some/other/path", status: "ready" },
-    ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc-1",
-      projectRun: true,
-    });
-    expect(result).toEqual({
-      kind: "project-stopped",
-      project: PROJECT,
-      projectPath,
-    });
+  it("returns project-stopped when no instance runs the project", async () => {
+    const services = makeServices([{ workdir: "/some/other/path", status: "ready" }]);
+    expect(
+      await resolvePreview({ services, workdir, doc: "doc-1", projectRun: true }),
+    ).toEqual({ kind: "project-stopped", projectPath });
   });
 
-  it("returns project-stopped when the matching instance has stopped/failed", async () => {
+  it("returns project-stopped when the project's instance has stopped/failed", async () => {
     const services = makeServices([{ workdir: projectPath, status: "stopped" }]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc-1",
-      projectRun: true,
-    });
+    const result = await resolvePreview({ services, workdir, doc: "doc-1", projectRun: true });
     expect(result.kind).toBe("project-stopped");
   });
 
   it("project run off (the default): preview-off, never project-stopped", async () => {
     for (const instances of [[], [{ workdir: projectPath, status: "stopped" as const }]]) {
       expect(
-        await resolvePreview({
-          services: makeServices(instances),
-          workdir,
-          project: PROJECT,
-          doc: "doc-1",
-        }),
-      ).toEqual({ kind: "preview-off", project: PROJECT });
+        await resolvePreview({ services: makeServices(instances), workdir, doc: "doc-1" }),
+      ).toEqual({ kind: "preview-off" });
     }
     expect(
       await resolvePreview({
         services: makeServices([]),
         workdir,
-        project: PROJECT,
         doc: "",
         home: true,
         projectRun: false,
       }),
-    ).toEqual({ kind: "preview-off", project: PROJECT });
+    ).toEqual({ kind: "preview-off" });
   });
 
   it("returns starting, with no drive yet, while the run record is not live", async () => {
-    const services = makeServices([
-      { workdir: projectPath, status: "starting" },
-    ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc-1",
-    });
-    expect(result).toEqual({
+    const services = makeServices([{ workdir: projectPath, status: "starting" }]);
+    expect(await resolvePreview({ services, workdir, doc: "doc-1" })).toEqual({
       kind: "starting",
-      project: PROJECT,
       projectPath,
     });
   });
@@ -136,15 +103,8 @@ describe("preview-server resolver", () => {
   it("returns starting when ready without the Connect endpoint or the preview drive", async () => {
     /* Without both, no URL can be built: the editor keeps showing the
      * starting state. */
-    const services = makeServices([
-      { workdir: projectPath, status: "ready", endpoints: {} },
-    ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc-1",
-    });
+    const services = makeServices([{ workdir: projectPath, status: "ready", endpoints: {} }]);
+    const result = await resolvePreview({ services, workdir, doc: "doc-1" });
     expect(result.kind).toBe("starting");
   });
 
@@ -153,15 +113,8 @@ describe("preview-server resolver", () => {
       { workdir: projectPath, status: "ready", endpoints: readyEndpoints() },
     ]);
     expect(driveId).toBe("vetra-preview-1a2b3c4d");
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc-1",
-    });
-    expect(result).toEqual({
+    expect(await resolvePreview({ services, workdir, doc: "doc-1" })).toEqual({
       kind: "ready",
-      project: PROJECT,
       projectPath,
       driveId,
       documentId: "doc-1",
@@ -173,16 +126,8 @@ describe("preview-server resolver", () => {
     const services = makeServices([
       { workdir: projectPath, status: "ready", endpoints: readyEndpoints("http://localhost:3001/") },
     ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "",
-      home: true,
-    });
-    expect(result).toEqual({
+    expect(await resolvePreview({ services, workdir, doc: "", home: true })).toEqual({
       kind: "ready",
-      project: PROJECT,
       projectPath,
       driveId,
       documentId: driveId,
@@ -195,38 +140,29 @@ describe("preview-server resolver", () => {
       await resolvePreview({
         services: makeServices([{ workdir: projectPath, status: "starting" }]),
         workdir,
-        project: PROJECT,
         doc: "",
         home: true,
       }),
-    ).toEqual({ kind: "starting", project: PROJECT, projectPath });
+    ).toEqual({ kind: "starting", projectPath });
     expect(
       await resolvePreview({
         services: makeServices([]),
         workdir,
-        project: PROJECT,
         doc: "",
         home: true,
         projectRun: true,
       }),
-    ).toEqual({ kind: "project-stopped", project: PROJECT, projectPath });
+    ).toEqual({ kind: "project-stopped", projectPath });
   });
 
   it("strips a trailing slash from the Connect endpoint and encodes the doc segment", async () => {
     const services = makeServices([
       { workdir: projectPath, status: "ready", endpoints: readyEndpoints("http://localhost:3001/") },
     ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "doc with spaces",
-    });
+    const result = await resolvePreview({ services, workdir, doc: "doc with spaces" });
     expect(result.kind).toBe("ready");
     const ready = result as Extract<typeof result, { kind: "ready" }>;
-    expect(ready.url).toBe(
-      `http://localhost:3001/d/${driveId}/doc%20with%20spaces?embed=1`,
-    );
+    expect(ready.url).toBe(`http://localhost:3001/d/${driveId}/doc%20with%20spaces?embed=1`);
   });
 
   it("returns a drive-root URL when drive param is set", async () => {
@@ -241,16 +177,8 @@ describe("preview-server resolver", () => {
       },
     ]);
     const appDriveId = "app-drive-123";
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "",
-      drive: appDriveId,
-    });
-    expect(result).toEqual({
+    expect(await resolvePreview({ services, workdir, doc: "", drive: appDriveId })).toEqual({
       kind: "ready",
-      project: PROJECT,
       projectPath,
       driveId: appDriveId,
       documentId: appDriveId,
@@ -269,25 +197,10 @@ describe("preview-server resolver", () => {
         },
       },
     ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "",
-      drive: "app-drive-123",
-    });
+    const result = await resolvePreview({ services, workdir, doc: "", drive: "app-drive-123" });
     expect(result.kind).toBe("ready");
     const ready = result as Extract<typeof result, { kind: "ready" }>;
     const driveUrl = encodeURIComponent("http://localhost:4001/d/app-drive-123");
-    expect(ready.url).toBe(
-      `http://localhost:3001/d/app-drive-123?embed=1&driveUrl=${driveUrl}`,
-    );
-  });
-
-  it("returns no-target when both doc and drive are empty", async () => {
-    const services = makeServices([]);
-    expect(
-      await resolvePreview({ services, workdir, project: "x", doc: "", drive: undefined }),
-    ).toEqual({ kind: "no-target" });
+    expect(ready.url).toBe(`http://localhost:3001/d/app-drive-123?embed=1&driveUrl=${driveUrl}`);
   });
 });

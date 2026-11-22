@@ -7,7 +7,7 @@ import {
   summarizeDiagnostics,
   type CheckScope,
 } from "../../helpers/project-checks.js";
-import { resolveReactorProjectPath } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { attachCheckResults, type ObservedCheck } from "../../product/check-results.js";
 import { runSmoke } from "../../product/smoke.js";
 import { getProductDoc, type ProductContext } from "../../product/product-doc.js";
@@ -49,12 +49,6 @@ export async function examplesRequired(
 export const UNREADABLE_PRODUCT_NOTE = "couldn't read the product — examples not required this time";
 
 const inputSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe(
-      "Project directory name (relative to workdir). Only needed when the workdir is not already a Reactor package project.",
-    ),
   scope: z
     .enum(["all", "module"])
     .optional()
@@ -80,14 +74,14 @@ const inputSchema = z.object({
 export const reactorProjectCheck = defineCommand({
   id: "reactor-project-check",
   description:
-    "Run TypeScript and ESLint over a Reactor project and report any diagnostics. Useful after hand-editing generated code or to verify a project compiles cleanly.",
+    "Run TypeScript and ESLint over the Reactor project (the workdir) and report any diagnostics. Useful after hand-editing generated code or to verify the project compiles cleanly.",
   inputSchema,
   execute: async (
-    { name, scope, skipLint, skipTypecheck, tests },
+    { scope, skipLint, skipTypecheck, tests },
     context,
   ) => {
     const { workdir, runProcess, services } = context;
-    const base = await resolveReactorProjectPath(workdir, name);
+    const base = await projectRoot(workdir);
     const resolvedScope: CheckScope = scope ?? "all";
 
     const outcome = await runChecks(base, runProcess, {

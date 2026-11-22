@@ -32,7 +32,6 @@ import { withSignaturePolicy } from "document-model";
 import { baseLoadFromFile } from "document-model/node";
 import {
   applyFsChangesToReactor,
-  projectForPath,
   specForPath,
 } from "../../src/helpers/spec-drive-sync.js";
 import { specFsSyncTrigger } from "../../src/triggers/spec-fs-sync.js";
@@ -82,8 +81,8 @@ function makeLog(): { logs: CapturedLog[]; api: {
   };
 }
 
-/** The ReactorContext view of an in-process client, as clint's
- * buildDefaultReactor makes it. */
+/** The ReactorContext view of an in-process client: the `client` the sync
+ * calls, which the switchboard's GraphQL client has too. */
 function contextOf(m: InProcessReactorClientModule): Pick<ReactorContext, "client"> {
   return { client: m.client as ReactorContext["client"] };
 }
@@ -131,7 +130,7 @@ describe("spec-fs-sync FS → drive", () => {
       expect(spec?.documentType).toBe("powerhouse/app");
     });
 
-    it("maps a workspace-layout path (<workdir>/<project>/specs/<subdir>/)", () => {
+    it("maps by the specs/<subdir>/ tail, wherever specs/ sits", () => {
       const p = path.join(tmpDir, "workout-tracker", "specs", "apps", "foo.phdm.phd");
       expect(specForPath(p)?.documentType).toBe("powerhouse/app");
     });
@@ -148,22 +147,6 @@ describe("spec-fs-sync FS → drive", () => {
     it("returns undefined for an unknown subdir", () => {
       const p = path.join(tmpDir, "specs", "unknown", "foo.phd");
       expect(specForPath(p)).toBeUndefined();
-    });
-  });
-
-  describe("projectForPath", () => {
-    it("returns the project subdir in workspace layout", () => {
-      const p = path.join(tmpDir, "workout-tracker", "specs", "apps", "foo.phd");
-      expect(projectForPath(p, tmpDir)).toBe("workout-tracker");
-    });
-
-    it("returns undefined when specs/ is at the workdir root (single-project)", () => {
-      const p = path.join(tmpDir, "specs", "apps", "foo.phd");
-      expect(projectForPath(p, tmpDir)).toBeUndefined();
-    });
-
-    it("returns undefined for paths outside workdir", () => {
-      expect(projectForPath("/elsewhere/specs/apps/foo.phd", tmpDir)).toBeUndefined();
     });
   });
 
@@ -320,40 +303,25 @@ describe("spec-fs-sync FS → drive", () => {
     expect((await driveNodes()).filter((n) => n.kind === "file" && n.id === doc.header.id)).toHaveLength(1);
   }, 15_000);
 
-  // ── FS → drive: workspace layout files into a per-project folder ──
+  // ── FS → drive: one project, every spec at the drive root ─────────
 
-  it("files a workspace-layout spec under a folder named after its project", async () => {
-    const project = "workout-tracker";
-    const projectDir = path.join(tmpDir, project);
-    const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
-    draft.header.name = "ws-app";
-    draft.header.documentType = "powerhouse/app";
-    await module.client.create(draft);
-    const created = await module.client.get(draft.header.id);
-    const opsByScope = await module.reactor.getOperations(draft.header.id);
-    const operations: Record<string, unknown[]> = {};
-    for (const [scope, paged] of Object.entries(opsByScope)) {
-      operations[scope] = (paged as { results: unknown[] }).results;
-    }
-    const enriched = { ...created, operations } as unknown as Parameters<typeof saveSpec>[0];
-    const filePath = await saveSpec(enriched, projectDir);
-    expect(filePath.startsWith(path.join(projectDir, "specs"))).toBe(true);
+  it("files a spec at the drive root and makes no project folder", async () => {
+    const { id, path: filePath } = await makeSpecFile("root-app");
+    expect(filePath.startsWith(path.join(tmpDir, "specs"))).toBe(true);
 
     const { logs, api: log } = makeLog();
     await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
 
     const nodes = await driveNodes();
-    const folder = nodes.find((n) => n.kind === "folder" && n.name === project);
-    expect(folder).toBeDefined();
-    const fileNode = nodes.find((n) => n.kind === "file" && n.id === draft.header.id);
-    expect(fileNode?.parentFolder).toBe(folder?.id);
+    expect(nodes.filter((n) => n.kind === "folder")).toEqual([]);
+    const fileNode = nodes.find((n) => n.kind === "file" && n.id === id);
+    expect(fileNode?.parentFolder ?? null).toBeNull();
     expect(logs.some((l) => l.level === "error")).toBe(false);
 
-    // Re-sync: no duplicate folder/file nodes.
+    // Re-sync: no duplicate file node.
     await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
     const after = await driveNodes();
-    expect(after.filter((n) => n.kind === "folder" && n.name === project)).toHaveLength(1);
-    expect(after.filter((n) => n.kind === "file" && n.id === draft.header.id)).toHaveLength(1);
+    expect(after.filter((n) => n.kind === "file" && n.id === id)).toHaveLength(1);
   }, 15_000);
 
   // ── FS → drive: mutate offline, then sync ────────────────────────
@@ -469,24 +437,22 @@ describe("spec-fs-sync FS → drive", () => {
 
   // ── Live watcher: the path the unit tests don't cover ────────────
   //
-  // Drives the real trigger (chokidar setup → poll) and writes a spec into a
-  // project subtree that did NOT exist at setup time — the exact scenario that
-  // silently failed in production (reactor-project-init runs after startup).
+  // Drives the real trigger (chokidar setup → poll) and writes the project's
+  // `specs/` folder only after setup: the watcher sees it. A spec under a
+  // subfolder of the workdir is not the project's and is never watched.
 
-  it("detects a spec written into a new project subtree after setup() and syncs it", async () => {
+  it("detects the project's specs/ created after setup() and syncs it; ignores subfolders", async () => {
     const { logs, api: log } = makeLog();
     const ctx = {
       state: specFsSyncTrigger.state!(),
       context: { workdir: tmpDir, log },
       reactor: async () => ({ client: module.client, driveId }),
     } as never as Parameters<NonNullable<typeof specFsSyncTrigger.setup>>[0];
+    const changed = (ctx as { state: { changed: Set<string> } }).state.changed;
 
-    await specFsSyncTrigger.setup!(ctx);
-    try {
-      // Project dir + specs subtree created entirely AFTER the watcher started.
-      const projectDir = path.join(tmpDir, "late-project");
+    async function specIn(dir: string, name: string): Promise<{ id: string; file: string }> {
       const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
-      draft.header.name = "late-app";
+      draft.header.name = name;
       draft.header.documentType = "powerhouse/app";
       await module.client.create(draft);
       const created = await module.client.get(draft.header.id);
@@ -496,17 +462,26 @@ describe("spec-fs-sync FS → drive", () => {
         operations[scope] = (paged as { results: unknown[] }).results;
       }
       const enriched = { ...created, operations } as unknown as Parameters<typeof saveSpec>[0];
-      await saveSpec(enriched, projectDir);
+      return { id: draft.header.id, file: await saveSpec(enriched, dir) };
+    }
 
-      // chokidar should observe the new nested file (awaitWriteFinish ~75ms).
-      await waitUntil(() => (ctx as { state: { changed: Set<string> } }).state.changed.size > 0, {
-        timeout: 5_000,
-      });
+    await specFsSyncTrigger.setup!(ctx);
+    try {
+      // A subfolder "project": out of scope, never reported.
+      const outside = await specIn(path.join(tmpDir, "late-project"), "outside-app");
+      // The project's specs/ created entirely AFTER the watcher started.
+      const inside = await specIn(tmpDir, "late-app");
+
+      // chokidar should observe the new file (awaitWriteFinish ~75ms).
+      await waitUntil(() => changed.has(inside.file), { timeout: 5_000 });
+      expect(changed.has(outside.file)).toBe(false);
       await specFsSyncTrigger.poll(ctx);
 
       const nodes = await driveNodes();
-      expect(nodes.some((n) => n.kind === "folder" && n.name === "late-project")).toBe(true);
-      expect(nodes.some((n) => n.kind === "file" && n.id === draft.header.id)).toBe(true);
+      expect(nodes.filter((n) => n.kind === "folder")).toEqual([]);
+      const fileNode = nodes.find((n) => n.kind === "file" && n.id === inside.id);
+      expect(fileNode?.parentFolder ?? null).toBeNull();
+      expect(nodes.some((n) => n.kind === "file" && n.id === outside.id)).toBe(false);
       expect(logs.some((l) => l.level === "error")).toBe(false);
     } finally {
       await specFsSyncTrigger.teardown!(ctx);
@@ -530,7 +505,7 @@ describe("spec-fs-sync FS → drive", () => {
 
     await specFsSyncTrigger.setup!(ctx);
     try {
-      const projectDir = path.join(tmpDir, "del-project");
+      const projectDir = tmpDir;
       const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "del-app";
       draft.header.documentType = "powerhouse/app";
@@ -578,7 +553,7 @@ describe("spec-fs-sync FS → drive", () => {
 
     await specFsSyncTrigger.setup!(ctx);
     try {
-      const projectDir = path.join(tmpDir, "rename-project");
+      const projectDir = tmpDir;
       const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "rename-app";
       draft.header.documentType = "powerhouse/app";

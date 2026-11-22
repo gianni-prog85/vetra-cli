@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   deletePreviewDocument,
   findPreviewByName,
@@ -15,7 +12,6 @@ export const specPreviewDelete = defineCommand({
   id: "spec-preview-delete",
   description: "Remove a document from the reactor-project's preview drive.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -24,11 +20,10 @@ export const specPreviewDelete = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(context.workdir, input.project);
+    const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     const token = await getPreviewAuthToken(context.workdir, context.config);
     const row = await findPreviewByName(switchboardUrl, driveId, input.name, token);

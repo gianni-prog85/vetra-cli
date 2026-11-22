@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   createPreviewDrive,
   findPreviewDriveByPreferredEditor,
@@ -17,7 +14,6 @@ export const specPreviewCreateDrive = defineCommand({
   description:
     "Create a preview drive bound to a drive app. The drive's preferredEditor is set to the app's editor config.id so Connect renders the app when the drive is opened. Idempotent: reuses an existing preview drive already bound to this app.",
   inputSchema: z.object({
-    project: projectInputSchema,
     app: z
       .string()
       .describe(
@@ -31,15 +27,8 @@ export const specPreviewCreateDrive = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(
-      context.workdir,
-      input.project,
-    );
-    const { switchboardUrl } = resolvePreviewEndpoint(
-      context.services,
-      base,
-      input.project ?? ".",
-    );
+    const base = await projectRoot(context.workdir);
+    const { switchboardUrl } = resolvePreviewEndpoint(context.services, base);
     const appEditorId = resolveAppEditorId(base, input.app);
     const driveName = input.name ?? `${input.app} Preview`;
     const token = await getPreviewAuthToken(context.workdir, context.config);

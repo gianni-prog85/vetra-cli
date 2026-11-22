@@ -23,7 +23,7 @@ import {
 } from "../../../cloud-client/index.js";
 import type { StudioProductState } from "document-models/studio-product";
 import type { Config } from "../framework.js";
-import { listReactorProjects } from "../helpers/project.js";
+import { workspaceProjectDirs } from "../launch/workspace-layout.js";
 import { studioPath } from "../helpers/studio-paths.js";
 import { resolveLaunchRegistryUrl } from "../cloud/registry-url.js";
 import {
@@ -88,7 +88,7 @@ export interface UpgradeContext extends ProductContext {
 }
 
 const defaultDeps: UpgradeDeps = {
-  listProjects: listReactorProjects,
+  listProjects: workspaceProjectDirs,
   findLiveEnvironments: findOwnerEnvironmentsRunning,
 };
 

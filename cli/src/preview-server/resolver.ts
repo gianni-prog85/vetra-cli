@@ -1,7 +1,7 @@
 /**
- * `GET /resolve` — given the `project` label and `doc` id/slug a session
- * extracted from its chat history, return the live preview URL or a state
- * code the editor can render.
+ * `GET /resolve` — given the `doc` id/slug a session extracted from its chat
+ * history, return the live preview URL in the project's run (the project the
+ * Cli works in) or a state code the editor can render.
  *
  * `home` (no doc, no drive) asks for the project's preview drive root — the
  * Connect drive view the Studio shows from the moment the project's preview
@@ -11,7 +11,7 @@
  * sole mutator.
  */
 import type { ServiceManager } from "@powerhousedao/clint";
-import { resolveReactorProjectPath } from "../helpers/project.js";
+import { projectRoot } from "../helpers/project.js";
 import {
   buildPreviewDocPath,
   buildPreviewDriveRootPath,
@@ -23,7 +23,6 @@ import type { ResolveResult } from "./config.js";
 export async function resolvePreview(args: {
   services: ServiceManager;
   workdir: string;
-  project: string;
   doc: string;
   drive?: string;
   /** No doc or drive: the preview drive's root (see the module comment). */
@@ -31,16 +30,14 @@ export async function resolvePreview(args: {
   /** The Cli config's `projectRun`; off: a project that isn't up is `preview-off`. */
   projectRun?: boolean;
 }): Promise<ResolveResult> {
-  if (!args.project) return { kind: "no-target" };
   if (!args.drive && !args.doc && !args.home) return { kind: "no-target" };
 
   let projectPath: string;
   try {
-    projectPath = await resolveReactorProjectPath(args.workdir, args.project);
+    projectPath = await projectRoot(args.workdir);
   } catch (err) {
     return {
       kind: "unknown-project",
-      project: args.project,
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -51,15 +48,14 @@ export async function resolvePreview(args: {
 
   const stopped = (): ResolveResult =>
     args.projectRun
-      ? { kind: "project-stopped", project: args.project, projectPath }
-      : { kind: "preview-off", project: args.project };
+      ? { kind: "project-stopped", projectPath }
+      : { kind: "preview-off" };
   if (!instance) return stopped();
   // The preview drive's id comes with the run record, once it is live.
   const defaultDriveId = previewDriveIdOf(instance);
   const targetDriveId = args.drive ?? defaultDriveId;
   const starting = (): ResolveResult => ({
     kind: "starting",
-    project: args.project,
     projectPath,
     ...(targetDriveId ? { driveId: targetDriveId } : {}),
   });
@@ -81,7 +77,6 @@ export async function resolvePreview(args: {
     );
     return {
       kind: "ready",
-      project: args.project,
       projectPath,
       driveId: args.drive,
       documentId: args.drive,
@@ -96,7 +91,6 @@ export async function resolvePreview(args: {
     : buildPreviewDriveRootPath(defaultDriveId);
   return {
     kind: "ready",
-    project: args.project,
     projectPath,
     driveId: defaultDriveId,
     documentId: args.doc || defaultDriveId,

@@ -17,15 +17,14 @@
  * calls are ones both clients have (the in-process client and the
  * switchboard's GraphQL client); there is no load API over the wire.
  *
- * Drive attachment mirrors the per-project folder structure Vetra Studio reads
- * (`drive.state.global.nodes`): an ADD_FOLDER node per project, an ADD_FILE node
- * and a `child` relationship per spec doc. Both steps check existing nodes and
- * skip when present, so re-attaching is a no-op. ADD_FILE/ADD_FOLDER mutate the
- * drive document (`powerhouse/document-drive`), not a spec type, so they never
- * feed back into `spec-sync` (drive → FS).
+ * Drive attachment: the Studio works in one project, so every spec doc is an
+ * ADD_FILE node at the drive root (`drive.state.global.nodes`, what Vetra
+ * Studio reads) plus a `child` relationship. The step checks existing nodes
+ * and skips when present, so re-attaching is a no-op. ADD_FILE mutates the
+ * drive document (`powerhouse/document-drive`), not a spec type, so it never
+ * feeds back into `spec-sync` (drive → FS).
  */
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { baseLoadFromFile } from "document-model/node";
 import { signaturePolicyOf } from "document-model";
 import type { ReactorContext } from "@powerhousedao/clint";
@@ -88,7 +87,7 @@ function specClient(reactor: Pick<ReactorContext, "client">): SpecDriveClient {
 
 // One sync at a time in this process: a command's push and the watcher's poll
 // of the same file would each find its actions unknown and execute them twice,
-// and two attaches to a new project folder would each create it.
+// and two attaches of a new file would each add its node.
 let syncQueue: Promise<unknown> = Promise.resolve();
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
   const run = syncQueue.then(fn);
@@ -111,8 +110,7 @@ for (const documentType of listSpecTypes()) {
 
 /**
  * Infer the spec registration for a `.phd` path from the `specs/<subdir>/`
- * tail. Layout-agnostic: works for both `<workdir>/specs/<subdir>/` and
- * `<workdir>/<project>/specs/<subdir>/`. Returns undefined when the path
+ * tail (`<project>/specs/<subdir>/<file>`). Returns undefined when the path
  * doesn't sit directly under a `specs/<known-subdir>/` directory.
  */
 export function specForPath(filePath: string): SpecRegistration | undefined {
@@ -121,24 +119,6 @@ export function specForPath(filePath: string): SpecRegistration | undefined {
   // Need `specs/<subdir>/<file>`: a subdir segment and a file after it.
   if (specsIdx === -1 || specsIdx + 2 > segments.length - 1) return undefined;
   return SUBDIR_TO_SPEC.get(segments[specsIdx + 1]);
-}
-
-/**
- * Derive the reactor-project name owning a spec file, relative to workdir.
- * Returns the segment(s) before `specs/` (e.g. `workout-tracker`), or
- * undefined when the file is outside workdir or `specs/` is the first segment
- * (the single-project case, where the doc attaches at the drive root).
- */
-export function projectForPath(
-  filePath: string,
-  workdir: string,
-): string | undefined {
-  const rel = path.relative(workdir, filePath);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
-  const segments = rel.split(path.sep);
-  const specsIdx = segments.indexOf(SPECS_DIRNAME);
-  if (specsIdx <= 0) return undefined;
-  return segments.slice(0, specsIdx).join(path.sep);
 }
 
 interface LoadedDoc {
@@ -305,11 +285,6 @@ async function pushSpec(
 }
 
 interface DriveActions {
-  addFolder: (input: {
-    id: string;
-    name: string;
-    parentFolder: string | null;
-  }) => unknown;
   addFile: (input: {
     id: string;
     name: string;
@@ -331,7 +306,6 @@ async function getDriveActions(): Promise<DriveActions> {
       "@powerhousedao/shared/document-drive"
     )) as unknown as DriveActions;
     _driveActions = {
-      addFolder: mod.addFolder,
       addFile: mod.addFile,
       deleteNode: mod.deleteNode,
     };
@@ -350,48 +324,15 @@ async function getDriveNodes(
 }
 
 /**
- * Ensure a root-level folder named after the project exists in the drive,
- * returning its node id. Returns null for the single-project case (no project
- * segment) so the doc attaches at the drive root. Idempotent: an existing
- * folder of the same name is reused.
- */
-async function ensureProjectFolder(
-  client: SpecDriveClient,
-  driveId: string,
-  project: string | undefined,
-  log?: FsSyncLogger,
-): Promise<string | null> {
-  if (!project) return null;
-  const nodes = await getDriveNodes(client, driveId);
-  const existing = nodes.find(
-    (n) =>
-      n.kind === "folder" &&
-      n.name === project &&
-      (n.parentFolder ?? null) === null,
-  );
-  if (existing) return existing.id;
-  const id = randomUUID();
-  const { addFolder } = await getDriveActions();
-  await client.execute(driveId, "main", [
-    addFolder({ id, name: project, parentFolder: null }),
-  ]);
-  log?.debug?.(
-    `[spec-fs-sync] created project folder "${project}" folderId=${id} driveId=${driveId}`,
-  );
-  return id;
-}
-
-/**
- * Ensure a file node for `docId` exists under `parentFolder`. Idempotent:
- * skips when a file node with the same id is already present. On create, also
- * adds the drive's `child` relationship to the doc, which `find({ parentId })`
- * reads.
+ * Ensure a file node for `docId` exists at the drive root. Idempotent: skips
+ * when a file node with the same id is already present (wherever it is filed).
+ * On create, also adds the drive's `child` relationship to the doc, which
+ * `find({ parentId })` reads.
  */
 async function ensureFileNode(
   client: SpecDriveClient,
   driveId: string,
   spec: PushedSpec,
-  parentFolder: string | null,
   log?: FsSyncLogger,
 ): Promise<void> {
   const nodes = await getDriveNodes(client, driveId);
@@ -402,12 +343,12 @@ async function ensureFileNode(
       id: spec.id,
       name: spec.name,
       documentType: spec.documentType,
-      parentFolder,
+      parentFolder: null,
     }),
   ]);
   log?.debug?.(
     `[spec-fs-sync] filed ${spec.documentType} "${spec.name}" ` +
-      `documentId=${spec.id} driveId=${driveId} folder=${parentFolder ?? "<root>"}`,
+      `documentId=${spec.id} driveId=${driveId}`,
   );
   // The file node is what Vetra Studio reads: a relationship failure is
   // reported, not allowed to abort the attach.
@@ -434,9 +375,9 @@ export interface ApplyFsChangesOptions {
 /**
  * Sync each `.phd` path into the reactor and the Studio drive: materialize a
  * document the reactor lacks, execute the content actions it does not hold,
- * and attach the doc to the drive under a folder named after its project.
- * Returns the number of files synced. Used by the trigger's poll, the `spec-*`
- * write commands, and integration tests.
+ * and attach the doc at the drive root. `workdir` is the project (where a
+ * signed file is mirrored back). Returns the number of files synced. Used by
+ * the trigger's poll, the `spec-*` write commands, and integration tests.
  *
  * `onLoaded` is invoked once per synced spec with its file path and document
  * id — the trigger uses it to maintain a path→docId map for resolving
@@ -458,22 +399,13 @@ export function applyFsChangesToReactor(
     for (const filePath of paths) {
       const doc = await loadSpecForFile(filePath, log);
       if (!doc) continue;
-      const project = projectForPath(filePath, workdir);
       try {
         const pushed = await pushSpec(client, doc, mode, log);
         if (mode === "v2-required") {
-          await mirrorSignedSpec(
-            client,
-            pushed.id,
-            project ? path.join(workdir, project) : workdir,
-            log,
-          );
+          await mirrorSignedSpec(client, pushed.id, workdir, log);
         }
         onLoaded?.(filePath, pushed.id);
-        if (driveId) {
-          const folderId = await ensureProjectFolder(client, driveId, project, log);
-          await ensureFileNode(client, driveId, pushed, folderId, log);
-        }
+        if (driveId) await ensureFileNode(client, driveId, pushed, log);
         synced += 1;
       } catch (err) {
         log?.error?.(

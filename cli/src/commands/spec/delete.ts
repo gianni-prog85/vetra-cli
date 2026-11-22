@@ -1,16 +1,15 @@
 import { deleteDocument } from "@powerhousedao/vetra/codegen/spec";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { projectInputSchema } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { removeSpecFromDrive } from "../../helpers/spec-drive-sync.js";
-import { findByName, resolveNamedSpecBase } from "./_helpers.js";
+import { findByName } from "./_helpers.js";
 
 export const specDelete = defineCommand({
   id: "spec-delete",
   description: "Delete a spec document by name.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -20,8 +19,7 @@ export const specDelete = defineCommand({
   }),
   execute: async (input, context) => {
     const { workdir } = context;
-    // Workspace-root product specs are reachable without a reactor project.
-    const base = await resolveNamedSpecBase(workdir, input.project, input.name);
+    const base = await projectRoot(workdir);
     const { doc, path } = await findByName(base, input.name);
     const result = await deleteDocument(path);
     if (!result.success) {

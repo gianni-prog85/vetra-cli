@@ -153,7 +153,7 @@ describe('spec-sync drive → FS integration', () => {
     unsubscribe();
   }, 15_000);
 
-  it('routes a doc filed under a project folder to <workdir>/<project>/specs/', async () => {
+  it('writes a doc to the project\'s specs/, whatever drive folder it is filed in', async () => {
     const project = 'workout-tracker';
     const drive = await module.client.createEmpty('powerhouse/document-drive');
     const driveId = drive.header.id;
@@ -176,14 +176,12 @@ describe('spec-sync drive → FS integration', () => {
     ]);
 
     const inDrive = await module.client.get<AppModuleDocument>(doc.header.id);
-    const nodes = (await module.client.get(driveId) as any).state.global.nodes;
-    await syncSpecsToFs([inDrive] as never, tmpDir, { nodes });
+    await syncSpecsToFs([inDrive] as never, tmpDir);
 
-    // Written under the project folder, not the workdir root.
-    const projectPath = specPath(path.join(tmpDir, project), 'powerhouse/app', 'filed-app');
-    expect((await fs.stat(projectPath)).isFile()).toBe(true);
+    // One project: the workdir's specs/, never a subfolder named after a drive folder.
+    expect((await fs.stat(specPath(tmpDir, 'powerhouse/app', 'filed-app'))).isFile()).toBe(true);
     await expect(
-      fs.stat(specPath(tmpDir, 'powerhouse/app', 'filed-app')),
+      fs.stat(specPath(path.join(tmpDir, project), 'powerhouse/app', 'filed-app')),
     ).rejects.toBeTruthy();
   }, 15_000);
 

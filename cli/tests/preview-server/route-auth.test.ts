@@ -1,20 +1,20 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { createRequestAuthorizer } from "../../src/preview-server/request-auth.js";
-import { startPreviewServer } from "../../src/preview-server/server.js";
+import { publicResolveResult, startPreviewServer } from "../../src/preview-server/server.js";
 import { makeWorkdir } from "../spec/_fixtures.js";
 
 // Every preview-server route, public or owner-only. A route missing here is a
 // route nobody decided on: keep the list in step with server.ts.
 const OWNER_ROUTES: Array<[method: string, path: string]> = [
-  ["GET", "/project-package?project=demo"],
-  ["GET", "/release-status?project=demo"],
-  ["POST", "/publish?project=demo"],
-  ["POST", "/start?project=demo"],
-  ["POST", "/restart?project=demo"],
+  ["GET", "/project-package"],
+  ["GET", "/release-status"],
+  ["POST", "/publish"],
+  ["POST", "/start"],
+  ["POST", "/restart"],
   ["GET", "/sessions"],
   ["GET", "/sessions/export?id=s1"],
   ["GET", "/export?workspace=1"],
@@ -26,7 +26,7 @@ const OWNER_ROUTES: Array<[method: string, path: string]> = [
 const PUBLIC_ROUTES: Array<[method: string, path: string]> = [
   ["GET", "/healthz"],
   ["GET", "/version"],
-  ["GET", "/resolve?project=demo&doc=x"],
+  ["GET", "/resolve?doc=x"],
   ["GET", "/export/status"],
 ];
 
@@ -49,9 +49,8 @@ describe("preview-server route gate", () => {
   };
 
   async function boot(cloud: boolean) {
+    // The workdir is the project (makeWorkdir writes its powerhouse.config.json).
     ({ workdir, cleanup } = makeWorkdir());
-    mkdirSync(join(workdir, "demo"));
-    writeFileSync(join(workdir, "demo", "powerhouse.config.json"), "{}\n");
     writeFileSync(join(workdir, "README.md"), "hello\n");
     start = vi.fn(async () => "i-1");
     delegation = vi.fn(async () => true);
@@ -157,15 +156,18 @@ describe("preview-server route gate", () => {
     });
 
     it("/resolve leaks no absolute path or raw error text", async () => {
-      const res = await call("GET", "/resolve?project=nope&doc=x", PROXIED);
-      const body = (await res.json()) as Record<string, unknown>;
-      expect(body).toEqual({ kind: "unknown-project", project: "nope", error: "unknown project" });
-      const stopped = await call("GET", "/resolve?project=demo&doc=x", PROXIED);
+      const stopped = await call("GET", "/resolve?doc=x", PROXIED);
       const s = (await stopped.json()) as Record<string, unknown>;
       // The project run is off unless the Cli config turns it on.
-      expect(s.kind).toBe("preview-off");
-      expect(s).not.toHaveProperty("projectPath");
+      expect(s).toEqual({ kind: "preview-off" });
       expect(JSON.stringify(s)).not.toContain(workdir);
+      // A refusal names no path either.
+      expect(
+        publicResolveResult({ kind: "unknown-project", error: `no powerhouse.config.json at ${workdir}` }),
+      ).toEqual({ kind: "unknown-project", error: "unknown project" });
+      expect(
+        publicResolveResult({ kind: "starting", projectPath: workdir }),
+      ).toEqual({ kind: "starting" });
     });
 
     it("an owner wallet whose delegation doesn't verify on Renown → 401", async () => {
@@ -191,7 +193,7 @@ describe("preview-server route gate", () => {
     it("unauthenticated /auth/logout and /auth/start change nothing", async () => {
       await call("POST", "/auth/logout", PROXIED);
       await call("POST", "/auth/start", PROXIED);
-      await call("POST", "/start?project=demo", PROXIED);
+      await call("POST", "/start", PROXIED);
       expect(start).not.toHaveBeenCalled();
     });
 

@@ -1,10 +1,11 @@
 /**
- * Publish a reactor-project's package for the Deploy flow, using the same
- * sequence the agent's `reactor-project-publish` runs (see `publishReactorProject`
- * in `commands/reactor-project/publish-core.ts`). Adds the deploy-specific bits:
- * skip the publish when the current source is already the latest published
- * version, otherwise pick the next free version and let the shared core
- * bump-and-retry on a registry conflict — so the browser never has to.
+ * Publish the project's package for the Deploy flow (the project the Cli works
+ * in), using the same sequence the agent's `reactor-project-publish` runs (see
+ * `publishReactorProject` in `commands/reactor-project/publish-core.ts`). Adds
+ * the deploy-specific bits: skip the publish when the current source is
+ * already the latest published version, otherwise pick the next free version
+ * and let the shared core bump-and-retry on a registry conflict — so the
+ * browser never has to.
  *
  * Publishing uses the agent's Renown identity (the studio "Authorize agent"
  * credential).
@@ -22,22 +23,21 @@ import {
   computeProjectContentHash,
   CONTENT_HASH_FIELD,
 } from "../helpers/project-fingerprint.js";
-import { resolveReactorProjectPath } from "../helpers/project.js";
+import { projectRoot } from "../helpers/project.js";
 
 export type PublishProjectResult =
   | {
       kind: "ok";
-      project: string;
       packageName: string;
       version: string;
       registry: string;
       /** false when the source was already the latest published version. */
       published: boolean;
     }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "no-package"; project: string; error: string }
-  | { kind: "auth-required"; project: string; error: string }
-  | { kind: "failed"; project: string; error: string };
+  | { kind: "unknown-project"; error: string }
+  | { kind: "no-package"; error: string }
+  | { kind: "auth-required"; error: string }
+  | { kind: "failed"; error: string };
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -45,24 +45,18 @@ function message(err: unknown): string {
 
 export async function publishProjectForDeploy(opts: {
   workdir: string;
-  project: string;
   /** Registry override (query param > configured default); the resolver applies
    * the rest of the precedence (env > project config > built-in default). */
   registryUrl?: string;
   renownUrl: string;
 }): Promise<PublishProjectResult> {
-  const { workdir, project, registryUrl: registryOverride, renownUrl } = opts;
-  if (!project) {
-    return { kind: "unknown-project", project, error: "No project specified." };
-  }
+  const { workdir, registryUrl: registryOverride, renownUrl } = opts;
 
   let projectPath: string;
   try {
-    projectPath = await resolveReactorProjectPath(workdir, project, {
-      soleProjectDefault: false,
-    });
+    projectPath = await projectRoot(workdir);
   } catch (err) {
-    return { kind: "unknown-project", project, error: message(err) };
+    return { kind: "unknown-project", error: message(err) };
   }
 
   let pkg: { name?: string; version?: string };
@@ -70,10 +64,10 @@ export async function publishProjectForDeploy(opts: {
     const raw = await readFile(path.join(projectPath, "package.json"), "utf-8");
     pkg = JSON.parse(raw) as typeof pkg;
   } catch (err) {
-    return { kind: "no-package", project, error: message(err) };
+    return { kind: "no-package", error: message(err) };
   }
   if (!pkg.name) {
-    return { kind: "no-package", project, error: 'package.json has no "name" field.' };
+    return { kind: "no-package", error: 'package.json has no "name" field.' };
   }
   const packageName = pkg.name;
   const localVersion = pkg.version ?? null;
@@ -87,7 +81,6 @@ export async function publishProjectForDeploy(opts: {
   if (!token) {
     return {
       kind: "auth-required",
-      project,
       error:
         'Agent not authorized to publish. Authorize the agent (the studio "Authorize agent" button, or `ph login`), then retry.',
     };
@@ -97,12 +90,11 @@ export async function publishProjectForDeploy(opts: {
   if (packument.kind === "auth-required") {
     return {
       kind: "auth-required",
-      project,
       error: `Registry requires auth (HTTP ${packument.status}).`,
     };
   }
   if (packument.kind === "error") {
-    return { kind: "failed", project, error: packument.reason };
+    return { kind: "failed", error: packument.reason };
   }
 
   const versions = packument.kind === "ok" ? packument.versions : {};
@@ -116,7 +108,6 @@ export async function publishProjectForDeploy(opts: {
   if (latest && publishedHash && publishedHash === currentHash) {
     return {
       kind: "ok",
-      project,
       packageName,
       version: latest,
       registry: registryUrl,
@@ -139,7 +130,6 @@ export async function publishProjectForDeploy(opts: {
   if (result.kind === "ok") {
     return {
       kind: "ok",
-      project,
       packageName: result.packageName,
       version: result.version,
       registry: result.registry,
@@ -147,10 +137,10 @@ export async function publishProjectForDeploy(opts: {
     };
   }
   if (result.kind === "auth-required") {
-    return { kind: "auth-required", project, error: result.error };
+    return { kind: "auth-required", error: result.error };
   }
   if (result.kind === "no-package") {
-    return { kind: "no-package", project, error: result.error };
+    return { kind: "no-package", error: result.error };
   }
-  return { kind: "failed", project, error: result.error };
+  return { kind: "failed", error: result.error };
 }

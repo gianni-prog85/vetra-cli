@@ -1,6 +1,8 @@
 # Plan: spec commands write the embedded drive directly
 
-Status: **planned, not started.** Pick this up in a future session.
+Status: **done** (`helpers/spec-drive-sync.ts`, `helpers/embedded-drive.ts`);
+kept as the record of the decisions. Since C1 the workdir is the one project:
+`projectForPath` and `ensureProjectFolder` below are gone.
 
 ## Goal / context
 
@@ -41,10 +43,11 @@ abandoned:
     up a full reactor just to write a spec).
   - `folders?: FolderOperations` — wired **only** by the daemon's
     `startupSequence` and only when a personal drive exists.
-- `buildDefaultReactor` gives the configured drive `role: 'personal'`
-  (`ph-clint .../dist/integrations/powerhouse/index.js:40`), so the `vetra`
-  drive (configured in `vetra-cli/src/cli.ts` `configureReactor`, name `vetra`,
-  `preferredEditor: vetra-studio`) sets `personalDriveId`.
+- clint's remote attach (`attachDefaultReactor`, monorepo
+  `packages/clint/src/integrations/powerhouse/index.ts`) gives the configured
+  drive `role: 'personal'`, so the Studio drive (configured in
+  `cli/src/cli.ts` `configureReactor.remote`, name `Home`, `preferredEditor:
+  vetra-studio`) sets `personalDriveId`.
 - Therefore **`context.folders` presence = "reactor running" signal**: present in
   the daemon, absent in one-shot mode — a non-booting check. When it's present,
   `await ctx.reactor()` returns the already-booted **cached** instance (no boot).
@@ -61,8 +64,10 @@ abandoned:
 - Removal API (pattern from ph-clint `folders.js` `removeDocument`):
   `client.execute(driveId,'main',[deleteNode({id})])` + `client.removeRelationship(driveId,id,'child')`
   + `client.deleteDocument(id)`.
-- Commands resolve `base = resolveReactorProjectPath(workdir, project)` then
-  `registry.saveSpec(doc, base)` → returns the saved path under `base/specs/`.
+- Commands resolve `base = projectRoot(workdir)` (the workdir is the one
+  project) then `registry.saveSpec(doc, base)` → returns the saved path under
+  `base/specs/`. Every spec file node attaches at the drive root (no project
+  folders).
   `registry.ts` is the merged registry (codegen builder specs + vetra-app domain
   models like brand-sheet); `resolveSpecEntry` / `createSpecDocument` /
   `applyActions` / `saveSpec` live there.

@@ -1,10 +1,6 @@
-import path from "node:path";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { runChecks } from "../../helpers/project-checks.js";
 import {
   buildPreviewDocPath,
@@ -22,7 +18,6 @@ export const specPreviewShow = defineCommand({
   description:
     "Resolve the preview iframe URL for a document or drive in the reactor-project. Use this to point the user's BUILD-card iframe at a specific document or drive root. For documents, the URL embeds the preview drive id and document slug. For drives (use --drive), it points at the drive root so Connect renders the drive's app. Both include `?embed=1` so Connect renders without its outer chrome.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -43,13 +38,7 @@ export const specPreviewShow = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(
-      context.workdir,
-      input.project,
-    );
-    // The Studio's preview pane finds the project here when the agent left
-    // `project` out (the workspace's only project).
-    const project = path.relative(context.workdir, base) || ".";
+    const base = await projectRoot(context.workdir);
 
     // Gate: the app/editor code must type-check AND be `any`-free before we
     // surface a preview. A non-compiling editor.tsx renders "Something went
@@ -112,11 +101,10 @@ export const specPreviewShow = defineCommand({
     const { switchboardUrl, connectUrl, driveId: defaultDriveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     if (!connectUrl) {
       throw new Error(
-        `Reactor project "${input.project ?? "."}" is running but its Connect endpoint has not been captured yet. Retry shortly.`,
+        "The project's run is up but its Connect endpoint has not been captured yet. Retry shortly.",
       );
     }
 
@@ -148,7 +136,6 @@ export const specPreviewShow = defineCommand({
           `Preview URL (drive): ${previewUrl}` +
           (input.app ? `  (preferredEditor: ${preferredEditor ?? "(none)"})` : ""),
         data: {
-          project,
           projectPath: base,
           driveId: input.drive,
           kind: "drive" as const,
@@ -167,7 +154,6 @@ export const specPreviewShow = defineCommand({
     return {
       text: `Preview URL: ${previewUrl}`,
       data: {
-        project,
         projectPath: base,
         driveId,
         kind: "document" as const,

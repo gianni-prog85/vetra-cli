@@ -2,16 +2,9 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertProjectInstalled, resolveReactorProjectPath } from "../../src/helpers/project.js";
+import { assertProjectInstalled, projectRoot } from "../../src/helpers/project.js";
 
-function mkProject(parent: string, name: string): string {
-  const dir = join(parent, name);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "powerhouse.config.json"), "{}", "utf8");
-  return dir;
-}
-
-describe("resolveReactorProjectPath", () => {
+describe("projectRoot", () => {
   let workdir: string;
   beforeEach(() => {
     workdir = mkdtempSync(join(tmpdir(), "vetra-project-"));
@@ -20,80 +13,17 @@ describe("resolveReactorProjectPath", () => {
     rmSync(workdir, { recursive: true, force: true });
   });
 
-  it("returns the subdir when it is a Reactor package", async () => {
-    mkProject(workdir, "workout-tracker");
-    await expect(
-      resolveReactorProjectPath(workdir, "workout-tracker"),
-    ).resolves.toBe(join(workdir, "workout-tracker"));
-  });
-
-  it("returns the workdir when it is itself a Reactor package", async () => {
+  it("is the workdir when it is a Reactor package", async () => {
     writeFileSync(join(workdir, "powerhouse.config.json"), "{}", "utf8");
-    await expect(resolveReactorProjectPath(workdir, undefined)).resolves.toBe(
-      workdir,
-    );
+    await expect(projectRoot(workdir)).resolves.toBe(workdir);
   });
 
-  it("lists available projects when workdir is not a Reactor package", async () => {
-    mkProject(workdir, "alpha");
-    mkProject(workdir, "beta");
-    await expect(
-      resolveReactorProjectPath(workdir, undefined),
-    ).rejects.toThrow(/Available projects: alpha, beta/);
-  });
-
-  it("suggests the closest project name on a typo", async () => {
-    mkProject(workdir, "workout-tracker");
-    await expect(
-      resolveReactorProjectPath(workdir, "worktout-tracker"),
-    ).rejects.toThrow(/Did you mean: workout-tracker\?/);
-  });
-
-  it("flags an existing-but-non-Reactor subdir", async () => {
-    mkdirSync(join(workdir, "src"));
-    await expect(resolveReactorProjectPath(workdir, "src")).rejects.toThrow(
-      /"src" is not a Reactor package/,
-    );
-  });
-
-  it("ignores dotfiles when listing projects", async () => {
-    mkProject(workdir, "alpha");
-    mkProject(workdir, "beta");
-    mkdirSync(join(workdir, ".cache"));
-    writeFileSync(
-      join(workdir, ".cache", "powerhouse.config.json"),
-      "{}",
-      "utf8",
-    );
-    await expect(
-      resolveReactorProjectPath(workdir, undefined),
-    ).rejects.toThrow(/Available projects: alpha, beta$/m);
-  });
-
-  // Staging: the agent left `project` out of spec/preview calls and lost a
-  // step to "Workdir is not a Reactor package" each time.
-  it("defaults to the workspace's only project when none is named", async () => {
-    const alpha = mkProject(workdir, "alpha");
-    // A dot-directory package doesn't count as a second project.
-    mkProject(workdir, ".cache");
-    await expect(resolveReactorProjectPath(workdir, undefined)).resolves.toBe(alpha);
-    // A named project still wins, and a missing one still fails.
-    await expect(resolveReactorProjectPath(workdir, "beta")).rejects.toThrow(
-      /Available projects: alpha/,
-    );
-  });
-
-  // M0: the bare "not found" errors led the agent to hand-write a project.
-  it("points a missing project at reactor-project-init", async () => {
-    await expect(resolveReactorProjectPath(workdir, "todo-app")).rejects.toThrow(
-      /reactor-project-init \{ name: "todo-app" \}.*never hand-write/,
-    );
-    await expect(resolveReactorProjectPath(workdir, undefined)).rejects.toThrow(
-      /Create a project with `reactor-project-init/,
-    );
-    mkProject(workdir, "alpha");
-    await expect(resolveReactorProjectPath(workdir, "beta")).rejects.toThrow(
-      /Available projects: alpha\nCreate a project with `reactor-project-init \{ name: "beta" \}`/,
+  it("refuses a workdir without powerhouse.config.json, and never picks a subfolder", async () => {
+    // A project in a subfolder is not discovered: Studio works in one project.
+    mkdirSync(join(workdir, "alpha"));
+    writeFileSync(join(workdir, "alpha", "powerhouse.config.json"), "{}", "utf8");
+    await expect(projectRoot(workdir)).rejects.toThrow(
+      /The workdir is not a Reactor Package project \(no powerhouse\.config\.json at .*\)\.\nStudio works inside one project/,
     );
   });
 });
@@ -102,22 +32,21 @@ describe("assertProjectInstalled", () => {
   let workdir: string;
   beforeEach(() => {
     workdir = mkdtempSync(join(tmpdir(), "vetra-project-"));
+    writeFileSync(join(workdir, "powerhouse.config.json"), "{}", "utf8");
   });
   afterEach(() => {
     rmSync(workdir, { recursive: true, force: true });
   });
 
-  it("refuses a hand-written project with no install, pointing at reactor-project-init", async () => {
-    const dir = mkProject(workdir, "todo-app");
-    writeFileSync(join(dir, "package.json"), "{}", "utf8");
-    await expect(assertProjectInstalled(dir, "todo-app")).rejects.toThrow(
-      /"todo-app" is not an initialised project[\s\S]*reactor-project-init \{ name: "todo-app" \}/,
+  it("refuses a project with no install, and says not to hand-write it", async () => {
+    writeFileSync(join(workdir, "package.json"), "{}", "utf8");
+    await expect(assertProjectInstalled(workdir)).rejects.toThrow(
+      /The project is not installed \(no node_modules at [\s\S]*pnpm install[\s\S]*never hand-write/,
     );
   });
 
   it("accepts an installed project", async () => {
-    const dir = mkProject(workdir, "todo-app");
-    mkdirSync(join(dir, "node_modules"));
-    await expect(assertProjectInstalled(dir, "todo-app")).resolves.toBeUndefined();
+    mkdirSync(join(workdir, "node_modules"));
+    await expect(assertProjectInstalled(workdir)).resolves.toBeUndefined();
   });
 });

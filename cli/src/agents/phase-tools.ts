@@ -32,7 +32,6 @@ export const ALWAYS_ON: readonly string[] = [
   'skill_search',
   'whoami',
   // Read-only project status: every phase's gate is checked with these.
-  'reactor-project-ls',
   'reactor-project-ps',
   'reactor-project-logs',
   // Reading what the customer attached to the message.

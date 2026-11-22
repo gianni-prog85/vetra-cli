@@ -1,15 +1,14 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { projectInputSchema, resolveSpecBasePath } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { formatColumns } from "./_helpers.js";
 import { getSpecDocuments } from "./registry.js";
 
 export const specList = defineCommand({
   id: "spec-list",
   description:
-    "List spec documents. Filter with --category or --type. On a workdir that isn't a reactor package, lists the workspace-level product specs.",
+    "List the project's spec documents (product and project specs, under specs/). Filter with --category or --type.",
   inputSchema: z.object({
-    project: projectInputSchema,
     category: z
       .enum(["product", "project"])
       .optional()
@@ -24,16 +23,10 @@ export const specList = defineCommand({
       ),
   }),
   execute: async (input, { workdir }) => {
-    // Project specs only exist inside a reactor project; product specs may sit
-    // at the workspace root.
-    const { base, productFallback } = await resolveSpecBasePath(
-      workdir,
-      input.project,
-      input.category !== "project",
-    );
+    const base = await projectRoot(workdir);
     const docs = await getSpecDocuments(base, {
       documentType: input.type,
-      category: productFallback ? "product" : input.category,
+      category: input.category,
     });
     if (docs.length === 0) {
       return { text: "(no specs)" };

@@ -5,14 +5,17 @@
  * `authorizeRequest` passes — see request-auth.ts):
  *   GET  /healthz                 public: liveness check.
  *   GET  /version                 public: running vetra + ph versions.
- *   GET  /resolve?project=&doc=   public: preview readiness/URL (or &drive=, &home=1).
+ *   GET  /resolve?doc=            public: preview readiness/URL (or ?drive=, ?home=1).
  *   GET  /events                  public: SSE of reactor-project lifecycle event types.
  *   GET  /export/status           public: whether *this caller* passes the owner gate.
  *   GET  /project-package         owner.
  *   GET  /release-status          owner.
  *   POST /publish                 owner.
- *   POST /start?project=          owner: idempotent start.
- *   POST /restart?project=        owner: stop the preview, start it again.
+ *   POST /start                   owner: idempotent start of the project's run.
+ *   POST /restart                 owner: stop the project's run, start it again.
+ *
+ * Every route acts on the project the Cli works in (the workdir): there is
+ * no project to name.
  *   GET  /sessions                owner: list chat sessions.
  *   GET  /sessions/export?id=     owner: zip of a session's doc/thread/log.
  *   GET  /export?workspace=1      owner: zip of selected workspace parts.
@@ -112,7 +115,7 @@ function parseQuery(url: string): URLSearchParams {
 export function publicResolveResult(result: ResolveResult): PublicResolveResult {
   if (result.kind === "no-target") return result;
   if (result.kind === "unknown-project") {
-    return { kind: "unknown-project", project: result.project, error: "unknown project" };
+    return { kind: "unknown-project", error: "unknown project" };
   }
   const rest: Record<string, unknown> = { ...result };
   delete rest.projectPath;
@@ -204,7 +207,6 @@ export async function startPreviewServer(
         const result = await resolvePreview({
           services,
           workdir,
-          project: q.get("project") ?? "",
           doc: q.get("doc") ?? "",
           drive: q.get("drive") ?? undefined,
           home: q.get("home") === "1",
@@ -216,8 +218,7 @@ export async function startPreviewServer(
 
       if (path === "/project-package" && method === "GET") {
         if (!(await requireOwner(req, res, url))) return;
-        const q = parseQuery(url);
-        const result = await readProjectPackage(workdir, q.get("project") ?? "");
+        const result = await readProjectPackage(workdir);
         writeJson(res, 200, result);
         return;
       }
@@ -227,7 +228,6 @@ export async function startPreviewServer(
         const q = parseQuery(url);
         const result = await checkReleaseStatus({
           workdir,
-          project: q.get("project") ?? "",
           registryUrl: q.get("registry") ?? registryUrl,
           renownUrl,
         });
@@ -240,7 +240,6 @@ export async function startPreviewServer(
         const q = parseQuery(url);
         const result = await publishProjectForDeploy({
           workdir,
-          project: q.get("project") ?? "",
           registryUrl: q.get("registry") ?? registryUrl,
           renownUrl,
         });
@@ -258,12 +257,7 @@ export async function startPreviewServer(
 
       if (path === "/start" && method === "POST") {
         if (!(await requireOwner(req, res, url))) return;
-        const q = parseQuery(url);
-        const result = await startPreview({
-          services,
-          workdir,
-          project: q.get("project") ?? "",
-        });
+        const result = await startPreview({ services, workdir });
         const status =
           result.kind === "unknown-project"
             ? 404
@@ -277,12 +271,7 @@ export async function startPreviewServer(
       // Restart can take down a running preview: owner-only, like the exports.
       if (path === "/restart" && method === "POST") {
         if (!(await requireOwner(req, res, url))) return;
-        const q = parseQuery(url);
-        const result = await restartPreview({
-          services,
-          workdir,
-          project: q.get("project") ?? "",
-        });
+        const result = await restartPreview({ services, workdir });
         const status =
           result.kind === "unknown-project"
             ? 404

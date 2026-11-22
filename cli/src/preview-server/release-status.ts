@@ -13,12 +13,11 @@ import {
   computeProjectContentHash,
   CONTENT_HASH_FIELD,
 } from "../helpers/project-fingerprint.js";
-import { resolveReactorProjectPath } from "../helpers/project.js";
+import { projectRoot } from "../helpers/project.js";
 
 export type ReleaseStatusResult =
   | {
       kind: "ok";
-      project: string;
       packageName: string;
       localVersion: string | null;
       publishedVersion: string | null;
@@ -26,34 +25,29 @@ export type ReleaseStatusResult =
       needsRelease: boolean;
       reason: "never-published" | "no-baseline" | "content-changed" | "up-to-date";
     }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "no-package"; project: string; error: string }
-  | { kind: "unknown"; project: string; error: string };
+  | { kind: "unknown-project"; error: string }
+  | { kind: "no-package"; error: string }
+  | { kind: "unknown"; error: string };
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** The release status of the project the Cli works in (the workdir). */
 export async function checkReleaseStatus(opts: {
   workdir: string;
-  project: string;
   /** Registry override (query param > configured default); the resolver applies
    * the rest of the precedence (env > project config > built-in default). */
   registryUrl?: string;
   renownUrl: string;
 }): Promise<ReleaseStatusResult> {
-  const { workdir, project, registryUrl: registryOverride, renownUrl } = opts;
-  if (!project) {
-    return { kind: "unknown-project", project, error: "No project specified." };
-  }
+  const { workdir, registryUrl: registryOverride, renownUrl } = opts;
 
   let projectPath: string;
   try {
-    projectPath = await resolveReactorProjectPath(workdir, project, {
-      soleProjectDefault: false,
-    });
+    projectPath = await projectRoot(workdir);
   } catch (err) {
-    return { kind: "unknown-project", project, error: message(err) };
+    return { kind: "unknown-project", error: message(err) };
   }
 
   let pkg: { name?: string; version?: string };
@@ -61,10 +55,10 @@ export async function checkReleaseStatus(opts: {
     const raw = await readFile(path.join(projectPath, "package.json"), "utf-8");
     pkg = JSON.parse(raw) as typeof pkg;
   } catch (err) {
-    return { kind: "no-package", project, error: message(err) };
+    return { kind: "no-package", error: message(err) };
   }
   if (!pkg.name) {
-    return { kind: "no-package", project, error: 'package.json has no "name" field.' };
+    return { kind: "no-package", error: 'package.json has no "name" field.' };
   }
   const packageName = pkg.name;
   const localVersion = pkg.version ?? null;
@@ -83,7 +77,6 @@ export async function checkReleaseStatus(opts: {
     reason: "never-published" | "no-baseline" | "content-changed" | "up-to-date",
   ): ReleaseStatusResult => ({
     kind: "ok",
-    project,
     packageName,
     localVersion,
     publishedVersion,
@@ -98,12 +91,11 @@ export async function checkReleaseStatus(opts: {
   if (packument.kind === "auth-required") {
     return {
       kind: "unknown",
-      project,
       error: `registry requires auth (HTTP ${packument.status})`,
     };
   }
   if (packument.kind === "error") {
-    return { kind: "unknown", project, error: packument.reason };
+    return { kind: "unknown", error: packument.reason };
   }
 
   const latest = packument.latest;

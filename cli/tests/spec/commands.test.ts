@@ -106,25 +106,23 @@ describe("spec-list", () => {
     expect(all.text).toMatch(/ProductSpec/);
   });
 
-  it("falls back to workspace-level product specs on a non-reactor workdir", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
-    try {
-      // Seed a product spec at the workspace root — no powerhouse.config.json.
-      await saveSpec(createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" }), dir);
-      const result = await specList.execute({}, makeCtx(dir));
-      expect(result.text).toMatch(/RootProduct/);
-      expect(result.text).toMatch(new RegExp(PRODUCT_TYPE));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it("lists the product specs saved in the project", async () => {
+    await saveSpec(createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" }), workdir);
+    const result = await specList.execute({}, makeCtx(workdir));
+    expect(result.text).toMatch(/RootProduct/);
+    expect(result.text).toMatch(new RegExp(PRODUCT_TYPE));
   });
 
-  it("still requires a reactor project for --category project", async () => {
+  it("requires the workdir to be a project, whatever the category", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
     try {
-      await expect(
-        specList.execute({ category: "project" }, makeCtx(dir)),
-      ).rejects.toThrow(/not a Reactor package/);
+      // A product spec saved at a workspace root is not a project's.
+      await saveSpec(createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" }), dir);
+      for (const category of ["project", "product", undefined] as const) {
+        await expect(
+          specList.execute(category ? { category } : {}, makeCtx(dir)),
+        ).rejects.toThrow(/The workdir is not a Reactor Package project/);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -165,17 +163,12 @@ describe("spec-create", () => {
   });
 
   it("product specs come without the action listing (Plan's token budget)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
-    try {
-      const result = await specCreate.execute(
-        { type: PRODUCT_TYPE, name: "Lean Feature", dryRun: true },
-        makeCtx(dir),
-      );
-      expect(result.text).toMatch(/^Created powerhouse\/feature "Lean Feature"/);
-      expect(result.text).not.toContain("Actions of");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const result = await specCreate.execute(
+      { type: PRODUCT_TYPE, name: "Lean Feature", dryRun: true },
+      makeCtx(workdir),
+    );
+    expect(result.text).toMatch(/^Created powerhouse\/feature "Lean Feature"/);
+    expect(result.text).not.toContain("Actions of");
     const model = await specCreate.execute(
       { type: DOC_TYPE, name: "Model", dryRun: true },
       makeCtx(workdir),
@@ -205,40 +198,28 @@ describe("spec-create", () => {
     expect(list.text).toBe("(no specs)");
   });
 
-  it("creates a product spec at the workspace root on a non-reactor workdir", async () => {
+  it("creates a product spec in the project's specs/, beside the project specs", async () => {
+    const result = await specCreate.execute(
+      { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
+      makeCtx(workdir),
+    );
+    expect(result.text).toMatch(/Created/);
+    expect(result.text).toContain(join(workdir, "specs"));
+    const list = await specList.execute({}, makeCtx(workdir));
+    expect(list.text).toMatch(/RootFeature/);
+  });
+
+  it("refuses any spec in a workdir that is no project", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
     try {
-      const result = await specCreate.execute(
-        { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
-        makeCtx(dir),
+      for (const type of [DOC_TYPE, PRODUCT_TYPE]) {
+        await expect(
+          specCreate.execute({ type, name: "NeedsProject", dryRun: false }, makeCtx(dir)),
+        ).rejects.toThrow(/The workdir is not a Reactor Package project/);
+      }
+      await expect(specList.execute({}, makeCtx(dir))).rejects.toThrow(
+        /The workdir is not a Reactor Package project/,
       );
-      expect(result.text).toMatch(/Created/);
-      expect(result.text).toContain(join(dir, "specs"));
-      const list = await specList.execute({}, makeCtx(dir));
-      expect(list.text).toMatch(/RootFeature/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("rejects --project for a product spec type", async () => {
-    await expect(
-      specCreate.execute(
-        { project: "some-project", type: PRODUCT_TYPE, name: "Misplaced", dryRun: false },
-        makeCtx(workdir),
-      ),
-    ).rejects.toThrow(/workspace root/);
-  });
-
-  it("still requires a reactor project for a project spec type", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
-    try {
-      await expect(
-        specCreate.execute(
-          { type: DOC_TYPE, name: "NeedsProject", dryRun: false },
-          makeCtx(dir),
-        ),
-      ).rejects.toThrow(/not a Reactor package/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -530,7 +511,7 @@ describe("spec-generate", () => {
       "    at ensure (file:///x/node_modules/@graphql-codegen/cli/esm/codegen.js:45:23)\n";
     const commands: string[] = [];
     const promise = specGenerate.execute(
-      { project: undefined, name: "Target", skipChecks: true },
+      { name: "Target", skipChecks: true },
       makeCtx(workdir, {
         runProcess: async (command) => {
           commands.push(command);
@@ -560,21 +541,20 @@ describe("a hand-written (never installed) project", () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vetra-stub-"));
-    mkdirSync(join(dir, "todo-app"));
-    writeFileSync(join(dir, "todo-app", "powerhouse.config.json"), "{}\n");
-    writeFileSync(join(dir, "todo-app", "package.json"), "{}\n");
+    writeFileSync(join(dir, "powerhouse.config.json"), "{}\n");
+    writeFileSync(join(dir, "package.json"), "{}\n");
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("spec-create and spec-generate refuse it and point at reactor-project-init", async () => {
-    const init = /"todo-app" is not an initialised project[\s\S]*reactor-project-init \{ name: "todo-app" \}/;
+  it("spec-create and spec-generate refuse it and say to install it", async () => {
+    const notInstalled = /The project is not installed \(no node_modules at [\s\S]*pnpm install/;
     await expect(
-      specCreate.execute({ project: "todo-app", type: DOC_TYPE, name: "Todo", dryRun: false }, makeCtx(dir)),
-    ).rejects.toThrow(init);
+      specCreate.execute({ type: DOC_TYPE, name: "Todo", dryRun: false }, makeCtx(dir)),
+    ).rejects.toThrow(notInstalled);
     await expect(
-      specGenerate.execute({ project: "todo-app", skipChecks: true }, makeCtx(dir)),
-    ).rejects.toThrow(init);
-    // Product specs need no project and are unaffected.
+      specGenerate.execute({ skipChecks: true }, makeCtx(dir)),
+    ).rejects.toThrow(notInstalled);
+    // Product specs generate no code and are unaffected.
     await expect(
       specCreate.execute({ type: PRODUCT_TYPE, name: "Todo", dryRun: false }, makeCtx(dir)),
     ).resolves.toMatchObject({ text: expect.stringContaining("Created") });
@@ -790,24 +770,18 @@ describe("spec-schema", () => {
   });
 });
 
-describe("workspace-level product specs (non-reactor workdir)", () => {
+describe("specs live in the project (the workdir)", () => {
   let dir: string;
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
-  });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  let cleanup: () => void;
+  beforeEach(() => ({ workdir: dir, cleanup } = makeWorkdir()));
+  afterEach(() => cleanup());
 
-  it("a project spec named without its project resolves in the only project", async () => {
-    const project = join(dir, "todo-list");
-    mkdirSync(join(project, "node_modules"), { recursive: true });
-    writeFileSync(join(project, "powerhouse.config.json"), "{}\n");
-    // No `project`: the editor spec goes to the only project …
+  it("a project spec and a product spec sit side by side; get/update/delete reach both", async () => {
     const created = await specCreate.execute(
       { type: "powerhouse/document-editor", name: "Todo Editor", dryRun: false },
       makeCtx(dir),
     );
-    expect(created.text).toContain(join(project, "specs"));
-    // … and get/update find it there without naming the project either.
+    expect(created.text).toContain(join(dir, "specs"));
     const updated = await specUpdate.execute(
       {
         name: "Todo Editor",
@@ -821,7 +795,7 @@ describe("workspace-level product specs (non-reactor workdir)", () => {
       makeCtx(dir),
     );
     expect(got.text).toMatch(/powerhouse\/document-editor "Todo Editor"/);
-    // A root product spec of the same workspace still resolves at the root.
+
     await specCreate.execute(
       { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
       makeCtx(dir),
@@ -831,24 +805,27 @@ describe("workspace-level product specs (non-reactor workdir)", () => {
       makeCtx(dir),
     );
     expect(root.text).toMatch(/RootFeature/);
-  });
-
-  it("spec-get and spec-delete reach a root product spec", async () => {
-    await specCreate.execute(
-      { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
-      makeCtx(dir),
-    );
-    const got = await specGet.execute(
-      { name: "RootFeature", full: false, latest: false },
-      makeCtx(dir),
-    );
-    expect(got.text).toMatch(/RootFeature/);
-    const deleted = await specDelete.execute(
-      { name: "RootFeature" },
-      makeCtx(dir),
-    );
+    const deleted = await specDelete.execute({ name: "RootFeature" }, makeCtx(dir));
     expect(deleted.text).toMatch(/Deleted "RootFeature"/);
     const list = await specList.execute({}, makeCtx(dir));
-    expect(list.text).toBe("(no specs)");
+    expect(list.text).toMatch(/Todo Editor/);
+    expect(list.text).not.toMatch(/RootFeature/);
+  });
+
+  it("a project in a subfolder of a workspace is not picked", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "vetra-workspace-"));
+    try {
+      const sub = join(workspace, "todo-list");
+      mkdirSync(join(sub, "node_modules"), { recursive: true });
+      writeFileSync(join(sub, "powerhouse.config.json"), "{}\n");
+      await expect(
+        specCreate.execute(
+          { type: "powerhouse/document-editor", name: "Todo Editor", dryRun: false },
+          makeCtx(workspace),
+        ),
+      ).rejects.toThrow(/The workdir is not a Reactor Package project/);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });

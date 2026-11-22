@@ -64,7 +64,7 @@ describe("spec-* commands → embedded drive", () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "spec-cmd-drive-it-"));
-    // A project: resolveReactorProjectPath checks this file, spec-create an install.
+    // A project: projectRoot checks this file, spec-create an install.
     await fs.writeFile(path.join(tmpDir, "powerhouse.config.json"), "{}");
     await fs.mkdir(path.join(tmpDir, "node_modules"));
 
@@ -119,7 +119,7 @@ describe("spec-* commands → embedded drive", () => {
     const { ctx } = runningContext(log);
 
     const res = await specCreate.execute(
-      { project: undefined, type: APP_TYPE, name: "Drive App", dryRun: false },
+      { type: APP_TYPE, name: "Drive App", dryRun: false },
       ctx,
     );
     // The id is on the saved doc — recover it from the drive's file node.
@@ -133,14 +133,14 @@ describe("spec-* commands → embedded drive", () => {
     expect(inDrive.header.name).toBe("Drive App");
     expect(logs.some((l) => l.level === "error")).toBe(false);
 
-    // Single-project layout (specs at workdir/specs) → file node at root.
+    // Every spec attaches at the drive root (one project, specs at workdir/specs).
     expect(fileNode!.parentFolder ?? null).toBeNull();
   }, 15_000);
 
   it("update pushes new ops into the drive doc; re-run is idempotent", async () => {
     const { ctx } = runningContext();
     await specCreate.execute(
-      { project: undefined, type: APP_TYPE, name: "Up App", dryRun: false },
+      { type: APP_TYPE, name: "Up App", dryRun: false },
       ctx,
     );
     const fileNode = (await driveNodes()).find((n) => n.kind === "file")!;
@@ -148,7 +148,6 @@ describe("spec-* commands → embedded drive", () => {
 
     await specUpdate.execute(
       {
-        project: undefined,
         name: "Up App",
         actions: [{ type: "SET_APP_NAME", input: { name: "renamed-app" } }],
         from: undefined,
@@ -164,14 +163,13 @@ describe("spec-* commands → embedded drive", () => {
     // The drive dedups by action.id, so this must not duplicate the file node.
     await specUpdate.execute(
       {
-        project: undefined,
         name: "Up App",
         actions: [{ type: "SET_APP_NAME", input: { name: "renamed-app" } }],
         from: undefined,
       },
       ctx,
     );
-    inDrive = await module.client.get<AppModuleDocument>(docId);
+    inDrive =await module.client.get<AppModuleDocument>(docId);
     expect((inDrive.state.global as { name: string }).name).toBe("renamed-app");
     expect(
       (await driveNodes()).filter((n) => n.kind === "file" && n.id === docId),
@@ -181,13 +179,13 @@ describe("spec-* commands → embedded drive", () => {
   it("delete removes the spec's node and document from the drive", async () => {
     const { ctx } = runningContext();
     await specCreate.execute(
-      { project: undefined, type: APP_TYPE, name: "Del App", dryRun: false },
+      { type: APP_TYPE, name: "Del App", dryRun: false },
       ctx,
     );
     const docId = (await driveNodes()).find((n) => n.kind === "file")!.id;
     await module.client.get(docId); // present before delete
 
-    await specDelete.execute({ project: undefined, name: "Del App" }, ctx);
+    await specDelete.execute({ name: "Del App" }, ctx);
 
     expect(
       (await driveNodes()).some((n) => n.kind === "file" && n.id === docId),
@@ -208,7 +206,7 @@ describe("spec-* commands → embedded drive", () => {
     } as never;
 
     await specCreate.execute(
-      { project: undefined, type: APP_TYPE, name: "Fs Only", dryRun: false },
+      { type: APP_TYPE, name: "Fs Only", dryRun: false },
       ctx,
     );
 

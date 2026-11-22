@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { requireOption } from "../../helpers/cli-errors.js";
-import {
-  assertProjectInstalled,
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { assertProjectInstalled, projectRoot } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
 import { studioSignatureMode } from "../../auth/studio-mode.js";
@@ -21,9 +17,8 @@ import { actionReference } from "./schema.js";
 export const specCreate = defineCommand({
   id: "spec-create",
   description:
-    "Create a new spec document under specs/. Product specs always go to the workspace root and need no reactor project; project specs require one.",
+    "Create a new spec document under the project's specs/ (product and project specs alike).",
   inputSchema: z.object({
-    project: projectInputSchema,
     type: z
       .string()
       .default("")
@@ -44,21 +39,10 @@ export const specCreate = defineCommand({
     const { workdir } = context;
     requireOption(input.type, "type", `Valid types: ${listSpecTypes().join(", ")}`);
     assertKnownDocumentType(input.type);
-    // Product specs are workspace-level: always saved at the workdir root,
-    // never inside a project. Project specs require a reactor project.
-    let base: string;
-    if (isProductSpecType(input.type)) {
-      if (input.project) {
-        throw new Error(
-          `Product specs live at the workspace root — omit --project for ${input.type}.`,
-        );
-      }
-      base = workdir;
-    } else {
-      base = await resolveReactorProjectPath(workdir, input.project);
-      // A stub project (hand-written config, never installed) can't generate.
-      await assertProjectInstalled(base, input.project);
-    }
+    // Every spec lives in the project (the workdir). A project spec generates
+    // code, so a project never installed can't take one.
+    const base = await projectRoot(workdir);
+    if (!isProductSpecType(input.type)) await assertProjectInstalled(base);
     // The spec is created the way the Studio switchboard creates documents;
     // a v2-required one is then created through the reactor and mirrored back
     // signed. Without the reactor the file is legacy, and the sync signs it.

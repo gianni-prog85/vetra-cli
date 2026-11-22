@@ -1,5 +1,3 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { createRequestAuthorizer } from "../../src/preview-server/request-auth.js";
@@ -17,8 +15,6 @@ const authorizeRequest = createRequestAuthorizer({
   verifyDelegation: async () => true,
 });
 
-const PROJECT = "demo-project";
-
 describe("POST /restart", () => {
   let workdir: string;
   let cleanup: () => void;
@@ -33,9 +29,8 @@ describe("POST /restart", () => {
     delete process.env.VETRA_SESSION_EXPORT_SECRET;
     delete process.env.ADMINS;
     ({ workdir, cleanup } = makeWorkdir());
-    projectPath = join(workdir, PROJECT);
-    mkdirSync(projectPath);
-    writeFileSync(join(projectPath, "powerhouse.config.json"), "{}\n");
+    // The workdir is the project (makeWorkdir writes its powerhouse.config.json).
+    projectPath = workdir;
     stop = vi.fn(async () => {});
     start = vi.fn(async () => "fresh");
     const list = vi.fn(() => [
@@ -61,27 +56,23 @@ describe("POST /restart", () => {
     else process.env.ADMINS = admins;
   });
 
-  function restart(project: string, headers: Record<string, string> = {}) {
-    return fetch(`http://127.0.0.1:${server.port}/restart?project=${project}`, {
+  function restart(headers: Record<string, string> = {}) {
+    return fetch(`http://127.0.0.1:${server.port}/restart`, {
       method: "POST",
       headers,
     });
   }
 
   it("restarts a stuck project for a direct loopback caller", async () => {
-    const res = await restart(PROJECT);
+    const res = await restart();
     expect(res.status).toBe(202);
     expect(await res.json()).toMatchObject({ kind: "started", instanceId: "fresh" });
     expect(stop).toHaveBeenCalledWith("reactor-project", "stuck");
     expect(start).toHaveBeenCalledTimes(1);
-
-    const missing = await restart("nope");
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toMatchObject({ kind: "unknown-project" });
   });
 
   it("refuses an unauthenticated caller through the proxy (401)", async () => {
-    const res = await restart(PROJECT, { "x-forwarded-for": "203.0.113.9" });
+    const res = await restart({ "x-forwarded-for": "203.0.113.9" });
     expect(res.status).toBe(401);
     expect(stop).not.toHaveBeenCalled();
     expect(start).not.toHaveBeenCalled();
@@ -89,7 +80,7 @@ describe("POST /restart", () => {
 
   it("lets the signed-in owner restart through the proxy", async () => {
     process.env.ADMINS = OWNER;
-    const res = await restart(PROJECT, {
+    const res = await restart({
       "x-forwarded-for": "203.0.113.9",
       authorization: "Bearer owner-token",
     });
@@ -99,13 +90,13 @@ describe("POST /restart", () => {
 
   it("with a secret set, a local Studio stays local; a proxied request needs the secret", async () => {
     process.env.VETRA_SESSION_EXPORT_SECRET = "s3cret";
-    expect((await restart(PROJECT)).status).toBe(202);
+    expect((await restart()).status).toBe(202);
     expect(
-      (await restart(PROJECT, { "x-forwarded-for": "203.0.113.9" })).status,
+      (await restart({ "x-forwarded-for": "203.0.113.9" })).status,
     ).toBe(401);
     expect(
       (
-        await restart(PROJECT, {
+        await restart({
           "x-forwarded-for": "203.0.113.9",
           authorization: "Bearer s3cret",
         })

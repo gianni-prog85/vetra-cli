@@ -133,5 +133,4 @@ export const reactorProject = defineService({
       'Install the project: pnpm install in its folder',
     ),
   ],
-  projectScanner: { isProjectFolder },
 });

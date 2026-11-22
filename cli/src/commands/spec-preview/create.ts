@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { requireOption } from "../../helpers/cli-errors.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   createEmptyPreviewDocument,
   getPreviewAuthToken,
@@ -16,7 +13,6 @@ export const specPreviewCreate = defineCommand({
   description:
     "Create a document in the running reactor-project's preview drive. Any document type registered by the running reactor is accepted — framework spec types and document models from installed packages alike. Use --drive to target a specific drive (e.g. an app preview drive).",
   inputSchema: z.object({
-    project: projectInputSchema,
     type: z
       .string()
       .default("")
@@ -36,7 +32,7 @@ export const specPreviewCreate = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(context.workdir, input.project);
+    const base = await projectRoot(context.workdir);
     requireOption(
       input.type,
       "type",
@@ -45,7 +41,6 @@ export const specPreviewCreate = defineCommand({
     const { switchboardUrl, driveId: defaultDriveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     const driveId = input.drive ?? defaultDriveId;
     const token = await getPreviewAuthToken(context.workdir, context.config);

@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   getPreviewAuthToken,
   listPreviewDocuments,
@@ -16,7 +13,6 @@ export const specPreviewList = defineCommand({
   description:
     "List documents in the running reactor-project's preview drive.",
   inputSchema: z.object({
-    project: projectInputSchema,
     type: z
       .string()
       .optional()
@@ -25,11 +21,10 @@ export const specPreviewList = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(context.workdir, input.project);
+    const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     const token = await getPreviewAuthToken(context.workdir, context.config);
     const items = await listPreviewDocuments(switchboardUrl, driveId, token);

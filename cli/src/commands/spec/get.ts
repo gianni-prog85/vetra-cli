@@ -1,13 +1,8 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { projectInputSchema } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
-import {
-  formatSchema,
-  loadByName,
-  renderProjected,
-  resolveNamedSpecBase,
-} from "./_helpers.js";
+import { formatSchema, loadByName, renderProjected } from "./_helpers.js";
 
 /* Narrow a doc's state down to its latest specification entry. Only doc-model
  * specs have a versioned `specifications` array on state.global; for other doc
@@ -63,7 +58,6 @@ export const specGet = defineCommand({
   description:
     "Read a spec. Pass --filter (or --latest) for data; otherwise returns summary + help.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -91,8 +85,7 @@ export const specGet = defineCommand({
     format: formatSchema.optional(),
   }),
   execute: async (input, { workdir }) => {
-    // Workspace-root product specs are reachable without a reactor project.
-    const base = await resolveNamedSpecBase(workdir, input.project, input.name);
+    const base = await projectRoot(workdir);
     const doc = await loadByName(base, input.name);
 
     if (!input.full && !input.filter && !input.latest) {

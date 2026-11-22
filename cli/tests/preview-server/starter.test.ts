@@ -33,27 +33,24 @@ function makeServices(args: {
   return { services: { list, start, stop } as never, list, start, stop };
 }
 
-describe("preview-server starter", () => {
+describe("preview-server starter (the workdir is the project)", () => {
   let workdir: string;
   let cleanup: () => void;
   let projectPath: string;
-  const PROJECT = "demo-project";
 
   beforeEach(() => {
     ({ workdir, cleanup } = makeWorkdir());
-    projectPath = join(workdir, PROJECT);
-    mkdirSync(projectPath);
-    writeFileSync(join(projectPath, "powerhouse.config.json"), "{}\n");
+    writeFileSync(join(workdir, "powerhouse.config.json"), "{}\n");
+    projectPath = workdir;
   });
   afterEach(() => cleanup());
 
-  it("returns unknown-project for a non-reactor sub-directory and does NOT call services.start", async () => {
+  it("returns unknown-project for a workdir that is no Reactor package and does NOT call services.start", async () => {
+    const workspace = join(workdir, "workspace");
+    mkdirSync(join(workspace, "todo"), { recursive: true });
+    writeFileSync(join(workspace, "todo", "powerhouse.config.json"), "{}\n");
     const { services, start } = makeServices({});
-    const result = await startPreview({
-      services,
-      workdir,
-      project: "not-a-project",
-    });
+    const result = await startPreview({ services, workdir: workspace });
     expect(result.kind).toBe("unknown-project");
     expect(start).not.toHaveBeenCalled();
   });
@@ -64,15 +61,10 @@ describe("preview-server starter", () => {
         { workdir: projectPath, status: "ready", instanceId: "i-1", endpoints: recordedEndpoints() },
       ],
     });
-    const result = await startPreview({
-      services,
-      workdir,
-      project: PROJECT,
-    });
+    const result = await startPreview({ services, workdir });
     expect(start).not.toHaveBeenCalled();
     expect(result).toEqual({
       kind: "already-running",
-      project: PROJECT,
       projectPath,
       instanceId: "i-1",
       driveId: DRIVE_ID,
@@ -84,11 +76,7 @@ describe("preview-server starter", () => {
     const { services, start } = makeServices({
       initial: [{ workdir: projectPath, status: "starting", instanceId: "i-2" }],
     });
-    const result = await startPreview({
-      services,
-      workdir,
-      project: PROJECT,
-    });
+    const result = await startPreview({ services, workdir });
     expect(start).not.toHaveBeenCalled();
     expect(result.kind).toBe("already-running");
   });
@@ -108,11 +96,7 @@ describe("preview-server starter", () => {
         return "new-instance";
       },
     });
-    const result = await startPreview({
-      services,
-      workdir,
-      project: PROJECT,
-    });
+    const result = await startPreview({ services, workdir });
     expect(start).toHaveBeenCalledTimes(1);
     const args = start.mock.calls[0] as unknown as [string, { workdir: string; cwd: string }];
     expect(args[0]).toBe("reactor-project");
@@ -120,29 +104,22 @@ describe("preview-server starter", () => {
     expect(args[1].cwd).toBe(projectPath);
     expect(result).toEqual({
       kind: "started",
-      project: PROJECT,
       projectPath,
       instanceId: "new-instance",
       driveId: DRIVE_ID,
     });
   });
 
-  it("returns failed when services.start throws (e.g. port conflict)", async () => {
+  it("returns failed when services.start throws (e.g. the project run is off)", async () => {
     const { services } = makeServices({
       initial: [],
       startImpl: async () => {
-        throw new Error("port 3000 in use");
+        throw new Error("Reactor Project: The project run is off");
       },
     });
-    const result = await startPreview({
-      services,
-      workdir,
-      project: PROJECT,
-    });
-    expect(result).toEqual({
+    expect(await startPreview({ services, workdir })).toEqual({
       kind: "failed",
-      project: PROJECT,
-      error: "port 3000 in use",
+      error: "Reactor Project: The project run is off",
     });
   });
 
@@ -152,11 +129,7 @@ describe("preview-server starter", () => {
       initial: [{ workdir: projectPath, status: "failed", instanceId: "old" }],
       startImpl: async () => "new",
     });
-    const result = await startPreview({
-      services,
-      workdir,
-      project: PROJECT,
-    });
+    const result = await startPreview({ services, workdir });
     expect(start).toHaveBeenCalledTimes(1);
     expect(result.kind).toBe("started");
   });
@@ -170,7 +143,7 @@ describe("preview-server starter", () => {
       ],
       startImpl: async () => "fresh",
     });
-    const result = await restartPreview({ services, workdir, project: PROJECT });
+    const result = await restartPreview({ services, workdir });
     expect(stop.mock.calls).toEqual([["reactor-project", "stuck"]]);
     expect(start).toHaveBeenCalledTimes(1);
     expect(stop.mock.invocationCallOrder[0]).toBeLessThan(
@@ -179,17 +152,18 @@ describe("preview-server starter", () => {
     // No ready instance listed after the start: no drive to report.
     expect(result).toEqual({
       kind: "started",
-      project: PROJECT,
       projectPath,
       instanceId: "fresh",
     });
   });
 
-  it("restart reports unknown projects and stop failures without starting", async () => {
+  it("restart reports a workdir that is no project and stop failures without starting", async () => {
+    const workspace = join(workdir, "workspace");
+    mkdirSync(workspace);
     const unknown = makeServices({});
-    expect(
-      (await restartPreview({ services: unknown.services, workdir, project: "nope" })).kind,
-    ).toBe("unknown-project");
+    expect((await restartPreview({ services: unknown.services, workdir: workspace })).kind).toBe(
+      "unknown-project",
+    );
     expect(unknown.stop).not.toHaveBeenCalled();
 
     const broken = makeServices({
@@ -198,12 +172,12 @@ describe("preview-server starter", () => {
     broken.stop.mockImplementation(async () => {
       throw new Error("cannot stop");
     });
-    const result = await restartPreview({ services: broken.services, workdir, project: PROJECT });
-    expect(result).toEqual({ kind: "failed", project: PROJECT, error: "cannot stop" });
+    const result = await restartPreview({ services: broken.services, workdir });
+    expect(result).toEqual({ kind: "failed", error: "cannot stop" });
     expect(broken.start).not.toHaveBeenCalled();
   });
 
-  it("overlapping restarts of a project share one restart", async () => {
+  it("overlapping restarts share one restart", async () => {
     let release: (id: string) => void = () => {};
     const gate = new Promise<string>((resolve) => {
       release = resolve;
@@ -212,8 +186,8 @@ describe("preview-server starter", () => {
       initial: [{ workdir: projectPath, status: "ready", instanceId: "i-1" }],
       startImpl: () => gate,
     });
-    const first = restartPreview({ services, workdir, project: PROJECT });
-    const second = restartPreview({ services, workdir, project: PROJECT });
+    const first = restartPreview({ services, workdir });
+    const second = restartPreview({ services, workdir });
     release("fresh");
     const [a, b] = await Promise.all([first, second]);
     expect(a).toEqual(b);
@@ -222,7 +196,7 @@ describe("preview-server starter", () => {
     expect(stop).toHaveBeenCalledTimes(1);
 
     // Once done, a later restart runs again.
-    await restartPreview({ services, workdir, project: PROJECT });
+    await restartPreview({ services, workdir });
     expect(start).toHaveBeenCalledTimes(2);
   });
 
@@ -240,7 +214,7 @@ describe("preview-server starter", () => {
       instances[0].status = "stopped";
       throw new Error("not running");
     });
-    const result = await restartPreview({ services, workdir, project: PROJECT });
+    const result = await restartPreview({ services, workdir });
     expect(stop.mock.calls).toEqual([["reactor-project", "i-1"]]);
     expect(start).toHaveBeenCalledTimes(1);
     expect(result.kind).toBe("started");

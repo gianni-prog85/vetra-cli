@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   findPreviewByName,
   getPreviewAuthToken,
@@ -17,7 +14,6 @@ export const specPreviewGet = defineCommand({
   description:
     "Read a document from the reactor-project's preview drive. Pass --filter for projection.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -39,11 +35,10 @@ export const specPreviewGet = defineCommand({
     format: formatSchema.optional(),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(context.workdir, input.project);
+    const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     const token = await getPreviewAuthToken(context.workdir, context.config);
     const row = await findPreviewByName(switchboardUrl, driveId, input.name, token);

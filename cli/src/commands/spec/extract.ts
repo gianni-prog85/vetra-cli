@@ -1,9 +1,8 @@
-import { realpath } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { baseSaveToFile } from "document-model/node";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { projectInputSchema, resolveReactorProjectPath } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
 import { studioSignatureMode } from "../../auth/studio-mode.js";
@@ -51,13 +50,12 @@ export const specExtract = defineCommand({
   id: "spec-extract",
   description: "Extract specs by reverse-engineering existing package source.",
   inputSchema: z.object({
-    project: projectInputSchema,
     type: typeSchema,
   }),
   execute: async (input, context) => {
     const { workdir, runProcess } = context;
     const drive = await getEmbeddedDrive(context);
-    const base = await resolveReactorProjectPath(workdir, input.project);
+    const base = await projectRoot(workdir);
 
     const command = extractCommand(input.type);
     const { success, output } = await runProcess(command, {
@@ -72,14 +70,12 @@ export const specExtract = defineCommand({
     const written = parseWritten(output);
     for (const filePath of written) await backfillSlug(filePath);
 
-    // realpath workdir: the subprocess emits realpath-resolved paths, which a
-    // lexical workdir would drop to the drive root in projectForPath. The
-    // extracted files are legacy; on a v2-required switchboard the sync makes
-    // signed documents of them.
+    // The extracted files are legacy; on a v2-required switchboard the sync
+    // makes signed documents of them.
     if (drive && written.length > 0) {
       await applyFsChangesToReactor(
         written,
-        await realpath(workdir),
+        base,
         drive.reactor,
         drive.driveId,
         context.log,

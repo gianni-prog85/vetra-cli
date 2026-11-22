@@ -6,7 +6,7 @@ import { defineCommand } from '../../framework.js';
 import { getRegistryToken } from '../../auth/renown.js';
 import { resolveCloudConfig } from '../../cloud/config.js';
 import { fetchPackument } from '../../cloud/registry-packument.js';
-import { resolveReactorProjectPath } from '../../helpers/project.js';
+import { projectRoot } from '../../helpers/project.js';
 
 /* Read the registry packument with the agent's Renown token and map the result
  * onto an explicit state — published / not-published / unknown — so the deploy
@@ -54,12 +54,6 @@ async function checkPublish(
 }
 
 const inputSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe(
-      'Project directory name (relative to workdir). Only needed when the workdir is not already a Reactor package project.',
-    ),
   version: z
     .string()
     .optional()
@@ -85,11 +79,8 @@ token (the same identity \`reactor-project-publish\` uses); if the registry
 requires auth and the agent isn't authorized, the result is reported as
 "unknown" rather than guessed.`,
   inputSchema,
-  execute: async ({ name, version, registry }, { workdir, config }) => {
-    // Publishing names its project: no one-project default.
-    const projectPath = await resolveReactorProjectPath(workdir, name, {
-      soleProjectDefault: false,
-    });
+  execute: async ({ version, registry }, { workdir, config }) => {
+    const projectPath = await projectRoot(workdir);
     const packageJsonPath = path.join(projectPath, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
       return {

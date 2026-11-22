@@ -1,7 +1,7 @@
 /**
- * reactor-project-start reports the project it started, so the Studio's
- * preview pane can show that project as soon as it is up — also when the
- * agent left `workdir` out (the workspace's only project).
+ * reactor-project-start starts the project the Cli works in (the workdir) and
+ * reports it, so the Studio's preview pane can show it as soon as it is up.
+ * It is idempotent, and a workdir that is no project is refused.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -24,36 +24,44 @@ function fakeServices(instances: Instance[]) {
 
 describe("reactor-project-start", () => {
   let workdir: string;
-  let project: string;
   beforeEach(() => {
     workdir = mkdtempSync(join(tmpdir(), "vetra-start-"));
-    project = join(workdir, "todo-list");
-    mkdirSync(project);
-    writeFileSync(join(project, "powerhouse.config.json"), "{}");
+    writeFileSync(join(workdir, "powerhouse.config.json"), "{}");
   });
   afterEach(() => rmSync(workdir, { recursive: true, force: true }));
 
-  const run = (input: Record<string, unknown>, services: ReturnType<typeof fakeServices>) =>
-    reactorProjectStart.execute(input, {
-      workdir,
+  const run = (dir: string, services: ReturnType<typeof fakeServices>) =>
+    reactorProjectStart.execute({}, {
+      workdir: dir,
       services,
       stdout: () => {},
       config: {},
-    } as never) as Promise<{ text: string; data?: { project: string; projectPath: string } }>;
+    } as never) as Promise<{ text: string; data?: { projectPath: string } }>;
 
-  it("starts the only project when no workdir is named, and says which", async () => {
+  it("starts the workdir's project and says which", async () => {
     const instances: Instance[] = [];
-    const result = await run({}, fakeServices(instances));
-    expect(instances.map((i) => i.workdir)).toEqual([project]);
-    expect(result.data).toEqual({ project: "todo-list", projectPath: project });
+    const result = await run(workdir, fakeServices(instances));
+    expect(instances.map((i) => i.workdir)).toEqual([workdir]);
+    expect(result.data).toEqual({ projectPath: workdir });
   });
 
-  it("reports the project of an instance already running", async () => {
+  it("reports the instance already running instead of a second start", async () => {
     const instances: Instance[] = [
-      { instanceId: "i0", workdir: project, status: "ready", serviceId: "reactor-project" },
+      { instanceId: "i0", workdir, status: "ready", serviceId: "reactor-project" },
     ];
-    const result = await run({ workdir: "todo-list" }, fakeServices(instances));
+    const result = await run(workdir, fakeServices(instances));
     expect(instances).toHaveLength(1);
-    expect(result.data).toEqual({ project: "todo-list", projectPath: project });
+    expect(result.data).toEqual({ projectPath: workdir });
+  });
+
+  it("refuses a workdir that is no project (a project in a subfolder is not picked)", async () => {
+    const workspace = join(workdir, "workspace");
+    mkdirSync(join(workspace, "todo"), { recursive: true });
+    writeFileSync(join(workspace, "todo", "powerhouse.config.json"), "{}");
+    const instances: Instance[] = [];
+    await expect(run(workspace, fakeServices(instances))).rejects.toThrow(
+      /The workdir is not a Reactor Package project/,
+    );
+    expect(instances).toHaveLength(0);
   });
 });

@@ -1,11 +1,10 @@
 import { z } from 'zod';
 import { defineCommand } from '../../framework.js';
 import { resolveCloudConfig } from '../../cloud/config.js';
-import { resolveReactorProjectPath } from '../../helpers/project.js';
+import { projectRoot } from '../../helpers/project.js';
 import { publishReactorProject } from './publish-core.js';
 
 const publishInputSchema = z.object({
-  name: z.string().optional().describe('Project directory name (relative to workdir).'),
   version: z
     .string()
     .optional()
@@ -41,13 +40,10 @@ Prerequisites: the agent must be authorized with the user's Renown identity
 login is required.`,
   inputSchema: publishInputSchema,
   execute: async (
-    { name, version, registry, tag, skipBuild, dryRun, log },
+    { version, registry, tag, skipBuild, dryRun, log },
     { workdir, config, stdout },
   ) => {
-    // Publishing names its project: no one-project default.
-    const projectPath = await resolveReactorProjectPath(workdir, name, {
-      soleProjectDefault: false,
-    });
+    const projectPath = await projectRoot(workdir);
     const { renownUrl } = resolveCloudConfig(config);
 
     const result = await publishReactorProject({

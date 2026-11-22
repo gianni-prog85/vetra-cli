@@ -49,7 +49,7 @@ import type {
   Version,
 } from "document-models/studio-product";
 import type { Config } from "../framework.js";
-import { listReactorProjects } from "../helpers/project.js";
+import { workspaceProjectDirs } from "./workspace-layout.js";
 import { studioPath } from "../helpers/studio-paths.js";
 import {
   dispatchProduct,
@@ -281,7 +281,7 @@ const defaultDeps: LaunchDeps = {
   discardDraft,
   setAccess,
   changedFiles,
-  listProjects: listReactorProjects,
+  listProjects: workspaceProjectDirs,
   sleep: realSleep,
   checkCompat: checkLaunchCompat,
   messageAgent,

@@ -22,7 +22,7 @@ import {
   nextPublishVersion,
   publishReactorProject,
 } from "../commands/reactor-project/publish-core.js";
-import { listReactorProjects } from "../helpers/project.js";
+import { workspaceProjectDirs } from "./workspace-layout.js";
 import { LaunchError } from "./errors.js";
 import { projectDirs } from "./git-versions.js";
 
@@ -138,7 +138,7 @@ export async function publishAll(
   opts: { slug: string; live?: LiveRelease | null },
   deps: PublishDeps = defaultDeps,
 ): Promise<PublishedPackage[]> {
-  const projects = await listReactorProjects(workdir);
+  const projects = await workspaceProjectDirs(workdir);
   if (projects.length === 0) {
     throw new LaunchError(
       "NOTHING_TO_PUBLISH",

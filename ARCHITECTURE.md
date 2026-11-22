@@ -353,18 +353,20 @@ Implemented as a trigger (`cli/src/triggers/preview-server.ts`)
 so it gets the framework's `ServiceManager` + event-bus access via
 `TriggerContext`. Server module lives at `cli/src/preview-server/`.
 
-**Endpoints (current):**
+**Endpoints (current).** Every route acts on the project the Cli works in,
+its workdir: no route takes a project. A workdir that is no Reactor Package
+answers `unknown-project`.
 
-- `GET /resolve?project=<label>&doc=<id-or-slug>` — read-only. Returns
-  the live preview URL or a state code (`no-target`,
-  `unknown-project`, `project-stopped`, `preview-off` (the project run is
-  off, see "reactor-project service"), `starting`, `ready`). The
-  editor calls this on every relevant state change.
-- `GET /project-package?project=<label>` — read-only. Returns the
-  project's package identity (`{ kind: "ok", name, version }`) read from
-  `<workdir>/<label>/package.json`, or `unknown-project` / `no-package`.
-  The Deploy section's read-only package display calls this.
-- `GET /release-status?project=<label>&registry=<url>` — read-only. Compares
+- `GET /resolve?doc=<id-or-slug>` (or `drive=`, `home=1`) — read-only.
+  Returns the live preview URL in the project's run or a state code
+  (`no-target`, `unknown-project`, `project-stopped`, `preview-off` (the
+  project run is off, see "reactor-project service"), `starting`, `ready`).
+  The editor calls this on every relevant state change.
+- `GET /project-package` — read-only. Returns the project's package
+  identity (`{ kind: "ok", name, version }`) read from
+  `<workdir>/package.json`, or `unknown-project` / `no-package`. The
+  project home's header and the Deploy section's package display call this.
+- `GET /release-status?registry=<url>` — read-only. Compares
   the project's current source content hash
   (`helpers/project-fingerprint.ts`) against the hash embedded in the latest
   published version on the registry (full packument via
@@ -373,7 +375,7 @@ so it gets the framework's `ServiceManager` + event-bus access via
   `unknown-project` / `no-package` / `unknown`. `reactor-project-publish`
   embeds the hash at `package.json` → `powerhouse.contentHash`. The Deploy
   section's "up to date / needs release" indicator calls this.
-- `POST /publish?project=<label>&registry=<url>` — build + publish the
+- `POST /publish?registry=<url>` — build + publish the
   project's package for the Deploy flow (`preview-server/publish-project.ts`).
   Skips publishing when the source already matches the latest published
   version (same content hash); otherwise picks a free version and runs the
@@ -388,8 +390,8 @@ so it gets the framework's `ServiceManager` + event-bus access via
   The browser then installs that exact version into the target cloud
   environment (env-document edit + approve, signed by the user). This is the
   publish half of the Deploy section's per-environment Deploy/Update action.
-- `POST /start?project=<label>` — idempotent. If an instance for
-  the project's workdir is already `starting`/`ready`, returns
+- `POST /start` — idempotent. If an instance for
+  the project is already `starting`/`ready`, returns
   `already-running`; otherwise spawns one via
   `services.start("reactor-project", ...)` and returns `started`.
   The editor calls this automatically when `/resolve` returns
@@ -591,7 +593,7 @@ project can turn it on; C2's Preview host replaces it.
 
 When on, it is spawned by the agent via the
 `reactor-project-start` tool or the BUILD pane's `POST /start`, in the
-project folder (a subfolder of the workdir), with the project as its data
+project (the Cli's workdir), with the project as its data
 dir: its stores and `.ph/run/vetra.json` are the project's own. Ready once
 that record is live; stopped through its stdin (the compound shuts its
 members down; its tree is killed only after 30 s). Ports are the
@@ -608,11 +610,8 @@ document models) live in this drive. The agent's `spec-preview-*` tools
 target it by default. The editor composes iframe URLs as deep links into
 this drive's editor route.
 
-A chat session may associate with a reactor-project throughout its
-lifecycle, and may also switch projects mid-session if the agent
-needs to touch multiple projects. The chat-session document carries
-a reference to its current project (id or workdir path); switching
-is an explicit action.
+There is one project per Studio, the Cli's workdir: a chat session never
+names or switches projects.
 
 ### Agent
 
@@ -622,14 +621,15 @@ Tool surface for MVP (see `HANDOFF.md` for the implementation
 checklist):
 
 - **Existing project lifecycle:** `reactor-project-start`,
-  `reactor-project-stop`, `reactor-project-ls` (the project run is opt-in;
-  there is no init: the workdir is the project).
+  `reactor-project-stop`, `reactor-project-ps` (the project run is opt-in;
+  no init and no project list: the workdir is the project, and no command
+  takes a `project`).
 - **Existing spec lifecycle:** `spec-create`, `spec-get`, `spec-list`,
   `spec-update`, `spec-delete`, `spec-extract`, `spec-generate`.
 - **Preview document lifecycle (planned):** `spec-preview-create`,
   `spec-preview-get`, `spec-preview-list`, `spec-preview-update`,
   `spec-preview-delete`. Mirror the `spec-*` shape; operate on the
-  preview drive of a named reactor-project.
+  preview drive of the project's run.
 - **Workflow tools (planned):** `start_workflow({ scaffold, input? })`,
   `set_step_content({ instanceId, step, payload })`,
   `complete_step({ instanceId, step })`,
@@ -708,23 +708,22 @@ Registered in `cli.ts`. Run as part of clint's routine loop.
 
 - `chatSessionWatchTrigger` (clint-common) — watches chat-session
   documents for new user messages and forwards them to the agent.
-- `specSyncTrigger` — drive → filesystem mirror for spec documents.
-  Routes each doc to `<workdir>/<project>/specs/` by reading the doc's
-  file node and its parent folder (the project) off the Home
-  drive; falls back to `<workdir>/specs/` for root-level
-  docs (single-project layout).
+- `specSyncTrigger` — drive → filesystem mirror for spec documents: each
+  doc is written to the project's `<workdir>/specs/<subdir>/`, wherever it
+  is filed in the Home drive. On an existing repository (Sektar) that is
+  project content, on purpose: spec documents in the drive change the
+  project's tree.
 - `specFsSyncTrigger` — filesystem → drive (chokidar-based), the
   **external-change detector**: hand-edited `.phd`, `git pull`,
-  reactor-project writes. Watches the workdir root recursively, so
-  `specs/` subtrees for projects created after startup are picked up
-  automatically (no `poll()` reconcile step). For each `.phd` it
-  materializes a document the switchboard lacks (empty, the file's id
-  and type), executes the content actions whose ids the switchboard does
-  not hold (`client.execute`, one call per scope; there is no load API
-  over the wire), and attaches the doc to the Home drive under an
-  ADD_FOLDER node named after its project with an ADD_FILE node and a
-  `child` relationship (idempotent ensure-folder + ensure-file). This is
-  the project↔folder mapping `specSyncTrigger` reads back. The shared
+  codegen writes. Watches the workdir itself and `<workdir>/specs/` only
+  (nothing else of the project's tree), so a `specs/` folder created after
+  startup is picked up automatically (no `poll()` reconcile step). For each
+  `.phd` under `specs/<known-subdir>/` it materializes a document the
+  switchboard lacks (empty, the file's id and type), executes the content
+  actions whose ids the switchboard does not hold (`client.execute`, one
+  call per scope; there is no load API over the wire), and attaches the doc
+  at the Home drive's root with an ADD_FILE node and a `child`
+  relationship (idempotent; no folders). The shared
   push/remove logic lives in `helpers/spec-drive-sync.ts`
   (`applyFsChangesToReactor`, `removeSpecFromDrive`, one sync at a time
   per process); the `spec-*` write commands call it directly (see
@@ -964,13 +963,12 @@ These are limitations of the current direction; not bugs.
   MVP this is fine. Persistence (and the resumable-vs-abandonable
   question that comes with it) is V2.
 
-- **Project state is not a drive document.** Chat sessions reference
-  their current project by a transient handle (path or service
-  instance id). Renaming or moving a project workdir invalidates
-  references in any chat sessions that pointed at it. Promoting
-  project to a document model in the vetra drive is phase 2;
-  it'll resolve this and let the editor enumerate projects via the
-  reactor instead of a side-channel API.
+- **The product layer keeps the cloud workspace layout.** Launch,
+  versions, rollback and the upgrade of older Studios read the project
+  folders of a cloud Studio's workspace (immediate subfolders with a
+  `powerhouse.config.json`, `launch/workspace-layout.ts`) until Labs
+  replaces them (D8). A Studio inside one project has none, and the layer
+  is unreachable there (no product document).
 
 - **Agent doesn't see runtime failures.** Service errors, workflow
   failures, and reactor-project crashes surface in the terminal via

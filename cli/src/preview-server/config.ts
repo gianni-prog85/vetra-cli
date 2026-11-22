@@ -12,17 +12,19 @@ export const DEFAULT_PREVIEW_SERVER_PORT = 0;
 
 export const PREVIEW_SERVER_HOST = "127.0.0.1";
 
+/** The workdir is no Reactor Package project: there is nothing to preview. */
+type UnknownProject = { kind: "unknown-project"; error: string };
+
 export type ResolveResult =
   | { kind: "no-target" }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "project-stopped"; project: string; projectPath: string }
+  | UnknownProject
+  | { kind: "project-stopped"; projectPath: string }
   /** Not running, and the project run is off (`projectRun`): no start. */
-  | { kind: "preview-off"; project: string }
+  | { kind: "preview-off" }
   /** `driveId`: absent until the run record names the preview drive. */
-  | { kind: "starting"; project: string; projectPath: string; driveId?: string }
+  | { kind: "starting"; projectPath: string; driveId?: string }
   | {
       kind: "ready";
-      project: string;
       projectPath: string;
       driveId: string;
       documentId: string;
@@ -32,10 +34,10 @@ export type ResolveResult =
 
 /** `driveId`: the preview drive, absent until the run record names it. */
 export type StartResult =
-  | { kind: "started"; project: string; projectPath: string; instanceId: string; driveId?: string }
-  | { kind: "already-running"; project: string; projectPath: string; instanceId: string; driveId?: string; status: "starting" | "ready" }
-  | { kind: "unknown-project"; project: string; error: string }
-  | { kind: "failed"; project: string; error: string };
+  | { kind: "started"; projectPath: string; instanceId: string; driveId?: string }
+  | { kind: "already-running"; projectPath: string; instanceId: string; driveId?: string; status: "starting" | "ready" }
+  | UnknownProject
+  | { kind: "failed"; error: string };
 
 export type SseEvent = {
   type:

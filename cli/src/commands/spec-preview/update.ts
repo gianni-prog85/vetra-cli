@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 import {
   findPreviewByName,
   getPreviewAuthToken,
@@ -30,7 +27,6 @@ export const specPreviewUpdate = defineCommand({
   description:
     "Apply actions to a preview document through the document model's reducer.",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .default("")
@@ -66,11 +62,10 @@ export const specPreviewUpdate = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const base = await resolveReactorProjectPath(context.workdir, input.project);
+    const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId: defaultDriveId } = resolvePreviewEndpoint(
       context.services,
       base,
-      input.project ?? ".",
     );
     const driveId = input.drive ?? defaultDriveId;
     const token = await getPreviewAuthToken(context.workdir, context.config);

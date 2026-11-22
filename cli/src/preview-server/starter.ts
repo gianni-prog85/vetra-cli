@@ -1,39 +1,40 @@
 /**
- * `POST /start` — idempotently bring a reactor-project online
- * (`POST /restart` stops it first, see `restartPreview`).
+ * `POST /start` — idempotently bring the project's run online
+ * (`POST /restart` stops it first, see `restartPreview`). The project is the
+ * one the Cli works in (the workdir).
  *
  * Side-effecty. Triggered by the browser on `project-stopped`; can also be
- * called by the agent (the auto-injected `reactor-project-start` command is
- * equivalent). When an instance for this `workdir` is already `starting` or
- * `ready`, we return the existing instance without spawning a second one.
+ * called by the agent (the `reactor-project-start` command is equivalent).
+ * When an instance for the project is already `starting` or `ready`, we
+ * return the existing instance without spawning a second one. Refused while
+ * the project run is off (the service's preflight).
  */
 import type { ServiceManager } from "@powerhousedao/clint";
-import { resolveReactorProjectPath } from "../helpers/project.js";
+import { projectRoot } from "../helpers/project.js";
 import { previewDriveIdOf } from "../helpers/reactor-project-preview.js";
 import type { StartResult } from "./config.js";
+
+/** The project the start acts on, or the refusal when the workdir is none. */
+async function projectOf(
+  workdir: string,
+): Promise<{ projectPath: string } | Extract<StartResult, { kind: "unknown-project" }>> {
+  try {
+    return { projectPath: await projectRoot(workdir) };
+  } catch (err) {
+    return {
+      kind: "unknown-project",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
 
 export async function startPreview(args: {
   services: ServiceManager;
   workdir: string;
-  project: string;
 }): Promise<StartResult> {
-  // The browser always names the project; an empty one never picks the
-  // workspace's only project.
-  if (!args.project) {
-    return { kind: "unknown-project", project: args.project, error: "No project specified." };
-  }
-  let projectPath: string;
-  try {
-    projectPath = await resolveReactorProjectPath(args.workdir, args.project, {
-      soleProjectDefault: false,
-    });
-  } catch (err) {
-    return {
-      kind: "unknown-project",
-      project: args.project,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  const project = await projectOf(args.workdir);
+  if ("kind" in project) return project;
+  const { projectPath } = project;
 
   const existing = args.services
     .list("reactor-project")
@@ -46,7 +47,6 @@ export async function startPreview(args: {
     const driveId = previewDriveIdOf(existing);
     return {
       kind: "already-running",
-      project: args.project,
       projectPath,
       instanceId: existing.instanceId ?? "",
       ...(driveId ? { driveId } : {}),
@@ -58,7 +58,7 @@ export async function startPreview(args: {
 }
 
 async function spawn(
-  args: { services: ServiceManager; project: string },
+  args: { services: ServiceManager },
   projectPath: string,
 ): Promise<StartResult> {
   try {
@@ -73,7 +73,6 @@ async function spawn(
     const driveId = ready ? previewDriveIdOf(ready) : undefined;
     return {
       kind: "started",
-      project: args.project,
       projectPath,
       instanceId,
       ...(driveId ? { driveId } : {}),
@@ -81,7 +80,6 @@ async function spawn(
   } catch (err) {
     return {
       kind: "failed",
-      project: args.project,
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -92,21 +90,20 @@ const RUNNING = new Set(["starting", "ready"]);
 
 /** Restarts in flight, per project path: overlapping calls share one. */
 const restarts = new Map<string, Promise<StartResult>>();
-/** Requests in flight, per workdir + project name (before the path is known). */
+/** Requests in flight, per workdir (before the path is known). */
 const requests = new Map<string, Promise<StartResult>>();
 
 /**
- * `POST /restart` — stop the project's running preview instances (including
- * one stuck `starting`) and start a fresh one. Overlapping restarts of the
- * same project share a single restart.
+ * `POST /restart` — stop the project's running instances (including one
+ * stuck `starting`) and start a fresh one. Overlapping restarts share a
+ * single restart.
  */
 export function restartPreview(args: {
   services: ServiceManager;
   workdir: string;
-  project: string;
 }): Promise<StartResult> {
   // Keyed before any await, so a second call can't slip past the first.
-  const key = `${args.workdir}\0${args.project}`;
+  const key = args.workdir;
   const pending = requests.get(key);
   if (pending) return pending;
   const request = restartProject(args).finally(() => requests.delete(key));
@@ -117,27 +114,11 @@ export function restartPreview(args: {
 async function restartProject(args: {
   services: ServiceManager;
   workdir: string;
-  project: string;
 }): Promise<StartResult> {
-  // The browser always names the project; an empty one never picks the
-  // workspace's only project.
-  if (!args.project) {
-    return { kind: "unknown-project", project: args.project, error: "No project specified." };
-  }
-  let projectPath: string;
-  try {
-    projectPath = await resolveReactorProjectPath(args.workdir, args.project, {
-      soleProjectDefault: false,
-    });
-  } catch (err) {
-    return {
-      kind: "unknown-project",
-      project: args.project,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  const project = await projectOf(args.workdir);
+  if ("kind" in project) return project;
+  const { projectPath } = project;
 
-  // The same project asked for under another name shares the restart too.
   const inFlight = restarts.get(projectPath);
   if (inFlight) return inFlight;
   const restart = stopThenSpawn(args, projectPath).finally(() => {
@@ -148,7 +129,7 @@ async function restartProject(args: {
 }
 
 async function stopThenSpawn(
-  args: { services: ServiceManager; project: string },
+  args: { services: ServiceManager },
   projectPath: string,
 ): Promise<StartResult> {
   const running = (instanceId?: string) =>
@@ -168,7 +149,6 @@ async function stopThenSpawn(
       if (running(instance.instanceId).length === 0) continue;
       return {
         kind: "failed",
-        project: args.project,
         error: err instanceof Error ? err.message : String(err),
       };
     }

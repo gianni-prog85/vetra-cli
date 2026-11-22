@@ -1,59 +1,48 @@
-import path from "node:path";
 import { z } from "zod";
 import { formatStatus } from "@powerhousedao/clint";
 import { defineCommand } from "../../framework.js";
-import { resolveReactorProjectPath } from "../../helpers/project.js";
+import { projectRoot } from "../../helpers/project.js";
 
 /**
  * Idempotent `reactor-project-start`. Overrides the ph-clint auto-injected
  * version (user-defined commands win in `defineCli`'s command map) so that
- * calling start against an already-running workdir returns the existing
- * instance instead of failing with "Service has reached max instances (1)".
+ * calling start against a running project returns the existing instance
+ * instead of failing with "Service has reached max instances (1)".
  *
  * The system prompt promises this behaviour ("idempotent and a no-op when
  * already running"): a start the Studio's preview pane makes and the agent's
- * explicit one never race into a stop/start dance. Ports and reloads are the
- * project's host data (`hosts/vetra`).
+ * explicit one never race into a stop/start dance. It starts the project the
+ * Cli works in (the workdir); ports and reloads are the project's host data
+ * (`hosts/vetra`). Refused while the project run is off (the service's
+ * preflight).
  */
 export const reactorProjectStart = defineCommand({
   id: "reactor-project-start",
-  description: "Start Reactor Project (idempotent)",
-  inputSchema: z.object({
-    workdir: z
-      .string()
-      .optional()
-      .describe("Working directory for the service"),
-  }),
-  execute: async (input, context) => {
+  description: "Start the project's run (idempotent; only when the project run is on)",
+  inputSchema: z.object({}),
+  execute: async (_input, context) => {
     const services = context.services;
     if (!services) throw new Error("No services configured");
- 
-    const resolvedWorkdir = await resolveReactorProjectPath(
-      context.workdir,
-      input.workdir,
-    );
+
+    const projectPath = await projectRoot(context.workdir);
 
     const existing = services
       .list("reactor-project")
       .find(
         (s) =>
-          s.workdir === resolvedWorkdir &&
+          s.workdir === projectPath &&
           (s.status === "ready" || s.status === "starting"),
       );
-    // The project the Studio's preview pane shows from now on, even when the
-    // agent left `workdir` out (the workspace's only project).
-    const data = {
-      project: path.relative(context.workdir, resolvedWorkdir) || ".",
-      projectPath: resolvedWorkdir,
-    };
+    // The project the Studio's preview pane shows from now on.
+    const data = { projectPath };
     if (existing) {
       return { text: formatStatus(existing), data };
     }
 
     try {
       const instanceId = await services.start("reactor-project", {
-        workdir: resolvedWorkdir,
-        cwd: resolvedWorkdir,
+        workdir: projectPath,
+        cwd: projectPath,
       });
       const status = services
         .list("reactor-project")

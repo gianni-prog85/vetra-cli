@@ -3,7 +3,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { createProcessManager } from '@powerhousedao/clint';
 import { defineCommand } from '../../framework.js';
-import { resolveReactorProjectPath } from '../../helpers/project.js';
+import { projectRoot } from '../../helpers/project.js';
 import { formatProcessFailure } from '../../helpers/cli-errors.js';
 import { phBuildNodeOptions } from '../../helpers/node-memory.js';
 
@@ -33,12 +33,6 @@ export async function runBuild(
 }
 
 const inputSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe(
-      'Project directory name (relative to workdir). Only needed when the workdir is not already a Reactor package project.',
-    ),
   log: z
     .boolean()
     .optional()
@@ -47,10 +41,10 @@ const inputSchema = z.object({
 
 export const reactorProjectBuild = defineCommand({
   id: 'reactor-project-build',
-  description: 'Build a Reactor package project (runs ph build)',
+  description: 'Build the Reactor package project (runs ph build in the workdir)',
   inputSchema,
-  execute: async ({ name }, { workdir, runProcess }) => {
-    const projectPath = await resolveReactorProjectPath(workdir, name);
+  execute: async (_input, { workdir, runProcess }) => {
+    const projectPath = await projectRoot(workdir);
 
     const { success, output } = await runProcess('ph build', {
       label: 'ph-build',
@@ -68,7 +62,7 @@ export const reactorProjectBuild = defineCommand({
     const hasDistDir = fs.existsSync(path.join(projectPath, 'dist'));
     if (hasDistDir) {
       return {
-        text: `**Build successful** — output at \`${path.join(name || '.', 'dist')}\``,
+        text: `**Build successful** — output at \`dist\``,
       };
     }
     return { text: `**Build completed** (exit code 0)` };

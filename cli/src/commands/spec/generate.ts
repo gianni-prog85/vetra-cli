@@ -1,11 +1,7 @@
 import type { PHDocument } from "@powerhousedao/shared/document-model";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import {
-  assertProjectInstalled,
-  projectInputSchema,
-  resolveReactorProjectPath,
-} from "../../helpers/project.js";
+import { assertProjectInstalled, projectRoot } from "../../helpers/project.js";
 import {
   runChecks,
   summarizeDiagnostics,
@@ -106,7 +102,6 @@ export const specGenerate = defineCommand({
   description:
     "Generate source code from one or all specs in the project (document models, editors, apps, processors, subgraphs).",
   inputSchema: z.object({
-    project: projectInputSchema,
     name: z
       .string()
       .optional()
@@ -121,10 +116,10 @@ export const specGenerate = defineCommand({
       ),
   }),
   execute: async (input, { workdir, runProcess }) => {
-    const base = await resolveReactorProjectPath(workdir, input.project);
-    await assertProjectInstalled(base, input.project);
+    const base = await projectRoot(workdir);
+    await assertProjectInstalled(base);
     // codegen rewrites shared barrels/manifest from the project's view, so
-    // concurrent runs clobber each other; serialize per reactor project.
+    // concurrent runs clobber each other; serialize per project.
     return withProjectCodegenLock(base, async () => {
       // Each target carries the doc plus its on-disk spec file, passed to
       // `ph generate --document`.

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { join } from 'node:path';
 import type { SpecMirrorIo } from '../../src/triggers/spec-sync.js';
 import { documentModelDocumentModelModule, actions, type Operation } from 'document-model';
 
@@ -16,7 +15,7 @@ vi.doMock('../../src/helpers/project-lock.js', () => ({
   withProjectCodegenLock: (_base: string, fn: () => Promise<unknown>) => fn(),
 }));
 
-const { syncSpecsToFs, mirrorSpecDoc, specRevision, resolveDriveNodes } =
+const { syncSpecsToFs, mirrorSpecDoc, specRevision } =
   await import('../../src/triggers/spec-sync.js');
 
 /** The operation-history client syncSpecsToFs reads. */
@@ -98,50 +97,6 @@ describe('mirrorSpecDoc', () => {
   });
 });
 
-describe('resolveDriveNodes', () => {
-  const nodes = [{ id: 'a', kind: 'file', name: 'foo', parentFolder: null }];
-  const makeReactor = (over: Record<string, unknown>) => ({
-    client: { get: vi.fn<(id: string) => Promise<unknown>>() },
-    ...over,
-  });
-
-  it('returns [] when there is no reactor', async () => {
-    expect(await resolveDriveNodes(undefined)).toEqual([]);
-  });
-
-  it('returns [] when the reactor has no drive id', async () => {
-    const reactor = makeReactor({});
-    expect(await resolveDriveNodes(reactor as never)).toEqual([]);
-    expect(reactor.client.get).not.toHaveBeenCalled();
-  });
-
-  it('reads nodes from personalDriveId', async () => {
-    const reactor = makeReactor({ personalDriveId: 'pd', driveId: 'other' });
-    reactor.client.get.mockResolvedValue({ state: { global: { nodes } } });
-    expect(await resolveDriveNodes(reactor as never)).toBe(nodes);
-    expect(reactor.client.get).toHaveBeenCalledWith('pd');
-  });
-
-  it('falls back to driveId when personalDriveId is absent', async () => {
-    const reactor = makeReactor({ driveId: 'd' });
-    reactor.client.get.mockResolvedValue({ state: { global: { nodes } } });
-    await resolveDriveNodes(reactor as never);
-    expect(reactor.client.get).toHaveBeenCalledWith('d');
-  });
-
-  it('returns [] when the drive read throws', async () => {
-    const reactor = makeReactor({ driveId: 'd' });
-    reactor.client.get.mockRejectedValue(new Error('gone'));
-    expect(await resolveDriveNodes(reactor as never)).toEqual([]);
-  });
-
-  it('returns [] when the drive has no node tree', async () => {
-    const reactor = makeReactor({ driveId: 'd' });
-    reactor.client.get.mockResolvedValue({ state: {} });
-    expect(await resolveDriveNodes(reactor as never)).toEqual([]);
-  });
-});
-
 describe('syncSpecsToFs', () => {
   const log = {
     debug: vi.fn<(msg: string) => void>(),
@@ -196,32 +151,6 @@ describe('syncSpecsToFs', () => {
     expect(written.operations.global.map((o) => o.index)).toEqual([0, 1, 2]);
     // The `.phd` keeps the create ops; replay (loadSpecForFile) filters them.
     expect(written.operations.document).toHaveLength(doc.operations.document.length);
-  });
-
-  it('routes a doc under its drive project folder', async () => {
-    const { io, save } = makeIo();
-    const nodes = [
-      { id: 'a', kind: 'file', name: 'foo', parentFolder: 'f1' },
-      { id: 'f1', kind: 'folder', name: 'my-project', parentFolder: null },
-    ];
-    await syncSpecsToFs(
-      [{ header: { id: 'a', documentType: 'powerhouse/app', name: 'foo' } }],
-      '/work',
-      { io, nodes },
-    );
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.calls[0][1]).toBe(join('/work', 'my-project'));
-  });
-
-  it('falls back to workdir when the parent folder node is missing', async () => {
-    const { io, save } = makeIo();
-    const nodes = [{ id: 'a', kind: 'file', name: 'foo', parentFolder: 'ghost' }];
-    await syncSpecsToFs(
-      [{ header: { id: 'a', documentType: 'powerhouse/app', name: 'foo' } }],
-      '/work',
-      { io, nodes },
-    );
-    expect(save.mock.calls[0][1]).toBe('/work');
   });
 
   it('uses the real IO adapter (saveSpec) when none is injected', async () => {

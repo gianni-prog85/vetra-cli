@@ -1,18 +1,15 @@
 /**
  * Spec-fs-sync trigger — filesystem → Vetra-drive mirror for EXTERNAL edits.
  *
- * Watches every reactor project's `specs/**\/*.phd` under the workdir and pushes
- * changes into the Studio drive on the switchboard via
+ * Watches the project's `specs/**\/*.phd` (the workdir is the project) and
+ * pushes changes into the Studio drive on the switchboard via
  * `applyFsChangesToReactor` (shared with the `spec-*` write commands, in
  * `helpers/spec-drive-sync.ts`). Command-originated writes already push the
  * drive directly and synchronously, so this watcher's job is the rest:
- * hand-edited `.phd`, `git pull`, reactor-project writes.
+ * hand-edited `.phd`, `git pull`, codegen writes.
  *
- * Layout: the workdir is a workspace parent; each reactor project is an
- * immediate subdir with a `powerhouse.config.json`. Specs live at
- * `<workdir>/<project>/specs/<subdir>/<name>.<ext>.phd`. The single-project
- * case (`<workdir>` is itself a project, specs at `<workdir>/specs/`) is also
- * supported — those docs attach at the drive root.
+ * Layout: specs live at `<workdir>/specs/<subdir>/<name>.<ext>.phd` and attach
+ * at the drive root. Nothing else under the workdir is watched.
  *
  * The sync executes only the actions whose ids the reactor does not hold, one
  * sync at a time, so re-feeding a file the commands already pushed is a
@@ -40,32 +37,15 @@ interface TriggerState {
   driveId: string | undefined;
 }
 
-// Directory names never worth descending into when scanning for specs.
-const IGNORED_DIRS = new Set([
-  "node_modules",
-  ".git",
-  ".ph",
-  "dist",
-  "build",
-  ".next",
-  "coverage",
-  ".turbo",
-  ".cache",
-]);
-
-// Specs live only under a `specs/` folder: `<workdir>/specs/...` or
-// `<workdir>/<project>/specs/...`. A path is in scope if it is the workdir
-// root, an immediate child (root `specs/` or a project dir, watched so a
-// `specs/` folder created later is seen), or anything under a `specs/` segment.
-// Deeper non-specs dirs (project src trees, etc.) are pruned so chokidar never
-// descends them. IGNORED_DIRS are always out of scope.
-function outOfSpecScope(p: string, workdir: string): boolean {
+// Specs live only under the project's `specs/` folder (`<workdir>/specs/...`).
+// A path is in scope if it is the workdir itself (watched so a `specs/` folder
+// created later is seen) or `specs/` and anything under it; every other entry
+// of the workdir is pruned, so chokidar never descends the project's tree.
+export function outOfSpecScope(p: string, workdir: string): boolean {
   const rel = path.relative(workdir, p);
-  if (rel === "" || rel.startsWith("..")) return false;
-  const segs = rel.split(path.sep);
-  if (segs.some((s) => IGNORED_DIRS.has(s))) return true;
-  if (segs.includes(SPECS_DIRNAME)) return false;
-  return segs.length > 1;
+  if (rel === "") return false;
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return true;
+  return rel.split(path.sep)[0] !== SPECS_DIRNAME;
 }
 
 // What chokidar currently tracks: .phd files retained in the watch set, and
@@ -97,17 +77,15 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
   async setup(ctx) {
     const workdir = ctx.context.workdir;
     const log = ctx.context.log;
-    // Watch the workdir directory itself rather than per-project specs globs.
-    // The directory always exists, so chokidar reliably picks up `specs/`
-    // subtrees created later (reactor-project-init runs after startup) without
-    // a reconcile step or fragile not-yet-existent glob bases. `specForPath`
-    // filters events down to `specs/<known-subdir>/*.phd` for both the
-    // workdir-as-project and workspace (`<workdir>/<project>/specs/`) layouts.
+    // Watch the workdir directory itself rather than a `specs/` glob: the
+    // directory always exists, so chokidar picks up a `specs/` folder created
+    // later without a reconcile step or a not-yet-existent glob base.
+    // `specForPath` filters events down to `specs/<known-subdir>/*.phd`.
     // ignoreInitial:false so specs written before this daemon started are
     // synced on boot too (the replay and the node attach are idempotent).
-    // Traversal is scoped to specs/ folders (outOfSpecScope) and only .phd
-    // files are retained in the watch set, so chokidar tracks specs — not whole
-    // project trees.
+    // Traversal is scoped to `<workdir>/specs` (outOfSpecScope) and only .phd
+    // files are retained in the watch set, so chokidar tracks specs — not the
+    // project's tree.
     const watcher = chokidar.watch(workdir, {
       ignoreInitial: false,
       ignored: (p: string, stats?: { isFile(): boolean }) =>
