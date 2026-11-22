@@ -1,6 +1,6 @@
 // Caps the noisy clint startup banner with one prominent Vetra Studio line,
 // and opens it in the browser on an interactive local run (stdout is a TTY).
-import { spawn } from "node:child_process";
+import { spawn, type SpawnOptions } from "node:child_process";
 import type { ServiceInstanceStatus } from "@powerhousedao/clint";
 import { defineTrigger } from "../framework.js";
 
@@ -24,21 +24,46 @@ export function studioUrlOf(
   return connect?.endpoints?.[CONNECT_ENDPOINT];
 }
 
+export interface BrowserCommand {
+  command: string;
+  args: string[];
+  options: SpawnOptions;
+}
+
+/**
+ * How the OS default browser opens `url`: `open` (macOS), `xdg-open`, or
+ * cmd's `start` (Windows). cmd reads `&`, `|`, `<`, `>` and `^` in an
+ * unquoted argument as syntax (a query string's `&` ends the command), so the
+ * URL goes to `start` quoted, on a command line passed as written; a `"` in
+ * it is percent-encoded so it cannot end the quote.
+ */
+export function browserCommand(
+  url: string,
+  platform: NodeJS.Platform = process.platform,
+): BrowserCommand {
+  const options: SpawnOptions = { stdio: "ignore", detached: true, windowsHide: true };
+  if (platform === "darwin") return { command: "open", args: [url], options };
+  if (platform === "win32") {
+    const quoted = `"${url.replace(/"/g, "%22")}"`;
+    return {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", `start "" ${quoted}`],
+      options: { ...options, windowsVerbatimArguments: true },
+    };
+  }
+  return { command: "xdg-open", args: [url], options };
+}
+
 // Launch the OS default browser, detached and best-effort. A missing opener
 // arrives async as an 'error' event (spawn won't throw), so swallow that too.
-function openBrowser(url: string): void {
-  const [cmd, args] =
-    process.platform === "darwin"
-      ? ["open", [url]]
-      : process.platform === "win32"
-        ? ["cmd", ["/c", "start", "", url]]
-        : ["xdg-open", [url]];
+export function openBrowser(
+  url: string,
+  spawner: typeof spawn = spawn,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  const { command, args, options } = browserCommand(url, platform);
   try {
-    const child = spawn(cmd as string, args as string[], {
-      stdio: "ignore",
-      detached: true,
-      windowsHide: true,
-    });
+    const child = spawner(command, args, options);
     child.on("error", () => {});
     child.unref();
   } catch {
