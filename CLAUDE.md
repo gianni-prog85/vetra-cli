@@ -63,12 +63,16 @@ rebuild there is picked up when the Cli restarts.
 
 ## Dev daemon model & rebuilds
 
-`pnpm dev` (`tsx cli/src/main.ts`) runs the Cli in the foreground through
+`pnpm exec ph-cli run studio` runs the Studio stack (`hosts/studio`): the
+switchboard (8091) and Connect (8090) in their own processes, then the built
+Cli in the foreground; `-- --workdir <dir>` sets the Cli's workdir. Stop it
+with Ctrl+C or `pnpm exec ph-cli run studio --stop`, never by process name.
+`pnpm dev` (`tsx cli/src/main.ts`) runs the Cli from source through
 clint's `runCli`, attached to the switchboard drive `VETRA_SWITCHBOARD_URL`
-names, and dies on Ctrl+C. It starts no Switchboard, Connect or
-`vetra-studio` service of its own: those are hosts from B2 (see
-`ARCHITECTURE.md`). reactor-project previews are child services clint's
-service manager tracks and stops; don't `pkill -f` them.
+names (`http://localhost:8091/d/studio`), and dies on Ctrl+C. It starts no
+Switchboard or Connect of its own (see `ARCHITECTURE.md` → "Hosts").
+reactor-project previews are child services clint's service manager tracks
+and stops; don't `pkill -f` them.
 
 Two non-obvious bundle facts:
 - **`dist/` is gitignored build output.** The browser client's sync

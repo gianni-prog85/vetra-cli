@@ -24,21 +24,22 @@ You can build:
    you (terminal)
         │  "build a to-do document model"
         ▼
-  ┌─────────────────┐      ┌──────────────────┐
-  │  Vetra agent    │◄────►│ Embedded Reactor │
-  │  (interactive)  │      │ (in-process DM)  │
-  └────────┬────────┘      └──────────────────┘
-           │ spawns + previews
-           ▼
-  ┌──────────────────────────────────────────┐
-  │ Vetra Studio (Connect + Switchboard)       │
-  │ live preview → http://localhost:8090/d/... │
-  └──────────────────────────────────────────┘
+  ┌─────────────────┐      ┌──────────────────────┐
+  │  Vetra agent    │◄────►│ Studio Switchboard   │
+  │  (the Cli)      │      │ (:8091, drive Home)  │
+  └────────┬────────┘      └──────────┬───────────┘
+           │ spawns + previews        │ proxied
+           ▼                          ▼
+  ┌──────────────────────────────────────────────┐
+  │ Vetra Studio (Connect)                       │
+  │ live preview → http://127.0.0.1:8090/d/...   │
+  └──────────────────────────────────────────────┘
 ```
 
-A single `vetra` process runs the interactive REPL, an embedded Reactor, and an
-embedded Switchboard. The agent spawns **Vetra Studio** — a Connect-based
-browser editor — so a freshly generated document model renders live while you
+`ph run studio` starts the Studio as a stack of hosts (`hosts/`): a
+Switchboard that holds the Studio drive, **Vetra Studio** — a Connect-based
+browser editor in front of it — and the agent's interactive Cli attached to
+the drive, so a freshly generated document model renders live while you
 iterate. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 
 The orchestrator (`vetra-agent`) delegates to three specialists —
@@ -57,18 +58,28 @@ Claude)
 
 ## Run it locally
 
-Clone the repo, install, and start the agent:
+Clone the repo, install, build, and start the Studio:
 
 ```sh
 pnpm install
-pnpm dev
+pnpm build
+pnpm build:connect
+pnpm exec ph-cli run studio -- --workdir ../vetra-test
 ```
 
-> `**pnpm dev` is the local entrypoint.** It launches the interactive agent
-> REPL (`tsx src/main.ts`, no build step) with the embedded Reactor and
-> Switchboard. When the agent starts a build, watch the logs for
-> `Vetra Studio: http://localhost:8090/d/<driveId>` and open that URL to see
-> your work live.
+> **`ph run studio` is the local entrypoint.** It starts the Studio
+> switchboard (port 8091) and Connect (8090), then the agent's Cli in the
+> terminal; `--workdir` is where the agent works (default: this
+> repository). Open the printed `Vetra Studio: http://127.0.0.1:8090/d/<driveId>`
+> to see your work live. Stop it with Ctrl+C or
+> `pnpm exec ph-cli run studio --stop`. Stores live in `.ph/vetra/`.
+>
+> `pnpm dev` runs the Cli from source instead (`tsx cli/src/main.ts`, no
+> build step), against a running switchboard:
+> `VETRA_SWITCHBOARD_URL=http://localhost:8091/d/studio pnpm dev`.
+>
+> Until the 6.4 release is on npm, the monorepo packages install linked
+> (`workspace/local-link/link.sh`).
 
 Authenticate the agent once, either way:
 
@@ -85,7 +96,9 @@ pnpm dev:reset
 
 ## Your first session
 
-Once the REPL is up you'll see:
+Type your idea in the Studio page, or open the Cli's shell in the terminal
+(`pnpm exec ph-cli run studio -- -i --workdir ../vetra-test`). Once the REPL is
+up you'll see:
 
 ```
 vetra v0.0.1 …
@@ -101,7 +114,7 @@ Try a build, end to end:
 ```
 
 The agent designs the schema, generates the model and editor, and boots Vetra
-Studio. Open the printed `http://localhost:8090/d/<driveId>` URL and edit your
+Studio. Open the printed `http://127.0.0.1:8090/d/<driveId>` URL and edit your
 new document type in the browser. Iterate by continuing the conversation.
 
 Type `/` at any time to see the available slash commands (publishing, service

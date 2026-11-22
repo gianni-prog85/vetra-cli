@@ -229,8 +229,9 @@ via the vetra drive's `preferredEditor` field. The editor renders:
 HTTP + SSE service hosted inside the vetra node process on a fixed
 loopback port. Default `127.0.0.1:5180`; see
 `cli/src/preview-server/config.ts` for the constant. The loopback
-bind does **not** restrict the audience: the embedded proxy (which listens
-on `0.0.0.0`) exposes it publicly at `/preview`, so every route that isn't
+bind does **not** restrict the audience on its own: the embedded proxy
+exposes it at `/preview`, on loopback by default (`configDefaults`) but on
+whatever `proxyHost` a deployment sets, so every route that isn't
 needed to render a preview is owner-gated per request (see "Preview-server
 access gate" below). CORS is `*`: the gate is a bearer header, never an
 ambient cookie.
@@ -349,7 +350,7 @@ sign-in. It passes when the request carries:
 3. local mode only — no studio environment id (`VETRA_ENVIRONMENT_ID`), no
    `ADMINS`, no secret: a request from a loopback socket whose every
    `x-forwarded-for` hop is loopback (the proxy appends the real client
-   address, so LAN clients of the `0.0.0.0` proxy are refused), whose `Host`
+   address, so LAN clients of a `0.0.0.0` proxy are refused), whose `Host`
    and `x-forwarded-host` are loopback, and whose `Origin`, if any, is
    loopback (blocks cross-site pages / DNS rebinding).
 
@@ -612,8 +613,16 @@ present, `ctx.reactor()` returns the already-cached instance.
 
 ## Boot sequence
 
-clint's start sequence, run by the Cli runner (`runCli`):
+`ph run studio` first starts the switchboard (its run record waits for the
+seeded `studio` drive), then Connect, each in its own process, then the
+Cli in the compound's process (the foreground member) at `run`, handed the
+drive URL
+(`<switchboard>/d/studio`) and the two members as service instances. The
+stack's record is `.ph/run/studio.json`. Then clint's start sequence, run by
+the Cli runner (`runCli`):
 
+0. **Embedded proxy** — on an OS port on `127.0.0.1` (see "Embedded
+   reverse proxy").
 1. **Reactor** — with a drive address, the runner's `RunOptions.reactor`
    attaches to the switchboard (`attachDefaultReactor` with
    `configureReactor.remote`): the GraphQL client, the `Home` drive found
@@ -625,6 +634,12 @@ clint's start sequence, run by the Cli runner (`runCli`):
    subscribes to the framework event-bus for `service:*` events.
    The other triggers (`chatSessionWatchTrigger`,
    `specSyncTrigger`, `specFsSyncTrigger`) begin polling.
+   `studioUrlTrigger` prints `Vetra Studio: <url>/d/<drive id>` (non-TTY)
+   or opens it in the browser: `<url>` is the ready Connect member's
+   `endpoints.connect` (`http://127.0.0.1:8090/`), else the proxy's URL.
+
+The stack ends when the Cli ends, on Ctrl-C, or on
+`ph run studio --stop`, which stops the members in reverse order.
 
 `reactor-project` instances stay dormant until the agent starts one
 via the `reactor-project-start` tool.
@@ -697,10 +712,15 @@ dynamic bundle swap.
 
 ## Embedded reverse proxy
 
-clint's embedded proxy (`proxyEnabled: true`, port pinned to 8090 via
-`configDefaults.proxyPort`) exposes every browser-facing endpoint through
-a single public port — the requirement for deployed agents, where the
-user's browser can only reach that one port.
+clint's embedded proxy (`proxyEnabled: true`) listens on an OS-assigned
+port on `127.0.0.1` (`configDefaults: { proxyPort: 0, proxyHost:
+'127.0.0.1' }`): 8090 is the Studio's Connect now (see "Hosts"), and the
+Studio is not behind this proxy. It still carries `/preview` and the
+reactor-project routes until B3 decides its place (a proxy member of the
+stack, or none). The Studio SPA reaches the local API directly at
+`127.0.0.1:5180`, as nothing stamps the proxy's address into it (see "The
+drive URL" under Connect). The sections below describe the proxy as the
+single public port of a deployed agent, which is the shape B3 revisits.
 
 Route sources:
 
@@ -873,9 +893,12 @@ These are limitations of the current direction; not bugs.
   `ctx.attachments` is unset on the runner path, so chat attachments are
   skipped.
 
-- **Hosts (B2).** The hosts and builds exist (see "Hosts" and
-  "Build-output split"). Still open in B2: the Cli in the stack
-  (`studioUrlTrigger`, the embedded proxy's port).
+- **Hosts (B2).** The package's form (`ph run
+  @powerhousedao/vetra-cli/studio` from another project) is not supported
+  yet: Connect's `outDir` and the switchboard's packages are read against
+  the project (see "Hosts"). On the remote path `studioRedirectTrigger`
+  finds no Connect `/` upstream on the proxy and skips (B3, with the
+  proxy).
 
 The live publish path — `commands/reactor-project/publish.ts` and
 `publish-status.ts` — is unaffected: those are the deploy-flow tools that

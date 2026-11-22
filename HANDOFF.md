@@ -175,23 +175,23 @@ against.
     deploy-flow publish (`commands/reactor-project/publish.ts`,
     `publish-status.ts`) is separate and untouched.
 
-14. **All browser-facing endpoints route through the embedded proxy**
-    (port pinned to 8090). Studio at `/` (explicit `proxyRoot` on the
-    embedded Connect capture), preview-server at `/preview` (static
-    `proxyRoutes`), project Connect at `/reactor-project/vetra-studio`
-    (service passes `ph vetra --base` so Vite emits self-contained
-    URLs). The `connect-drive-url` hook writes both live URLs into JSON
-    configs the SPA fetches at load — the drive URL into
-    `powerhouse.config.json` (`defaultDrives`), the preview-server base
-    (`<proxy>/preview`) into `studio.config.json`. No JS asset is
-    mutated: the served bundle stays byte-identical to the build, so the
-    image's precompressed (`.br`/`.gz`) siblings can't go stale against a
-    rewrite. The Dockerfile precompress pass excludes those two configs
-    (they're rewritten at boot and served uncompressed); the client reads
-    `studio.config.json` for the preview base and resolves the iframe
-    `proxiedUrl` against it. Vite-dev of vetra-app falls back to the
-    direct port via `import.meta.env.DEV`. See ARCHITECTURE.md →
-    "Embedded reverse proxy".
+14. **The Studio is a stack of hosts (B2).** `ph run studio` starts the
+    Studio switchboard (`hosts/switchboard`, 8091, the `studio` drive
+    named `Home`) and Connect (`hosts/connect`, 8090), then the Cli
+    attached to the drive. The browser talks to 8090 only: Connect serves
+    `dist/connect` and proxies the switchboard's paths (`/graphql`, `/d/*`,
+    `/attachments`, `/mcp`, `/api/*`), and serves the drive and the remote
+    backend as `${origin}/d/studio` in the `powerhouse.config.json` it
+    merges per request. Nothing is stamped into `dist/connect` for the
+    drive URL: the `connect-drive-url` hook waits for
+    `powerhouse:switchboard:ready`, which the remote path never emits, so it
+    also writes no `studio.config.json` and the SPA uses the direct
+    `127.0.0.1:5180` for the local API. The Cli's embedded proxy moved to
+    an OS port on `127.0.0.1` and carries only `/preview` and the
+    reactor-project routes (`/reactor-project/vetra-studio`, the project
+    switchboard) until B3 decides its place; the BUILD iframe's proxied
+    URLs are B3's. See ARCHITECTURE.md → "Hosts" and "Embedded reverse
+    proxy".
 
 ## Repositories touched
 
@@ -374,8 +374,8 @@ In order:
 # Service manager state files (project lifecycle source of truth)
 ls /Users/acaldas/dev/powerhouse/vetra/vetra-cli/vetra-cli/.ph/vetra-cli/services/
 
-# Embedded Switchboard schema sanity check
-curl -sS -X POST http://localhost:59220/graphql \
+# Studio switchboard schema sanity check (or through Connect: localhost:8090/graphql)
+curl -sS -X POST http://localhost:8091/graphql \
   -H "content-type: application/json" \
   -d '{"query":"{ __schema { types { name } } }"}' | grep -i drive
 

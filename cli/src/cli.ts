@@ -34,7 +34,6 @@ import { tsCheck } from './lifecycle/ts-check.js';
 import { serializableToolErrors } from './lifecycle/tool-errors.js';
 import { agentRequiredInputs } from './lifecycle/agent-required-inputs.js';
 import { checkRecorder } from './lifecycle/check-recorder.js';
-import { ensurePh } from './lifecycle/ensure-ph.js';
 import { studioUrlTrigger } from './triggers/studio-url.js';
 import { studioRedirectTrigger } from './triggers/studio-redirect.js';
 import { productSupervisorTrigger } from './product/supervisor.js';
@@ -252,7 +251,6 @@ export const cli = defineCli({
 
   // @clint:begin lifecycle
   lifecycle: [
-    ensurePh(),
     // Captures the resolved proxyPublicUrl for the reactor-project --base.
     proxyBasePathHook(),
     genGuard(),
@@ -278,9 +276,10 @@ export const cli = defineCli({
   // @clint:end lifecycle
 
   configDefaults: {
-    // Pin the proxy port so browser-facing URLs (stamped drive URL, iframe
-    // paths) survive daemon restarts; 0 would auto-assign per session.
-    proxyPort: 8090,
+    // An OS port on loopback: 8090 is the Studio's Connect (hosts/connect).
+    // The proxy carries only `/preview` and the reactor-project routes.
+    proxyPort: 0,
+    proxyHost: '127.0.0.1',
   },
 
   // @clint:begin interactive
