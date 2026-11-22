@@ -2,12 +2,13 @@
 
 // Ensures `ph` (from ph-cmd) is runnable on boot: installs DEFAULT_PH_VERSION
 // when absent, else checks the present ph's version for compatibility.
-import { execFile } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { LifecycleHook, Logger } from "@powerhousedao/clint";
 import { DEFAULT_PH_VERSION } from "../constants.js";
 
 const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 
 const CHECK_TIMEOUT_MS = 30_000;
 const INSTALL_TIMEOUT_MS = 300_000;
@@ -18,12 +19,13 @@ async function run(
   timeout: number,
 ): Promise<{ success: boolean; output: string }> {
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, {
-      // ph, pnpm and npm are .cmd shims on Windows, which only a shell runs.
-      shell: process.platform === "win32",
-      timeout,
-      maxBuffer: 16 * 1024 * 1024,
-    });
+    const options = { timeout, maxBuffer: 16 * 1024 * 1024 };
+    // ph, pnpm and npm are .cmd shims on Windows, which only a shell runs. The
+    // arguments here are plain words (a version, a package spec, a registry url).
+    const { stdout, stderr } =
+      process.platform === "win32"
+        ? await execAsync([command, ...args].join(" "), options)
+        : await execFileAsync(command, args, options);
     return { success: true, output: `${stdout}${stderr}` };
   } catch (err) {
     const e = err as { stdout?: string; stderr?: string; message?: string };
