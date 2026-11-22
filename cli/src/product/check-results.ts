@@ -54,19 +54,29 @@ function escapeRegExp(s: string): string {
 }
 
 /**
+ * A root path as it appears in tool output. Windows paths are case-insensitive
+ * and tools print them with either separator (`C:\Users\…`, `C:/Users/…`).
+ */
+function rootPattern(root: string, platform: NodeJS.Platform): RegExp {
+  const trimmed = root.replace(/[\\/]+$/, "");
+  if (platform !== "win32") return new RegExp(`${escapeRegExp(trimmed)}[\\\\/]?`, "g");
+  const body = trimmed.split(/[\\/]/).map(escapeRegExp).join("[\\\\/]");
+  return new RegExp(`${body}[\\\\/]?`, "gi");
+}
+
+/**
  * Make a reason safe to store in the product document, which the customer
  * reads: one line, no local paths (the project path becomes relative, any
  * other absolute path is cut to its file name), no forbidden words, capped.
  */
 export function capReason(
   text: string,
-  opts: { base?: string; max?: number } = {},
+  opts: { base?: string; max?: number; platform?: NodeJS.Platform } = {},
 ): string {
   let out = text;
+  const platform = opts.platform ?? process.platform;
   const roots = [opts.base, os.homedir()].filter((r): r is string => !!r && r !== path.sep);
-  for (const root of roots) {
-    out = out.replace(new RegExp(`${escapeRegExp(root.replace(/[\\/]+$/, ""))}[\\\\/]?`, "g"), "");
-  }
+  for (const root of roots) out = out.replace(rootPattern(root, platform), "");
   // Any absolute path left (POSIX or Windows) → its last segment.
   out = out.replace(/(?<=^|[\s"'(=])(?:[A-Za-z]:)?(?:[\\/][^\s\\/:;,"'()]+){2,}/g, (p) => p.split(/[\\/]/).pop() ?? "");
   for (const word of FORBIDDEN_WORDS) {

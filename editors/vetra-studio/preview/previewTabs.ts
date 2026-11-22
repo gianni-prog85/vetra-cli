@@ -193,12 +193,13 @@ function appFor(
   return apps.length === 1 ? apps[0] : undefined;
 }
 
-/** The screen a file path belongs to (`…/editors/order-editor/…`). */
+/** The screen a file path belongs to (`…/editors/order-editor/…`; a Windows
+ * Studio's agent may write `\`). */
 function screenForPath(
   screens: readonly PreviewScreen[],
   path: string,
 ): PreviewScreen | undefined {
-  const match = /(?:^|\/)(editors|apps)\/([^/]+)\//.exec(path);
+  const match = /(?:^|[\\/])(editors|apps)[\\/]([^\\/]+)[\\/]/.exec(path);
   if (!match) return undefined;
   const kind: ScreenKind = match[1] === "apps" ? "app" : "editor";
   const folder = match[2];

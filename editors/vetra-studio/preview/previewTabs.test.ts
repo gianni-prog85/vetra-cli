@@ -124,6 +124,17 @@ describe("screenPreviews", () => {
     expect(tabForTarget(found.targets, undefined)).toBeNull();
   });
 
+  it("a file path written with backslashes (a Windows Studio) finds its screen", () => {
+    const messages = [
+      toolTurn(
+        "mastra_workspace_edit_file",
+        { path: "hotel\\editors\\menu-editor\\editor.tsx" },
+        "ok",
+      ),
+    ];
+    expect(screenPreviews(messages, screens).activeScreenId).toBe("ed-menu");
+  });
+
   it("an edited spec makes its screen the active one", () => {
     const messages = [
       toolTurn(

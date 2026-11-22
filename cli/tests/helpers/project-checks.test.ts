@@ -106,10 +106,11 @@ describe("runChecks on this machine", () => {
 
       expect(outcome.notes).toEqual([]);
       expect(outcome.ran).toEqual({ tsc: { failedToRun: undefined }, eslint: { failedToRun: undefined } });
-      const found = outcome.diagnostics.map((d) => [d.source, path.basename(d.file), d.line, d.column, d.code]);
+      // `file` is `/`-separated on every OS.
+      const found = outcome.diagnostics.map((d) => [d.source, d.file, d.line, d.column, d.code]);
       expect(found).toEqual([
-        ["tsc", "editor.ts", 2, 3, "TS2339"],
-        ["eslint", "editor.ts", 3, 22, "no-useless-concat"],
+        ["tsc", "editors/todo/editor.ts", 2, 3, "TS2339"],
+        ["eslint", "editors/todo/editor.ts", 3, 22, "no-useless-concat"],
       ]);
     },
     120_000,

@@ -5,7 +5,9 @@ import { capReason, type ObservedCheck } from "../product/check-results.js";
 
 export interface GenDiagnostic {
   source: "tsc" | "eslint";
-  file: string; // relative to project base
+  /** Relative to the project base, `/`-separated on every OS: it reaches the
+   * product document and the agent. */
+  file: string;
   line: number;
   column: number;
   severity: "error" | "warning";
@@ -64,7 +66,7 @@ function inScope(absPath: string, scope: CheckScope): boolean {
 }
 
 function toRel(base: string, absPath: string): string {
-  return path.relative(base, absPath) || absPath;
+  return path.relative(base, absPath).split(SEP).join("/") || absPath;
 }
 
 function binPath(base: string, name: string): string | null {
