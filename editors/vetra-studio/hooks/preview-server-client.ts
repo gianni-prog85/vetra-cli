@@ -264,6 +264,8 @@ export type ResolveResult =
   | { kind: "no-target" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "project-stopped"; project: string }
+  /** The project run is off in this Studio: nothing starts it. */
+  | { kind: "preview-off"; project: string }
   | { kind: "starting"; project: string; driveId?: string }
   | {
       kind: "ready";

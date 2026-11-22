@@ -72,6 +72,8 @@ interface PreviewServerDeps {
   getStudioUrl?: () => string | undefined;
   /** Owner gate override (tests); default `createRequestAuthorizer`. */
   authorizeRequest?: RequestAuthorizer;
+  /** The Cli config's `projectRun`: off, `/resolve` says `preview-off`. */
+  projectRun?: boolean;
   log?: {
     info: (m: string) => void;
     error: (m: string) => void;
@@ -206,6 +208,7 @@ export async function startPreviewServer(
           doc: q.get("doc") ?? "",
           drive: q.get("drive") ?? undefined,
           home: q.get("home") === "1",
+          projectRun: deps.projectRun ?? false,
         });
         writeJson(res, 200, publicResolveResult(result));
         return;

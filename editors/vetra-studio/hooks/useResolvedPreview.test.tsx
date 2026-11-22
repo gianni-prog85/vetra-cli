@@ -8,13 +8,14 @@ import type { PreviewTarget } from "./useSessionPreviewTarget.js";
 const hoisted = vi.hoisted(() => ({
   resolves: [] as Record<string, unknown>[],
   starts: [] as string[],
+  kind: "project-stopped",
 }));
 
 vi.mock("./preview-server-client.js", () => ({
   fetchResolve: (args: Record<string, unknown>) => {
     hoisted.resolves.push(args);
     return Promise.resolve({
-      kind: "project-stopped",
+      kind: hoisted.kind,
       project: args.project,
     });
   },
@@ -46,6 +47,7 @@ async function settle() {
 beforeEach(() => {
   hoisted.resolves = [];
   hoisted.starts = [];
+  hoisted.kind = "project-stopped";
 });
 
 describe("useResolvedPreview", () => {
@@ -71,5 +73,17 @@ describe("useResolvedPreview", () => {
     render(<Probe target={{ project: "todo", doc: "d1", callId: "c1" }} />);
     await settle();
     expect(hoisted.starts).toEqual(["todo"]);
+  });
+
+  it("never starts anything while the Studio's project run is off", async () => {
+    hoisted.kind = "preview-off";
+    const container = render(
+      <Probe target={{ project: "todo", doc: "d1", callId: "c1" }} />,
+    );
+    await settle();
+    expect(
+      container.querySelector("[data-kind]")?.getAttribute("data-kind"),
+    ).toBe("preview-off");
+    expect(hoisted.starts).toEqual([]);
   });
 });

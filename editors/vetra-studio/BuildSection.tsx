@@ -39,6 +39,8 @@ export function BuildSection({
 export const SETTING_UP = "Setting up your project (about 30 s)…";
 export const STARTING = "Starting the preview…";
 export const UNREACHABLE = "The preview can't be reached right now.";
+/** The Studio's project run is off (`projectRun`): nothing starts a preview. */
+export const PREVIEW_OFF = "Preview comes with the Preview run";
 
 /** What the skeleton says for a preview that isn't showing yet. */
 export function previewActivity(preview: ResolvedPreview): string {
@@ -47,6 +49,8 @@ export function previewActivity(preview: ResolvedPreview): string {
     case "loading":
     case "unknown-project":
       return SETTING_UP;
+    case "preview-off":
+      return PREVIEW_OFF;
     case "project-stopped":
     case "starting":
     case "ready":

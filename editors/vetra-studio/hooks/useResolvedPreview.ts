@@ -6,7 +6,8 @@
  *      event, refetch `/resolve` for the current target.
  *   3. When state is `project-stopped`, fire `POST /start` exactly once per
  *      target — the editor never asks the user; we treat opening a preview
- *      as intent to run the project.
+ *      as intent to run the project. `preview-off` (the Studio's project run
+ *      is off) starts nothing.
  *   4. Aborts in-flight fetches when target changes or the component
  *      unmounts.
  *
@@ -27,6 +28,7 @@ export type ResolvedPreview =
   | { kind: "loading" }
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "project-stopped"; project: string }
+  | { kind: "preview-off"; project: string }
   | { kind: "starting"; project: string; driveId?: string }
   | {
       kind: "ready";

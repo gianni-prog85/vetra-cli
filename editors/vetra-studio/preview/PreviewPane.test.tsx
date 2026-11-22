@@ -5,6 +5,7 @@ import { act, useReducer } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedPreview } from "../hooks/useResolvedPreview.js";
 import type { PreviewTarget } from "../hooks/useSessionPreviewTarget.js";
+import { PREVIEW_OFF } from "../BuildSection.js";
 import { readProduct } from "../shell/useStudioState.js";
 import { stripChange } from "../strip/stripModel.js";
 import { expectNoForbiddenWords } from "../test-utils/forbiddenWords.js";
@@ -165,6 +166,22 @@ describe("PreviewPane", () => {
       shared.container.querySelector("iframe")?.getAttribute("src"),
     ).toContain("breakfast-for-2");
     expect(hoisted.autoStart.at(-1)).toBe(true);
+  });
+
+  it("says the preview comes with the Preview run while the project run is off", () => {
+    hoisted.resolve = (target) =>
+      target
+        ? { kind: "preview-off", project: target.project }
+        : { kind: "no-target" };
+    const { container } = mount({
+      change: null,
+      documents: [],
+      session: session(AGENT_SHOWS_ORDER),
+    });
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.textContent).toContain(PREVIEW_OFF);
+    expect(PREVIEW_OFF).toBe("Preview comes with the Preview run");
+    expectNoForbiddenWords(container);
   });
 
   it("says over the early drive view that screens appear as they're built", () => {

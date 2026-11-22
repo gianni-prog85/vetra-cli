@@ -133,7 +133,7 @@ export async function createAgent(ctx: AgentSetupContext<Config>): Promise<Agent
       // F19: a new change's starting code, before the model's first step.
       new ChangeBaseProcessor(ctx.context),
       createSteerProcessor(),
-      new PhaseToolsProcessor(ctx.context),
+      new PhaseToolsProcessor(ctx.context, undefined, { projectRun: ctx.config.projectRun }),
       new TokenLimiterProcessor({ limit: mainLimit }),
     ],
   });

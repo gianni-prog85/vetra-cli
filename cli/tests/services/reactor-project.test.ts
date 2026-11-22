@@ -9,7 +9,11 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { PreflightContext, ServiceBuildContext } from '@powerhousedao/clint';
 import type { Config } from '../../src/framework.js';
-import { previewEndpoints, reactorProject } from '../../src/services/reactor-project.js';
+import {
+  PROJECT_RUN_OFF,
+  previewEndpoints,
+  reactorProject,
+} from '../../src/services/reactor-project.js';
 import { defaultConfig } from '../spec/_fixtures.js';
 import { recordFixture } from './run-record.js';
 
@@ -87,8 +91,11 @@ describe('reactor-project preflight', () => {
   });
   afterEach(() => rmSync(project, { recursive: true, force: true }));
 
-  async function failures(): Promise<string[]> {
-    const ctx = { cwd: project } as PreflightContext<Config>;
+  async function failures(projectRun = true): Promise<string[]> {
+    const ctx = {
+      cwd: project,
+      config: { ...defaultConfig(), projectRun },
+    } as PreflightContext<Config>;
     const messages: string[] = [];
     for (const check of reactorProject.preflight ?? []) {
       const result = await check(ctx);
@@ -96,6 +103,29 @@ describe('reactor-project preflight', () => {
     }
     return messages;
   }
+
+  it('refuses first while the project run is off, the default', async () => {
+    expect(defaultConfig().projectRun).toBe(false);
+    const [first] = reactorProject.preflight ?? [];
+    const result = await first!({
+      cwd: project,
+      config: defaultConfig(),
+    } as PreflightContext<Config>);
+    expect(result).toEqual({
+      ok: false,
+      message: PROJECT_RUN_OFF,
+      hint: expect.stringMatching(/VETRA_PROJECT_RUN=1.*Preview run \(C2\)/),
+    });
+    // A full project is refused all the same.
+    mkdirSync(path.join(project, 'hosts', 'vetra'), { recursive: true });
+    writeFileSync(path.join(project, 'powerhouse.config.json'), '{}');
+    writeFileSync(path.join(project, 'hosts', 'vetra', 'host.js'), 'export default {};');
+    const cli = path.join(project, 'node_modules', '@powerhousedao', 'ph-cli', 'dist');
+    mkdirSync(cli, { recursive: true });
+    writeFileSync(path.join(cli, 'cli.mjs'), '');
+    expect(await failures(false)).toEqual([PROJECT_RUN_OFF]);
+    expect(await failures(true)).toEqual([]);
+  });
 
   it('needs a project with a vetra host and its ph-cli installed', async () => {
     writeFileSync(path.join(project, 'powerhouse.config.json'), '{}');

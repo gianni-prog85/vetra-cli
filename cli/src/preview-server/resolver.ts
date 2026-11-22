@@ -28,6 +28,8 @@ export async function resolvePreview(args: {
   drive?: string;
   /** No doc or drive: the preview drive's root (see the module comment). */
   home?: boolean;
+  /** The Cli config's `projectRun`; off: a project that isn't up is `preview-off`. */
+  projectRun?: boolean;
 }): Promise<ResolveResult> {
   if (!args.project) return { kind: "no-target" };
   if (!args.drive && !args.doc && !args.home) return { kind: "no-target" };
@@ -47,9 +49,11 @@ export async function resolvePreview(args: {
     .list("reactor-project")
     .find((i) => i.workdir === projectPath);
 
-  if (!instance) {
-    return { kind: "project-stopped", project: args.project, projectPath };
-  }
+  const stopped = (): ResolveResult =>
+    args.projectRun
+      ? { kind: "project-stopped", project: args.project, projectPath }
+      : { kind: "preview-off", project: args.project };
+  if (!instance) return stopped();
   // The preview drive's id comes with the run record, once it is live.
   const defaultDriveId = previewDriveIdOf(instance);
   const targetDriveId = args.drive ?? defaultDriveId;
@@ -60,9 +64,7 @@ export async function resolvePreview(args: {
     ...(targetDriveId ? { driveId: targetDriveId } : {}),
   });
   if (instance.status === "starting") return starting();
-  if (instance.status !== "ready") {
-    return { kind: "project-stopped", project: args.project, projectPath };
-  }
+  if (instance.status !== "ready") return stopped();
 
   const connectUrl = instance.endpoints?.["vetra-studio"];
   if (!connectUrl) return starting();

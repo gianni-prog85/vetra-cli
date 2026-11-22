@@ -324,7 +324,8 @@ so it gets the framework's `ServiceManager` + event-bus access via
 
 - `GET /resolve?project=<label>&doc=<id-or-slug>` — read-only. Returns
   the live preview URL or a state code (`no-target`,
-  `unknown-project`, `project-stopped`, `starting`, `ready`). The
+  `unknown-project`, `project-stopped`, `preview-off` (the project run is
+  off, see "reactor-project service"), `starting`, `ready`). The
   editor calls this on every relevant state change.
 - `GET /project-package?project=<label>` — read-only. Returns the
   project's package identity (`{ kind: "ok", name, version }`) read from
@@ -541,7 +542,19 @@ Composition:
 The project's own `ph run vetra dev` (`services/reactor-project.ts`, a
 clint host service): the compound the 6.4 scaffold writes to
 `hosts/vetra`, its `vetra-switchboard` and `vetra-studio` members each in
-their own process, Vite HMR for editors. Spawned by the agent via the
+their own process, Vite HMR for editors.
+
+**Opt-in.** The run opens the project's own stores (on Sektar: its
+business drives, workflows and Portle), so it is off unless the Cli config
+says `projectRun: true` (env `VETRA_PROJECT_RUN=1`). While off, the
+service's first preflight refuses every start (agent, BUILD pane, restart),
+the agent sees no `reactor-project-start` or `-restart` in any phase
+(`PROJECT_RUN_TOOLS` in `agents/phase-tools.ts`), and `/resolve` answers
+`preview-off` where it would say `project-stopped`, so the BUILD pane shows
+"Preview comes with the Preview run" and starts nothing. A scaffolded
+project can turn it on; C2's Preview host replaces it.
+
+When on, it is spawned by the agent via the
 `reactor-project-start` tool or the BUILD pane's `POST /start`, in the
 project folder (a subfolder of the workdir), with the project as its data
 dir: its stores and `.ph/run/vetra.json` are the project's own. Ready once
@@ -743,7 +756,9 @@ via the `reactor-project-start` tool.
 
 ### Auto-start of reactor-project
 
-The editor pre-empts manual lifecycle calls for the BUILD pane. When
+Only with the project run on (`projectRun`; off, `/resolve` says
+`preview-off` and nothing starts). The editor pre-empts manual lifecycle
+calls for the BUILD pane. When
 `/resolve` returns `project-stopped` for a session's target, the
 browser-side `useResolvedPreview` hook fires `POST /start` once per
 target without any user click. SSE drives the resulting state

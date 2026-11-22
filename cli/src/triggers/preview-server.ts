@@ -82,6 +82,7 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
         versions: { vetraCli: VETRA_CLI_VERSION, ph: DEFAULT_PH_VERSION },
         getReactor: () => getEmbeddedDrive(ctx.commandContext),
         agentLogging: ctx.context.config.agentLogging,
+        projectRun: ctx.context.config.projectRun,
         cloud,
         // Verify owner bearers on the Renown the Studio's Connect logs in on.
         gateRenownUrl: resolveStudioRenownUrl(

@@ -162,7 +162,8 @@ describe("preview-server route gate", () => {
       expect(body).toEqual({ kind: "unknown-project", project: "nope", error: "unknown project" });
       const stopped = await call("GET", "/resolve?project=demo&doc=x", PROXIED);
       const s = (await stopped.json()) as Record<string, unknown>;
-      expect(s.kind).toBe("project-stopped");
+      // The project run is off unless the Cli config turns it on.
+      expect(s.kind).toBe("preview-off");
       expect(s).not.toHaveProperty("projectPath");
       expect(JSON.stringify(s)).not.toContain(workdir);
     });

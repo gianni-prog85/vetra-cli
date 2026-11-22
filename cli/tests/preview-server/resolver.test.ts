@@ -72,6 +72,7 @@ describe("preview-server resolver", () => {
       workdir,
       project: PROJECT,
       doc: "doc-1",
+      projectRun: true,
     });
     expect(result).toEqual({
       kind: "project-stopped",
@@ -87,8 +88,32 @@ describe("preview-server resolver", () => {
       workdir,
       project: PROJECT,
       doc: "doc-1",
+      projectRun: true,
     });
     expect(result.kind).toBe("project-stopped");
+  });
+
+  it("project run off (the default): preview-off, never project-stopped", async () => {
+    for (const instances of [[], [{ workdir: projectPath, status: "stopped" as const }]]) {
+      expect(
+        await resolvePreview({
+          services: makeServices(instances),
+          workdir,
+          project: PROJECT,
+          doc: "doc-1",
+        }),
+      ).toEqual({ kind: "preview-off", project: PROJECT });
+    }
+    expect(
+      await resolvePreview({
+        services: makeServices([]),
+        workdir,
+        project: PROJECT,
+        doc: "",
+        home: true,
+        projectRun: false,
+      }),
+    ).toEqual({ kind: "preview-off", project: PROJECT });
   });
 
   it("returns starting, with no drive yet, while the run record is not live", async () => {
@@ -182,6 +207,7 @@ describe("preview-server resolver", () => {
         project: PROJECT,
         doc: "",
         home: true,
+        projectRun: true,
       }),
     ).toEqual({ kind: "project-stopped", project: PROJECT, projectPath });
   });

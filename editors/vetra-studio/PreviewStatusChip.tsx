@@ -55,6 +55,12 @@ function describe(preview: Exclude<ResolvedPreview, { kind: "no-target" }>): {
       return { label: "starting…", tone: "starting", project: preview.project };
     case "project-stopped":
       return { label: "starting…", tone: "starting", project: preview.project };
+    case "preview-off":
+      return {
+        label: "preview off",
+        tone: "stopped",
+        project: preview.project,
+      };
     case "loading":
       return { label: "checking…", tone: "starting", project: "" };
     case "unknown-project":
@@ -70,6 +76,8 @@ function tooltipFor(preview: ResolvedPreview): string | undefined {
       return preview.url;
     case "project-stopped":
       return "Project is not running — starting it.";
+    case "preview-off":
+      return "Studio runs no stack of the project's own: preview comes with the Preview run.";
     case "starting":
       return "Reactor project is booting.";
     case "unknown-project":

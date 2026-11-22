@@ -79,10 +79,17 @@ function isProjectFolder(p: string): boolean {
   );
 }
 
+/** The refusal while the project run is off (`projectRun`, the default). */
+export const PROJECT_RUN_OFF = 'The project run is off';
+export const PROJECT_RUN_OFF_HINT =
+  "Studio starts no stack of the project's own unless asked: set projectRun: true (env VETRA_PROJECT_RUN=1) for a scaffolded project. The package's Preview run (C2) replaces it";
+
 /**
  * The builder's project run: `ph run vetra dev` in the project, its stores
  * and run record the project's own (`.ph/`). Ready once `.ph/run/vetra.json`
- * is live; stopped through its stdin.
+ * is live; stopped through its stdin. Opt-in (`projectRun`): the run opens the
+ * project's business stores, so no start path (agent, BUILD pane, restart)
+ * gets past the first preflight while it is off.
  */
 export const reactorProject = defineService({
   id: 'reactor-project',
@@ -103,6 +110,10 @@ export const reactorProject = defineService({
   }),
   readiness: { timeout: READINESS_TIMEOUT_MS },
   preflight: [
+    ({ config }) =>
+      config.projectRun
+        ? { ok: true }
+        : { ok: false, message: PROJECT_RUN_OFF, hint: PROJECT_RUN_OFF_HINT },
     checkWorkdir(
       isProjectFolder,
       'Not a Reactor Package project',

@@ -16,6 +16,17 @@ describe("OpenRouter config", () => {
     expect(configSchema.parse({ llmAllowDataCollection: "false" }).llmAllowDataCollection).toBe(false);
   });
 
+  it("keeps the project run off unless VETRA_PROJECT_RUN turns it on", () => {
+    expect(configSchema.parse({}).projectRun).toBe(false);
+    for (const on of ["1", "true", "TRUE", " yes "]) {
+      expect(configSchema.parse({ projectRun: on }).projectRun).toBe(true);
+    }
+    for (const off of ["0", "false", "", "no"]) {
+      expect(configSchema.parse({ projectRun: off }).projectRun).toBe(false);
+    }
+    expect(configSchema.parse({ projectRun: true }).projectRun).toBe(true);
+  });
+
   it("declares openrouterApiKey as a secret", () => {
     expect(secretsSchema.parse({ openrouterApiKey: "sk-or-v1-x" }).openrouterApiKey).toBe("sk-or-v1-x");
   });
