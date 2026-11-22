@@ -12,12 +12,12 @@
   "packages": [
     {
       "packageName": "@powerhousedao/clint-common",
-      "version": "0.1.0-dev.79",
+      "version": "6.3.0-dev.6",
       "provider": "local"
     },
     {
       "packageName": "@powerhousedao/vetra",
-      "version": "6.2.3-dev.66",
+      "version": "6.3.0-dev.6",
       "provider": "local"
     },
     {

@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import * as studioProduct from "document-models/studio-product";
 import { LaunchError } from "../../src/launch/errors.js";
 import {
@@ -77,7 +78,7 @@ function fakeGithub(): { root: string; bare: string; url: string } {
   const bare = path.join(root, "acme", "team-todo.git");
   fs.mkdirSync(bare, { recursive: true });
   git(bare, "init", "-q", "--bare", "-b", "main");
-  return { root, bare, url: `file://${bare}` };
+  return { root, bare, url: pathToFileURL(bare).href };
 }
 
 /** Someone pushes a commit to `main` on GitHub; returns its sha. */
@@ -277,7 +278,7 @@ describe("GitHub mirror", () => {
     const hook = path.join(m.gh.bare, "hooks", "pre-receive");
     fs.writeFileSync(
       hook,
-      "#!/bin/sh\necho \"refusing to allow a GitHub App to create or update workflow \\\`.github/workflows/ci.yml\\\` without \\\`workflows\\\` permission\" >&2\nexit 1\n",
+      "#!/bin/sh\necho \"refusing to allow a GitHub App to create or update workflow \\`.github/workflows/ci.yml\\` without \\`workflows\\` permission\" >&2\nexit 1\n",
       { mode: 0o755 },
     );
     write(m.h.workdir, ".github/workflows/ci.yml", "on: push\n");

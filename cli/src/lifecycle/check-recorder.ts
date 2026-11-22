@@ -106,7 +106,7 @@ export function checkRecorder(
       return {
         contribute: {
           tool(name, tool) {
-            if (!RECORDED_TOOLS.has(name)) return tool;
+            if (!RECORDED_TOOLS.has(name) || !tool.execute) return tool;
             const innerExecute = tool.execute.bind(tool);
             return {
               ...tool,

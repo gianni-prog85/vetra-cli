@@ -111,11 +111,12 @@ const reactConfig = {
   plugins: reactPlugins,
 };
 
-/** Config for javascript files */
+/** Config for javascript files: all of them are Node scripts (bin, pnpmfile, cli scripts and fixtures) */
 const javascriptConfig = {
   // disable type aware linting for js files
   files: javascriptFiles,
   extends: [tseslint.configs.disableTypeChecked],
+  languageOptions: { globals: globals.node },
 };
 
 /** Unsafe-* rules, relaxed where upstream types are `any` or tests build partial mocks */
@@ -177,6 +178,16 @@ const typescriptEsLintRecommendedConfig = [
   ...tseslint.configs.recommendedTypeChecked,
 ];
 
+/**
+ * Prettier checks the app folders. The CLI's code was never prettier-formatted:
+ * its own config only turned off the rules that clash with prettier
+ * (eslint-config-prettier, part of the recommended config below).
+ */
+const prettierConfigs = [
+  eslintPluginPrettierRecommended,
+  { files: ["cli/**"], rules: { "prettier/prettier": "off" } },
+];
+
 /** Main config */
 export default defineConfig(
   ignored,
@@ -186,5 +197,5 @@ export default defineConfig(
   cliConfigs,
   reactConfig,
   javascriptConfig,
-  eslintPluginPrettierRecommended,
+  prettierConfigs,
 );

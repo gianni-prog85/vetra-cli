@@ -27,6 +27,7 @@ import {
   setAppName,
 } from "@powerhousedao/vetra/document-models/app-module";
 import { saveSpec } from "@powerhousedao/vetra/codegen";
+import { withSignaturePolicy } from "document-model";
 import { baseLoadFromFile } from "document-model/node";
 import {
   applyFsChangesToReactor,
@@ -101,6 +102,8 @@ describe("spec-fs-sync FS → drive", () => {
     ]);
     module = await new ReactorClientBuilder()
       .withReactorBuilder(builder)
+      // The client is unsigned; new documents default to v2-required.
+      .withCreateSignaturePolicy("legacy")
       .buildModule();
     const drive = await module.client.createEmpty("powerhouse/document-drive");
     driveId = drive.header.id;
@@ -177,7 +180,7 @@ describe("spec-fs-sync FS → drive", () => {
    * saveSpec, or the saved file is unsyncable (no ops to replay).
    */
   async function makeSpecFile(name: string): Promise<{ id: string; path: string }> {
-    const draft = AppModuleV1.utils.createDocument();
+    const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
     draft.header.name = name;
     draft.header.documentType = "powerhouse/app";
     await module.client.create(draft);
@@ -209,9 +212,10 @@ describe("spec-fs-sync FS → drive", () => {
     ]);
     const producer = await new ReactorClientBuilder()
       .withReactorBuilder(producerBuilder)
+      .withCreateSignaturePolicy("legacy")
       .buildModule();
     try {
-      const draft = AppModuleV1.utils.createDocument();
+      const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "fresh-app";
       draft.header.documentType = "powerhouse/app";
       await producer.client.create(draft);
@@ -278,7 +282,7 @@ describe("spec-fs-sync FS → drive", () => {
 
   it("materializes a snapshot .phd (no document-scope create) and syncs its state", async () => {
     // Built via reducer, no reactor — mirrors createSpecDocument + saveSpec.
-    let doc = AppModuleV1.utils.createDocument();
+    let doc = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
     doc.header.name = "snapshot-app";
     doc.header.documentType = "powerhouse/app";
     doc = AppModuleV1.reducer(doc, setAppName({ name: "snap-name" }));
@@ -316,7 +320,7 @@ describe("spec-fs-sync FS → drive", () => {
   it("files a workspace-layout spec under a folder named after its project", async () => {
     const project = "workout-tracker";
     const projectDir = path.join(tmpDir, project);
-    const draft = AppModuleV1.utils.createDocument();
+    const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
     draft.header.name = "ws-app";
     draft.header.documentType = "powerhouse/app";
     await module.client.create(draft);
@@ -457,7 +461,7 @@ describe("spec-fs-sync FS → drive", () => {
     try {
       // Project dir + specs subtree created entirely AFTER the watcher started.
       const projectDir = path.join(tmpDir, "late-project");
-      const draft = AppModuleV1.utils.createDocument();
+      const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "late-app";
       draft.header.documentType = "powerhouse/app";
       await module.client.create(draft);
@@ -503,7 +507,7 @@ describe("spec-fs-sync FS → drive", () => {
     await specFsSyncTrigger.setup!(ctx);
     try {
       const projectDir = path.join(tmpDir, "del-project");
-      const draft = AppModuleV1.utils.createDocument();
+      const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "del-app";
       draft.header.documentType = "powerhouse/app";
       await module.client.create(draft);
@@ -551,7 +555,7 @@ describe("spec-fs-sync FS → drive", () => {
     await specFsSyncTrigger.setup!(ctx);
     try {
       const projectDir = path.join(tmpDir, "rename-project");
-      const draft = AppModuleV1.utils.createDocument();
+      const draft = withSignaturePolicy(AppModuleV1.utils.createDocument(), "legacy");
       draft.header.name = "rename-app";
       draft.header.documentType = "powerhouse/app";
       await module.client.create(draft);

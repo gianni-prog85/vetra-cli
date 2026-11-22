@@ -1,6 +1,6 @@
-import { readOwnPackage } from './own-package.js';
+import { readPackageInfo } from '@powerhousedao/clint';
 
-const pkg = readOwnPackage();
+const pkg = readPackageInfo(import.meta.url);
 
 export const CLI_ROOT = pkg.root;
 // A literal, not the package name: it is the VETRA_* env prefix, the

@@ -131,7 +131,7 @@ export function shellGuard(): LifecycleHook {
       return {
         contribute: {
           tool(name, tool) {
-            if (name !== SHELL_TOOL) return tool;
+            if (name !== SHELL_TOOL || !tool.execute) return tool;
             const innerExecute = tool.execute.bind(tool);
             return {
               ...tool,

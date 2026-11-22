@@ -22,7 +22,7 @@
 import { readFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import type { DriveConfig, ReactorClientModule } from "@powerhousedao/clint";
+import type { DriveConfig, EnsureDriveClient } from "@powerhousedao/clint";
 import type { IRenown, ISigner } from "@renown/sdk/node";
 import { getRenown } from "./renown.js";
 import {
@@ -81,7 +81,7 @@ export function writeStudioDrivePointer(
 
 /** The pointer's drive id, when the document still exists. */
 async function resolvePointerDrive(
-  client: Pick<ReactorClientModule["client"], "get">,
+  client: Pick<EnsureDriveClient, "get">,
   workdir: string,
 ): Promise<string | undefined> {
   const id = readStudioDrivePointer(workdir);

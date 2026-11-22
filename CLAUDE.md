@@ -55,53 +55,31 @@ non-trivial session:
 
 ## Cross-repo context
 
-The runtime composition spans three checkouts (vetra-cli, ph-clint,
-monorepo worktree at `apps/switchboard` + `apps/connect`). See
-`ARCHITECTURE.md` → "Repositories" and `HANDOFF.md` → "Repositories
-touched" for paths. Workspace overrides in `pnpm-workspace.yaml` link
-them locally; rebuilds in any of the three are only picked up after the
-dev daemon is cycled — see "Dev daemon model & rebuilds" below.
+The runtime composition spans two checkouts: vetra-cli and the Powerhouse
+monorepo (`packages/clint`, `packages/clint-common`, `apps/switchboard`,
+`apps/connect`). See `ARCHITECTURE.md` → "Repositories" for paths.
+`workspace/local-link/link.sh` links the monorepo packages locally; a
+rebuild there is picked up when the Cli restarts.
 
 ## Dev daemon model & rebuilds
 
-When you run `pnpm dev` interactively, `main.ts` is the **foreground
-REPL** (reactor + Switchboard) and dies on Ctrl+C. But it spawns the
-`vetra-studio` service (a `ph vetra` process group serving the
-Switchboard + Connect Studio BUILD preview from `vetra-app/dist/connect`)
-as a **detached service that survives the REPL.** On exit you'll see:
+`pnpm dev` (`tsx cli/src/main.ts`) runs the Cli in the foreground through
+clint's `runCli`, attached to the switchboard drive `VETRA_SWITCHBOARD_URL`
+names, and dies on Ctrl+C. It starts no Switchboard, Connect or
+`vetra-studio` service of its own: those are hosts from B2 (see
+`ARCHITECTURE.md`). reactor-project previews are child services clint's
+service manager tracks and stops; don't `pkill -f` them.
 
-```
-vetra-studio still active …
-Run `vetra vetra-studio-stop` to shut it down
-```
-
-A subsequent `pnpm dev` **reuses** that still-running service rather than
-restarting it — so **rebuilds do not take effect until the service is
-cycled.** This is the #1 source of "I fixed it but nothing changed."
-
-ph-clint manages the service lifecycle (tracked PID, clean process-group
-kill). After rebuilding linked packages or `vetra-app/dist`, stop the
-service with the built-in before re-running `pnpm dev`:
-
-```
-vetra vetra-studio-stop          # built (dist) CLI
-# in dev without a build:
-pnpm --filter vetra exec tsx src/main.ts vetra-studio-stop
-```
-
-Don't `pkill -f` the processes — the managed `*-stop` command is the
-correct mechanism and kills the whole group via the tracked PID.
-
-Two non-obvious bundle facts that compound this:
-- **`vetra-app/dist` is gitignored build output.** The browser client's
-  sync query (`PollSyncEnvelopes`) is baked into
-  `vetra-app/dist/connect`, **not** the node-side packages. A stale
-  `dist` serves a stale query even when node_modules is correct. Rebuild
-  with `pnpm --filter vetra-app build && pnpm --filter vetra-app build:connect`.
+Two non-obvious bundle facts:
+- **`dist/` is gitignored build output.** The browser client's sync
+  query (`PollSyncEnvelopes`) is baked into the Studio bundle
+  (`dist/connect`), **not** the node-side packages. `build:connect`
+  needs the 6.4 connect host (`ph connect build` is `ph run connect
+  build`), so the bundle does not build until B2.
 - The node-side routine poll and the browser poll are **separate code
   paths**. Verifying one does not verify the other — exercise the
-  browser (load `http://localhost:8090/d/<drive-id>` and check the
-  `pollSyncEnvelopes` POST) when the symptom is browser-facing.
+  browser (load `/d/<drive-id>` and check the `pollSyncEnvelopes` POST)
+  when the symptom is browser-facing.
 
 When verifying a fix, restart the daemon, hard-load the Studio in a
 browser, and confirm the actual request — don't infer from boot logs.
@@ -114,49 +92,32 @@ are a stale artifact, not a real bug.
 
 | You changed… | To see it |
 |---|---|
-| Studio UI / editors / document models (`vetra-app` source) | Nothing — `ph vetra` dev mode runs **Vite HMR**, saves live-reload in the Studio. |
-| `vetra` source (`src/` — CLI, agents, triggers) | Restart the REPL: Ctrl+C, `pnpm dev`. `dev` is `tsx src/main.ts` (no build step). |
-| **Agents or skills** (`src/cli.ts` `prompts.agents`, anything under `prompts/`) | **`pnpm build:assets`, then restart the REPL** — see "Generated assets" below. |
-| The built Studio **BUILD preview** pane (`vetra-app/dist/connect`) | `pnpm --filter vetra-app build && build:connect`, then cycle the service. |
-| A linked framework package (`clint-common` / `ph-clint`) | Rebuild it (`pnpm --filter @powerhousedao/<pkg> build`), then `vetra vetra-studio-stop && pnpm dev`. No HMR across a built-dep boundary. |
+| Studio UI / editors / document models (`editors/`, `document-models/`) | Served by the Connect host from B2; this package has no Studio dev loop until then. |
+| Cli source (`cli/src/` — CLI, agents, triggers) | Restart the REPL: Ctrl+C, `pnpm dev`. `dev` is `tsx cli/src/main.ts` (no build step). |
+| **Agents or skills** (`cli/src/cli.ts` `prompts.agents`, anything under `prompts/`) | No build step until B2 — see "Generated assets" below. |
+| The built Studio bundle (`dist/connect`) | Not buildable until B2 (needs the connect host). |
+| A linked framework package (`clint` / `clint-common`) | Rebuild it in the monorepo, then restart `pnpm dev`. No HMR across a built-dep boundary. |
 
 ## Generated assets (`gen/`) — the silent-stale gotcha
 
-Agent profiles and `SKILL.md` files are **generated** from `src/cli.ts`
-(`prompts.agents`) + `prompts/` into `gen/` (and `dist/gen/`) by
-`pnpm build:assets`. At runtime `getAgentInstructions(<id>)` reads
+Agent profiles and `SKILL.md` files are **generated** from
+`cli/src/cli.ts` (`prompts.agents`) + `prompts/` into `gen/` (and
+`dist/gen/`). At runtime `getAgentInstructions(<id>)` reads
 `gen/agent-profiles/<name>.md`; a missing file throws and the agent
 never runs (e.g. a chat box that types but never replies).
 
-**`pnpm dev` does NOT run `build:assets`** — it reads whatever `gen/`
-already exists. So adding/renaming an agent or skill in `src/cli.ts`
-and just running `pnpm dev` silently uses a **stale profile**. The full
-root `pnpm build` *does* regenerate `gen/` (via
-`vetra build` → `build:assets && tsc`), but dev does not.
+This package has no step that writes `gen/` until B2 (`ph run <cli host>
+build`); `build:assets` is gone. `pnpm dev` reads whatever `gen/` an
+earlier build left, so a new or renamed agent or skill has no profile
+until then. Profiles are read once at agent-definition time, so a
+restart is required after `gen/` changes.
 
-After touching `prompts.agents` or `prompts/`: run `pnpm build:assets`,
-then restart the REPL. (Profiles are read once at agent-definition time,
-so a restart is required even after the file exists.)
+### Framework source
 
-### `.claude/ph-clint` symlink
-
-`.claude/ph-clint` is a symlink to the local ph-clint checkout
-(`/Users/acaldas/dev/powerhouse/ph-clint`). It's there so you can read
-framework internals (services, runtime, switchboard glue, interactive
-REPL, agent loader) from inside this workspace without leaving it.
-
-Treat it as a **read-only reference**:
-
-- Don't recursively grep/find/glob across the vetra-cli tree without
-  excluding `.claude/ph-clint`. It contains a full node_modules tree,
-  pnpm-lock, examples, prototypes, sandbox — searches will be slow and
-  noisy. Target it explicitly when you actually need ph-clint internals.
-- Don't edit through the symlink unless the task is specifically a
-  cross-repo change in ph-clint, in which case commit boundaries follow
-  the rule above (separate commits in separate repos).
-- The Explore / general-purpose agents should be pointed at specific
-  subpaths under `.claude/ph-clint/packages/...` rather than the symlink
-  root.
+The framework is `packages/clint` and `packages/clint-common` in the
+Powerhouse monorepo (the `.claude/ph-clint` symlink to the old ph-clint
+checkout is gone). Read framework internals there. Edit it only for a
+cross-repo change, in a separate commit in that repo.
 
 ## Authoring vetra agent skills
 

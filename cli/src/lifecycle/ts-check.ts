@@ -156,7 +156,7 @@ export function tsCheck(): LifecycleHook {
       return {
         contribute: {
           tool(name, tool) {
-            if (!WRITE_TOOLS.has(name)) return tool;
+            if (!WRITE_TOOLS.has(name) || !tool.execute) return tool;
             const innerExecute = tool.execute.bind(tool);
             return {
               ...tool,

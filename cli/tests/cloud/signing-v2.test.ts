@@ -10,6 +10,7 @@ import {
 import type { ReactorGraphQLClient } from "@powerhousedao/reactor-browser";
 import {
   deserializeSignature,
+  protocolVersionsFor,
   type Action,
   type ISigner,
   type TransportAction,
@@ -91,12 +92,23 @@ describe("Renown signing for Vetra Cloud", () => {
   });
 
   it("environment controller pushes v2-signed actions", async () => {
-    const envId = "fake-env-id";
+    let envId = "";
     const pushed: TransportAction[] = [];
     // Only the create + push half of the remote; the pull after it is refused.
+    // The host's create defaults are the prod cloud's; the document is created
+    // under its own header id, as a switchboard does.
     const client = {
-      CreateEmptyDocument: () =>
-        Promise.resolve({ createEmptyDocument: { id: envId } }),
+      GetCreateDefaults: () =>
+        Promise.resolve({
+          createDefaults: {
+            signaturePolicy: "v2-required",
+            protocolVersions: protocolVersionsFor("v2-required"),
+          },
+        }),
+      CreateDocument: (vars: { document: { header: { id: string } } }) => {
+        envId = vars.document.header.id;
+        return Promise.resolve({ createDocument: { id: envId } });
+      },
       MutateDocument: (vars: { actions: TransportAction[] }) => {
         pushed.push(...vars.actions);
         return Promise.resolve({ mutateDocument: { id: envId } });
@@ -118,6 +130,7 @@ describe("Renown signing for Vetra Cloud", () => {
     });
     await expect(controller.push()).rejects.toThrow("pull not faked");
 
+    expect(envId).not.toBe("");
     expect(pushed.map((a) => a.type)).toEqual(
       expect.arrayContaining(["SET_OWNER", "SET_LABEL", "INITIALIZE"]),
     );

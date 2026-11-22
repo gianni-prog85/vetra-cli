@@ -27,21 +27,15 @@ async function wrapOf(): Promise<ToolWrap> {
   return wrap;
 }
 
-/** A Mastra tool in the shape `WrapRegistry.tool` takes: clint's Mastra glue
- * narrows each tool to `{ execute }` before it wraps it. */
-type WrappableTool = Awaited<ReturnType<typeof commandsToMastraTools>>[string] & {
-  execute: (...args: unknown[]) => unknown;
-};
-
 /** The agent's tool for `command`, as clint builds it for Mastra. */
-async function agentTool(command: typeof specCreate | typeof specUpdate): Promise<WrappableTool> {
+async function agentTool(command: typeof specCreate | typeof specUpdate) {
   const tools = await commandsToMastraTools([command] as never, {
     workdir: "/tmp",
     stdout: () => {},
   } as never);
   const tool = tools[command.id];
   if (!tool) throw new Error(`no tool ${command.id}`);
-  return tool as WrappableTool;
+  return tool;
 }
 
 function required(schema: unknown): string[] {

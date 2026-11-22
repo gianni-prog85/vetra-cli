@@ -3,11 +3,14 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = join(__dirname, "..", "src", "main.ts");
-const TSX = join(__dirname, "..", "..", "node_modules", ".bin", "tsx");
+// tsx's own entry, run by this node: the `.bin/tsx` shim is a shell script,
+// which Windows cannot spawn without a shell.
+const TSX_CLI = createRequire(import.meta.url).resolve("tsx/cli");
 
 type RunResult = { stdout: string; stderr: string; code: number };
 
@@ -17,7 +20,7 @@ async function run(
 ): Promise<RunResult> {
   const cliArgs = opts.workdir ? ["-w", opts.workdir, ...args] : args;
   return new Promise((resolve, reject) => {
-    const child = spawn(TSX, [CLI_PATH, ...cliArgs], {
+    const child = spawn(process.execPath, [TSX_CLI, CLI_PATH, ...cliArgs], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";

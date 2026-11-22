@@ -13,6 +13,7 @@
 
 import {AppModuleV1} from "@powerhousedao/vetra/document-models"
 import {type AppModuleDocument, setAppName} from "@powerhousedao/vetra/document-models/app-module"
+import {withSignaturePolicy} from "document-model"
 import {baseLoadFromFile} from "document-model/node"
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
@@ -62,6 +63,8 @@ describe('spec-sync drive → FS integration', () => {
     ]);
     module = await new ReactorClientBuilder()
       .withReactorBuilder(builder)
+      // The client is unsigned; new documents default to v2-required.
+      .withCreateSignaturePolicy('legacy')
       .buildModule();
   });
 
@@ -89,16 +92,23 @@ describe('spec-sync drive → FS integration', () => {
       (event) => {
         if (event.documents.length === 0) return;
         eventCount += 1;
-        chain = chain.then(() =>
-          syncSpecsToFs(event.documents as never, tmpDir, {
-            log,
-            client: module.client as never,
-          }),
+        // The trigger loads the documents when it polls, not from the event, so
+        // the header matches the operation history read beside it.
+        const ids = event.documents.map((d) => d.header.id);
+        chain = chain.then(async () =>
+          syncSpecsToFs(
+            await Promise.all(ids.map((id) => module.client.get(id))),
+            tmpDir,
+            {
+              log,
+              client: module.client as never,
+            },
+          ),
         );
       },
     );
 
-    const doc = AppModuleV1.utils.createDocument();
+    const doc = withSignaturePolicy(AppModuleV1.utils.createDocument(), 'legacy');
     doc.header.name = 'my-test-app';
     doc.header.documentType = 'powerhouse/app';
     await module.client.create(doc);
@@ -152,7 +162,7 @@ describe('spec-sync drive → FS integration', () => {
       addFolder({ id: folderId, name: project, parentFolder: null }) as never,
     ]);
 
-    const doc = AppModuleV1.utils.createDocument();
+    const doc = withSignaturePolicy(AppModuleV1.utils.createDocument(), 'legacy');
     doc.header.name = 'filed-app';
     doc.header.documentType = 'powerhouse/app';
     await module.client.create(doc);
@@ -192,7 +202,7 @@ describe('spec-sync drive → FS integration', () => {
     // subscription.
     const [driveModel] = driveDocumentModels;
     try {
-      const driveDoc = driveModel.utils.createDocument();
+      const driveDoc = withSignaturePolicy(driveModel.utils.createDocument(), 'legacy');
       await module.client.create(driveDoc);
     } catch {
       // Some doc-model types require additional setup; ignore — the point

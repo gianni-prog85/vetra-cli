@@ -30,6 +30,7 @@ export function serializableToolErrors(): LifecycleHook {
       return {
         contribute: {
           tool(_name, tool) {
+            if (!tool.execute) return tool;
             const innerExecute = tool.execute.bind(tool);
             return {
               ...tool,

@@ -145,10 +145,15 @@ package; defaults to the pre-release registry `https://registry.vetra.io`),
 ## Project layout
 
 
+The repository is one package, `@powerhousedao/vetra-cli`.
+
 | Path                               | What it is                                                                        |
 | ---------------------------------- | --------------------------------------------------------------------------------- |
-| [vetra-cli/](vetra-cli/)           | The CLI — agent definitions, skills, services, triggers, and the local API.       |
-| [vetra-app/](vetra-app/)           | The Powerhouse Reactor package — document models, editors, processors, subgraphs. |
+| [cli/](cli/)                       | The CLI — agent definitions, services, triggers, and the local API; `cli/index.ts` is the `./cli` export. |
+| [bin/vetra.mjs](bin/vetra.mjs)     | The `vetra` bin: runs the built `./cli`.                                          |
+| [prompts/](prompts/)               | Agent profile and skill sources.                                                  |
+| [cloud-client/](cloud-client/)     | The Vetra Cloud environment client.                                               |
+| `document-models/`, `editors/`, `processors/`, `subgraphs/` | The Powerhouse package — document models, editors, processors, subgraphs. |
 | [lab/](lab/)                       | Docker-based e2e reproduction of the publish → build → run pipeline.              |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Durable map of how the runtime fits together.                                     |
 | [CLAUDE.md](CLAUDE.md)             | Agent/contributor instructions and dev-daemon gotchas.                            |
@@ -156,11 +161,9 @@ package; defaults to the pre-release registry `https://registry.vetra.io`),
 
 ## Publishing
 
-```sh
-pnpm publish:dev          # publish to the dev registry
-pnpm publish:staging      # publish to staging
-pnpm publish:production   # publish to production
-```
+`pnpm build` writes the Powerhouse version marker and runs `ph-cli build`
+into `dist/`; the package publishes with `npm publish`. The `ph-publish`
+scripts are gone.
 
 ## Troubleshooting
 
@@ -172,9 +175,9 @@ processes — the managed stop command kills the whole group cleanly.
 Connect, and Switchboard ports from the CLI name with no fallback. Free those
 ports (stop any prior `vetra-studio`) before starting.
 - **Agent types but never replies / a profile is missing.** Agent profiles and
-skills are generated into `gen/`. After editing agents or skills run
-`pnpm --filter vetra build:assets` and restart the REPL — `pnpm dev`
-does not regenerate them.
+skills are generated into `gen/`, which no script in this package writes
+until the host build (`ph run <cli host> build`) arrives; `pnpm dev` reads
+what an earlier build left there.
 
 More detail on the dev-daemon model and reload story lives in
 [CLAUDE.md](CLAUDE.md).

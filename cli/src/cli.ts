@@ -4,7 +4,6 @@
  */
 // @clint:begin imports
 import { defineCli } from '@powerhousedao/clint';
-import type { DocumentModelModule } from 'document-model';
 import { z } from 'zod';
 import path from 'node:path';
 import { CLI_NAME, CLI_VERSION, CLI_ROOT } from './config.js';
@@ -49,11 +48,8 @@ import { githubCommands } from './commands/github/index.js';
 // The package root: the Connect stamping hooks write into its dist/connect.
 const CONNECT_ASSETS_ROOT = CLI_ROOT;
 
-// Every model the reactor client reduces and signs with. A mixed list takes
-// the element type clint's defineRegistry and the reactor client take
-// (`DocumentModelModule<any>`): `remote.documentModels` is typed
-// `DocumentModelModule[]`, which no concrete module's reducer fits.
-const studioDocumentModels: DocumentModelModule<any>[] = [
+// Every model the reactor client reduces and signs with.
+const studioDocumentModels = [
   ...documentModels,
   ...vetraModels,
   ...extModels,
