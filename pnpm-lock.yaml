@@ -3410,7 +3410,7 @@ packages:
         optional: true
 
   '@powerhousedao/vetra-cloud-package@https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz':
-    resolution: {tarball: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz}
+    resolution: {integrity: sha512-H6DXFp5AAIS177IW536Zw4BCqsqT9L3UH9sj9mgrwv2/jJCQDRIWVWhqiNjDGOgMkHgNRe3JAmdwtT6pQRVInA==, tarball: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz}
     version: 0.0.75
     peerDependencies:
       react: ^19.2.0
