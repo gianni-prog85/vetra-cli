@@ -1,43 +1,38 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { createWriteStream, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import type { FullConfig } from "@playwright/test";
+import { STUDIO_MEMBERS, memberPids, stopStudio } from "./cleanup.js";
 import {
   CACHE_DIR,
-  CLI_DIR,
+  REPO_ROOT,
   RUN_FILE,
+  type RunFile,
   STUDIO_LOG,
+  homeFor,
   loadFixture,
-  phHomeFor,
+  phCliEntry,
   replayFixturePath,
+  stackEnv,
+  workdirFor,
 } from "./target.js";
 
-/** studioUrlTrigger prints this once the embedded studio is reachable. */
-const STUDIO_LINE = /Vetra Studio:\s*(http:\/\/\S+)/;
-const BOOT_TIMEOUT_MS = 180_000;
+/** studioUrlTrigger prints this once the stack is up; whole lines only. */
+const STUDIO_LINE = /Vetra Studio:\s*(http:\/\/\S+)\r?\n/;
+const BOOT_TIMEOUT_MS = 240_000;
 
-/** Studio boot command: default runs from source via tsx;
- * VETRA_E2E_BOOT_CMD=vetra boots the globally-installed `vetra` bin. */
-function bootSpec(workdir: string): {
-  command: string;
-  args: string[];
-  cwd?: string;
-} {
-  if (process.env.VETRA_E2E_BOOT_CMD === "vetra") {
-    return { command: "vetra", args: ["--workdir", workdir] };
-  }
-  return {
-    command: "pnpm",
-    args: ["exec", "tsx", "src/main.ts", "--workdir", workdir],
-    cwd: CLI_DIR,
-  };
+function writeRunFile(run: RunFile): void {
+  writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
 }
 
-/** Boot a self-contained REPLAY studio (isolated HOME, auto-assigned ports) and
- * record baseUrl + driveId in RUN_FILE; VETRA_E2E_BASE_URL attaches instead. */
+/** Boots `ph-cli run studio` (switchboard, Connect and the Cli in REPLAY mode)
+ * with its stores, records and home in a temp dir, and records the Studio URL,
+ * drive id and pids in RUN_FILE; VETRA_E2E_BASE_URL attaches instead. */
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   mkdirSync(CACHE_DIR, { recursive: true });
+  rmSync(RUN_FILE, { force: true });
 
   if (process.env.VETRA_E2E_BASE_URL) {
     const baseUrl = process.env.VETRA_E2E_BASE_URL.replace(/\/$/, "");
@@ -45,80 +40,72 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     // id (e.g. from the studio boot log), so attach doesn't need `/` -> 302.
     const driveId =
       process.env.VETRA_E2E_DRIVE_ID ?? (await discoverDriveId(baseUrl));
-    writeFileSync(
-      RUN_FILE,
-      JSON.stringify({ baseUrl, driveId, pid: null, workdir: null }, null, 2),
-    );
+    writeRunFile({ baseUrl, driveId, pid: null, members: {}, tmp: null });
     return;
   }
 
   const fixture = loadFixture();
-  const workdir = mkdtempSync(path.join(os.tmpdir(), "vetra-e2e-"));
-  // ph-clint roots service state at HOME/.ph/<cli>; point HOME into the
-  // throwaway tree so the run never touches the developer's real ~/.ph.
-  const phHome = phHomeFor(workdir);
-  mkdirSync(phHome, { recursive: true });
-  const boot = bootSpec(workdir);
-  const child = spawn(boot.command, boot.args, {
-    cwd: boot.cwd,
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      HOME: phHome,
-      // Under CI, picocolors/Vite colorize even non-TTY, and the inner
-      // `ph vetra` readiness pattern can't match the ANSI-wrapped `Local:` line.
-      NO_COLOR: "1",
-      FORCE_COLOR: "0",
-      // Keep the pnpm store (content-addressed, concurrency-safe) shared so
-      // the inner `ph init` install stays warm despite the isolated HOME.
-      npm_config_store_dir:
-        process.env.npm_config_store_dir ??
-        path.join(os.tmpdir(), "vetra-e2e-pnpm-store"),
-      // Auto-assign the proxy port so parallel runs don't collide on 8090; the
-      // resolved URL is parsed from the boot log below.
-      VETRA_PROXY_PORT: "0",
-      // Cold `ph vetra` Vite start is slow on constrained CI runners; give the
-      // reactor-project readiness check generous headroom.
-      VETRA_REACTOR_READINESS_TIMEOUT_MS:
-        process.env.VETRA_REACTOR_READINESS_TIMEOUT_MS ?? "240000",
-      VETRA_REPLAY_FIXTURE: replayFixturePath(fixture),
-      // A placeholder is enough — replay never calls the model.
-      VETRA_ANTHROPIC_API_KEY:
-        process.env.VETRA_ANTHROPIC_API_KEY ?? "sk-ant-placeholder",
-      SERVICE_COMMAND: process.env.SERVICE_COMMAND ?? "vetra",
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "vetra-e2e-"));
+  mkdirSync(homeFor(tmp), { recursive: true });
+  mkdirSync(workdirFor(tmp), { recursive: true });
+  const child = spawn(
+    process.execPath,
+    [phCliEntry(), "run", "studio", "serve", "--", "--workdir", workdirFor(tmp)],
+    {
+      cwd: REPO_ROOT,
+      // The stop stream: its end (this process ending too) stops the stack.
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      env: {
+        ...stackEnv(tmp),
+        PH_STOP_ON_STDIN: "1",
+        // Under CI, picocolors/Vite colorize even non-TTY.
+        NO_COLOR: "1",
+        FORCE_COLOR: "0",
+        // The pnpm store stays shared (content-addressed, concurrency-safe), so
+        // an inner `ph init` install stays warm despite the isolated HOME.
+        npm_config_store_dir:
+          process.env.npm_config_store_dir ??
+          path.join(os.tmpdir(), "vetra-e2e-pnpm-store"),
+        VETRA_REACTOR_READINESS_TIMEOUT_MS:
+          process.env.VETRA_REACTOR_READINESS_TIMEOUT_MS ?? "240000",
+        VETRA_REPLAY_FIXTURE: replayFixturePath(fixture),
+        // A placeholder is enough — replay never calls the model.
+        VETRA_ANTHROPIC_API_KEY:
+          process.env.VETRA_ANTHROPIC_API_KEY ?? "sk-ant-placeholder",
+      },
     },
-  });
+  );
+  child.stdin.on("error", () => undefined);
+  const run: RunFile = {
+    baseUrl: null,
+    driveId: null,
+    pid: child.pid ?? null,
+    members: {},
+    tmp,
+  };
+  // Before the wait: a teardown after a runner crash still finds the stack.
+  writeRunFile(run);
   // Tee everything to a file for the whole run (persists past the URL match).
   const logStream = createWriteStream(STUDIO_LOG);
-  child.stdout?.pipe(logStream);
-  child.stderr?.pipe(logStream);
+  child.stdout.pipe(logStream);
+  child.stderr.pipe(logStream);
 
-  let studioUrl: string;
   try {
-    studioUrl = await waitForStudio(child);
+    const url = new URL(await waitForStudio(child));
+    const driveId = url.pathname.match(/\/d\/([^/?#]+)/)?.[1];
+    if (!driveId) throw new Error(`Could not parse drive id from "${url.href}"`);
+    run.baseUrl = url.origin;
+    run.driveId = driveId;
+    run.members = memberPids(tmp, STUDIO_MEMBERS);
+    writeRunFile(run);
   } catch (err) {
-    try {
-      if (child.pid) process.kill(-child.pid, "SIGKILL");
-    } catch {
-      /* already gone */
-    }
+    child.stdin.end();
+    await stopStudio(run);
+    rmSync(RUN_FILE, { force: true });
     throw err;
   }
-
-  const url = new URL(studioUrl);
-  const driveId = url.pathname.match(/\/d\/([^/?#]+)/)?.[1];
-  if (!driveId) throw new Error(`Could not parse drive id from "${studioUrl}"`);
-
-  writeFileSync(
-    RUN_FILE,
-    JSON.stringify(
-      { baseUrl: url.origin, driveId, pid: child.pid, workdir },
-      null,
-      2,
-    ),
-  );
-  // Let the studio outlive globalSetup; global-teardown kills the group.
+  // The stack outlives globalSetup; global-teardown stops it.
   child.unref();
 }
 
@@ -128,7 +115,7 @@ function waitForStudio(child: ChildProcess): Promise<string> {
     let settled = false;
     const onData = (chunk: Buffer) => {
       const text = chunk.toString();
-      buf += text;
+      buf += stripVTControlCharacters(text);
       // Mirror boot output so a hang is debuggable in the Playwright log.
       process.stdout.write(text);
       const m = buf.match(STUDIO_LINE);
@@ -144,9 +131,8 @@ function waitForStudio(child: ChildProcess): Promise<string> {
       cleanup();
       reject(
         new Error(
-          `vetra exited (code ${code}) before the studio was ready. ` +
-            `Check the boot log above — common causes: port 8090 already in ` +
-            `use (stop any running \`vetra\` studio), or a codegen/install failure.`,
+          `ph-cli run studio exited (code ${code}) before the Studio was ready. ` +
+            `See the boot log above and ${STUDIO_LOG}.`,
         ),
       );
     };
@@ -154,11 +140,6 @@ function waitForStudio(child: ChildProcess): Promise<string> {
       if (settled) return;
       settled = true;
       cleanup();
-      try {
-        if (child.pid) process.kill(-child.pid, "SIGKILL");
-      } catch {
-        /* ignore */
-      }
       reject(new Error(`Studio not ready within ${BOOT_TIMEOUT_MS}ms`));
     }, BOOT_TIMEOUT_MS);
     function cleanup() {
