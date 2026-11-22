@@ -890,11 +890,13 @@ These are limitations of the current direction; not bugs.
 - **The remote path.** No host here runs a signed switchboard: a cloud
   Studio's signing is checked by unit tests only (a `v2-required`
   switchboard needs the project's `ph login` identity to create its
-  drive). `GraphQLReactorClient` lacks
-  `createDocumentInDrive` (`product/upgrade-existing.ts`); it fails at
-  run time, not in the type check: `ReactorContext.client` is typed as
-  the full client. The spec sync and clint's folder operations use only
-  calls both clients have. The attach carries the switchboard's
+  drive). `ReactorContext.client` is typed as the full client, so a call
+  `GraphQLReactorClient` lacks would fail at run time, not in the type
+  check; the Cli, the spec sync and clint's folder operations use only
+  calls both clients have. Studios from before the product page are not
+  upgraded: a product starts from the idea screen; one whose story starts
+  with work from before versions still launches through
+  `ensureProductTarget` (`product/upgrade-existing.ts`). The attach carries the switchboard's
   attachment service, but a chat attachment cannot be read back yet: the
   chat-session model types its attachment fields as `String`, so the
   switchboard indexes no reference from a message and refuses a read

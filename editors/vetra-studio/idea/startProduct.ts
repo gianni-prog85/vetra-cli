@@ -26,10 +26,9 @@ import { SPECIFY_TYPES } from "../specify/projects.js";
 export const CHAT_SESSION_TYPE = "powerhouse/chat-session";
 
 /**
- * The file name vetra-cli's existing-Studio upgrade gives a product document
- * before it fills it (`UPGRADING_PRODUCT_NAME` in upgrade-existing.ts). It
- * also covers Studios whose projects exist only in the workspace, which the
- * drive can't show.
+ * The file name an existing-Studio upgrade gives a product document before
+ * it fills it. It also covers Studios whose projects exist only in the
+ * workspace, which the drive can't show.
  */
 export const UPGRADING_PRODUCT_NAME = "Product (upgrading)";
 

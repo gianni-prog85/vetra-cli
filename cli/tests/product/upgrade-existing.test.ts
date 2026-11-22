@@ -1,25 +1,14 @@
 /**
- * Existing Studios open in the new experience (Task 3.7, spec §6.6): a real
- * in-memory reactor with an older Studio's drive (conversations, project
- * documents, no product), a real workspace with real git, and a fake cloud.
+ * Version 1 of a product with work from before versions (Task 3.7, spec
+ * §6.6): a real in-memory reactor with a product whose story starts with a
+ * BEFORE_VERSIONS change, a real workspace, and a fake cloud.
  */
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReactorBuilder, ReactorClientBuilder, type InProcessReactorClientModule } from "@powerhousedao/reactor";
-import {
-  addFile,
-  driveDocumentModelModule,
-  isFileNode,
-  setDriveName,
-  type DocumentDriveDocument,
-} from "@powerhousedao/shared/document-drive";
-import {
-  ChatSession,
-  type ChatSessionDocument,
-} from "@powerhousedao/clint-common/document-models/chat-session";
+import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { withSignaturePolicy } from "document-model";
 import { StudioProductV1 } from "document-models";
 import type { StudioProductDocument, StudioProductState } from "document-models/studio-product";
@@ -29,22 +18,14 @@ import { runProgress } from "../../src/commands/product/progress.js";
 import { NOT_AUTHENTICATED } from "../../src/cloud/environments-read.js";
 import type { ProductTarget } from "../../src/launch/cloud-launch.js";
 import {
-  BEFORE_VERSIONS_REQUEST,
-  UPGRADE_RECORD,
-  UPGRADING_PRODUCT_NAME,
-  adoptExisting,
   ensureProductTarget,
   environmentUrl,
-  existingStudioUpgradeTrigger,
   readUpgradeRecord,
-  refreshLiveBeforeVersions,
-  runUpgrade,
   type LiveCandidate,
   type UpgradeContext,
   type WorkspacePackages,
 } from "../../src/product/upgrade-existing.js";
 
-const chat = ChatSession.actions;
 const a = StudioProductV1.actions;
 const NOW = "2026-10-21T12:00:00.000Z";
 const PROD_SWITCHBOARD = "https://switchboard.vetra.io";
@@ -52,45 +33,54 @@ const OLD_ENV: LiveCandidate = { environmentId: "env-old", url: "https://bold-cr
 
 interface Harness {
   module: InProcessReactorClientModule;
-  driveId: string;
+  productId: string;
   workdir: string;
   ctx: UpgradeContext;
-  logs: string[];
   liveCalls: WorkspacePackages[];
   live: LiveCandidate[] | Error;
-  products(): Promise<string[]>;
   state(): Promise<StudioProductState>;
-  session(messages: string[], createdAt?: string): Promise<string>;
-  project(dir: string, opts?: { models?: boolean; editors?: boolean; registry?: string }): void;
-  driveFile(id: string, documentType: string): Promise<void>;
+  project(dir: string): void;
 }
 
 let h: Harness;
 
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
-}
-
-async function harness(): Promise<Harness> {
+/** A product whose story starts with the work from before versions; with
+ * `live`, an environment shown as live before versions. */
+async function harness(opts: { live?: LiveCandidate } = {}): Promise<Harness> {
   const builder = new ReactorBuilder().withDocumentModelSources([
     driveDocumentModelModule as never,
     StudioProductV1 as never,
-    ChatSession as never,
   ]);
   const module = await new ReactorClientBuilder()
     .withReactorBuilder(builder)
     .withCreateSignaturePolicy("legacy")
     .buildModule();
-  const drive = await module.client.createEmpty("powerhouse/document-drive");
-  const driveId = drive.header.id;
+  const driveId = (await module.client.createEmpty("powerhouse/document-drive")).header.id;
+  const productId = (
+    await module.client.createDocumentInDrive(
+      driveId,
+      withSignaturePolicy(StudioProductV1.utils.createDocument(), "legacy"),
+    )
+  ).header.id;
+  await module.client.execute(productId, "main", [
+    a.initProduct({ name: "Todo app", idea: "build a todo app", createdAt: NOW }),
+    a.adoptExisting({
+      changeId: "before-versions",
+      request: "Before versions",
+      chatSessionIds: [],
+      doneSteps: ["PLAN", "DATA"],
+      at: NOW,
+    }),
+    ...(opts.live
+      ? [a.setLiveBeforeVersions({ environmentId: opts.live.environmentId, url: opts.live.url, at: NOW })]
+      : []),
+  ]);
   const workdir = fs.mkdtempSync(path.join(os.tmpdir(), "upgrade-existing-"));
-  const logs: string[] = [];
   const liveCalls: WorkspacePackages[] = [];
   const self: Harness = {
     module,
-    driveId,
+    productId,
     workdir,
-    logs,
     liveCalls,
     live: [],
     ctx: {
@@ -100,167 +90,55 @@ async function harness(): Promise<Harness> {
       config: { cloudSwitchboardUrl: PROD_SWITCHBOARD, environmentId: "studio-env" },
       env: {},
       now: () => new Date(NOW),
-      log: {
-        info: (m) => logs.push(`info ${m}`),
-        warn: (m) => logs.push(`warn ${m}`),
-        error: (m) => logs.push(`error ${m}`),
-      },
+      log: {},
       upgradeDeps: {
         findLiveEnvironments: async (_ctx, workspace) => {
           liveCalls.push(workspace);
           if (self.live instanceof Error) throw self.live;
           return self.live;
         },
-        newId: () => "before-versions",
       },
     },
-    async products() {
-      const d = await module.client.get<DocumentDriveDocument>(driveId);
-      return d.state.global.nodes
-        .filter((n) => isFileNode(n) && n.documentType === "vetra/studio-product")
-        .map((n) => n.id);
-    },
     async state() {
-      const [id] = await self.products();
-      const d = await module.client.get<StudioProductDocument>(id);
+      const d = await module.client.get<StudioProductDocument>(productId);
       return d.state.global;
     },
-    async session(messages, createdAt) {
-      const doc = withSignaturePolicy(ChatSession.utils.createDocument(), "legacy");
-      if (createdAt) doc.header.createdAtUtcIso = createdAt;
-      const id = (await module.client.createDocumentInDrive(driveId, doc)).header.id;
-      if (messages.length > 0) {
-        await module.client.execute(
-          id,
-          "main",
-          messages.map((text, i) =>
-            chat.addUserMessage({
-              id: `${id}-m${i}`,
-              content: [{ id: `${id}-p${i}`, type: "TEXT", text }],
-              createdAt: NOW,
-            }),
-          ),
-        );
-      }
-      return id;
-    },
-    project(dir, opts = {}) {
+    project(dir) {
       const root = path.join(workdir, dir);
-      fs.mkdirSync(root, { recursive: true });
-      fs.writeFileSync(
-        path.join(root, "powerhouse.config.json"),
-        JSON.stringify(opts.registry ? { packageRegistryUrl: opts.registry } : { studio: { port: 3000 } }, null, 2),
-      );
+      fs.mkdirSync(path.join(root, "document-models", "todo"), { recursive: true });
+      fs.writeFileSync(path.join(root, "powerhouse.config.json"), JSON.stringify({ studio: { port: 3000 } }));
       fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: `@vetra-apps/${dir}` }));
-      if (opts.models !== false) fs.mkdirSync(path.join(root, "document-models", "todo"), { recursive: true });
-      if (opts.editors) fs.mkdirSync(path.join(root, "editors", "todo-editor"), { recursive: true });
-    },
-    async driveFile(id, documentType) {
-      await module.client.execute(driveId, "main", [
-        addFile({ id, name: id, documentType, parentFolder: null }) as never,
-      ]);
     },
   };
+  started.push(self);
   return self;
 }
 
-beforeEach(async () => {
-  h = await harness();
-});
+const started: Harness[] = [];
 
 afterEach(async () => {
-  await h.module.reactor.kill().completed;
-  fs.rmSync(h.workdir, { recursive: true, force: true });
+  for (const s of started.splice(0)) {
+    await s.module.reactor.kill().completed;
+    fs.rmSync(s.workdir, { recursive: true, force: true });
+  }
 });
 
-describe("adoptExisting", () => {
-  it("old Studio with two projects gets one product with both", async () => {
-    h.project("todo-app", { editors: true });
-    h.project("billing");
-    await h.driveFile("model-todo", "powerhouse/document-model");
-    await h.driveFile("model-billing", "powerhouse/document-model");
-    await h.session(["build a todo app and billing"]);
+const TARGET: ProductTarget = {
+  appId: "app-1",
+  productionEnvironmentId: "env-old",
+  slug: "bold-crow",
+  liveUrl: "https://bold-crow.vetra.io",
+};
 
-    expect(await adoptExisting(h.ctx)).toBe("created");
-
-    expect(await h.products()).toHaveLength(1);
-    const s = await h.state();
-    expect(s.changes).toHaveLength(1);
-    const c = s.changes[0];
-    expect(c).toMatchObject({ id: "before-versions", kind: "BEFORE_VERSIONS", status: "CLOSED", checkRuns: [] });
-    expect(c.steps.map((st) => [st.kind, st.status])).toEqual([
-      ["PLAN", "DONE"],
-      ["DATA", "DONE"],
-      ["EDITORS", "DONE"],
-      ["TESTS", "NOT_STARTED"],
-      ["LIVE", "NOT_STARTED"],
-    ]);
-    expect(s.activeChangeId).toBeNull();
-    expect(s.liveVersion).toBeNull();
-    // Both projects' packages are looked for on the owner's environments,
-    // with the stack's registry the launch will publish to (R25).
-    expect(h.liveCalls).toEqual([
-      { names: ["@vetra-apps/billing", "@vetra-apps/todo-app"], registries: ["https://registry.vetra.io"] },
-    ]);
-    // Git: a repository on main, nothing committed or tagged until the first launch.
-    expect(git(h.workdir, ["symbolic-ref", "--short", "HEAD"])).toBe("main");
-    expect(git(h.workdir, ["tag", "--list"])).toBe("");
-    // The projects' files are untouched (R25 is solved at launch time).
-    for (const p of ["todo-app", "billing"]) {
-      const config = JSON.parse(fs.readFileSync(path.join(h.workdir, p, "powerhouse.config.json"), "utf-8"));
-      expect(config).toEqual({ studio: { port: 3000 } });
-    }
-  });
-
-  it("old chats become the Before versions chapter", async () => {
-    await h.module.client.execute(h.driveId, "main", [setDriveName({ name: "Dog walks" }) as never]);
-    const second = await h.session(["make the list sortable"], "2026-09-02T10:00:00.000Z");
-    await h.session([], "2026-09-03T10:00:00.000Z");
-    const first = await h.session(["a dog walking planner for my street"], "2026-09-01T10:00:00.000Z");
-
-    expect(await adoptExisting(h.ctx)).toBe("created");
-
-    const s = await h.state();
-    expect(s.name).toBe("Dog walks");
-    expect(s.idea).toBe("a dog walking planner for my street");
-    const c = s.changes[0];
-    expect(c.request).toBe(BEFORE_VERSIONS_REQUEST);
-    // Oldest first; an empty conversation is not part of the story.
-    expect(c.chatSessionIds).toEqual([first, second]);
-    expect(c.chatSessionId).toBe(first);
-    // No project yet: nothing is marked done.
-    expect(c.steps.every((st) => st.status === "NOT_STARTED")).toBe(true);
-    // The conversations themselves are untouched.
-    const doc = await h.module.client.get<ChatSessionDocument>(first);
-    expect(doc.state.global.messages).toHaveLength(1);
-  });
-
-  it("a previously deployed env shows as live before versions and is never modified", async () => {
-    h.project("todo-app", { editors: true });
-    await h.session(["build a todo app"]);
-    h.live = [OLD_ENV];
-
-    expect(await adoptExisting(h.ctx)).toBe("created");
-    let s = await h.state();
-    expect(s.liveBeforeVersions).toEqual({ environmentId: "env-old", url: OLD_ENV.url, at: NOW });
-    // Not a version and not a live target yet.
-    expect(s.versions).toEqual([]);
-    expect(s.appId).toBeNull();
-    expect(readUpgradeRecord(h.workdir)).toMatchObject({ live: "one", candidates: ["env-old"] });
-
-    // Version 1 adopts it (F28): the cloud gets the env, nothing else touches it.
+describe("ensureProductTarget", () => {
+  it("Version 1 adopts the env live before versions; a refusal gives a new address", async () => {
+    h = await harness({ live: OLD_ENV });
     const calls: { name: string; adopt?: string }[] = [];
-    const target: ProductTarget = {
-      appId: "app-1",
-      productionEnvironmentId: "env-old",
-      slug: "bold-crow",
-      liveUrl: "https://bold-crow.vetra.io",
-    };
     const ensure = async (name: string, opts?: { adoptEnvironmentId?: string }) => {
       calls.push({ name, adopt: opts?.adoptEnvironmentId });
-      return target;
+      return TARGET;
     };
-    expect(await ensureProductTarget(h.ctx, s, "Todo app", ensure)).toEqual(target);
+    expect(await ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).toEqual(TARGET);
     expect(calls).toEqual([{ name: "Todo app", adopt: "env-old" }]);
     expect(readUpgradeRecord(h.workdir).liveTarget).toMatchObject({ path: "adopted", environmentId: "env-old" });
 
@@ -269,10 +147,9 @@ describe("adoptExisting", () => {
     const refusing = async (name: string, opts?: { adoptEnvironmentId?: string }) => {
       calls.push({ name, adopt: opts?.adoptEnvironmentId });
       if (opts?.adoptEnvironmentId) throw new LaunchError("ADOPT_NOT_ALLOWED", "refused", "linked to an App");
-      return { ...target, productionEnvironmentId: "env-new", slug: "todo-app" };
+      return { ...TARGET, productionEnvironmentId: "env-new", slug: "todo-app" };
     };
-    s = await h.state();
-    const fallback = await ensureProductTarget(h.ctx, s, "Todo app", refusing);
+    const fallback = await ensureProductTarget(h.ctx, await h.state(), "Todo app", refusing);
     expect(fallback.productionEnvironmentId).toBe("env-new");
     expect(calls).toEqual([
       { name: "Todo app", adopt: "env-old" },
@@ -284,26 +161,18 @@ describe("adoptExisting", () => {
     const failing = async () => {
       throw new LaunchError("STUDIO_BINDING", "refused");
     };
-    await expect(ensureProductTarget(h.ctx, s, "Todo app", failing)).rejects.toThrow("refused");
+    await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", failing)).rejects.toThrow("refused");
   });
 
   it("the launch's live target adopts the environment through ensureStudioProduct", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = [OLD_ENV];
-    await adoptExisting(h.ctx);
+    h = await harness({ live: OLD_ENV });
     const seen: (string | undefined)[] = [];
     const octx = {
       ...h.ctx,
       deps: {
         ensureProduct: async (_c: unknown, _name: string, opts?: { adoptEnvironmentId?: string }) => {
           seen.push(opts?.adoptEnvironmentId);
-          return {
-            appId: "app-1",
-            productionEnvironmentId: "env-old",
-            slug: "bold-crow",
-            liveUrl: "https://bold-crow.vetra.io",
-          };
+          return TARGET;
         },
       },
     } as unknown as OrchestratorContext;
@@ -315,159 +184,64 @@ describe("adoptExisting", () => {
   });
 
   it("several environments with the workspace: none is adopted, Version 1 gets a new address", async () => {
+    h = await harness();
     h.project("todo-app");
     h.live = [OLD_ENV, { environmentId: "env-other", url: "https://calm-fox-connect.vetra.io" }];
-    expect(await adoptExisting(h.ctx)).toBe("created");
-    const s = await h.state();
-    expect(s.liveBeforeVersions).toBeNull();
-    expect(readUpgradeRecord(h.workdir)).toMatchObject({ live: "many", candidates: ["env-old", "env-other"] });
     const calls: (string | undefined)[] = [];
-    await ensureProductTarget(h.ctx, s, "Todo app", async (_n, opts) => {
+    await ensureProductTarget(h.ctx, await h.state(), "Todo app", async (_n, opts) => {
       calls.push(opts?.adoptEnvironmentId);
       return { appId: "a", productionEnvironmentId: "env-new", slug: "todo-app", liveUrl: "https://todo-app.vetra.io" };
     });
     expect(calls).toEqual([undefined]);
+    // The workspace's packages are looked for, with the stack's registry (R25).
+    expect(h.liveCalls).toEqual([{ names: ["@vetra-apps/todo-app"], registries: ["https://registry.vetra.io"] }]);
     expect(readUpgradeRecord(h.workdir).liveTarget).toMatchObject({ path: "new" });
-  });
-
-  it("second start does nothing", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    expect(await adoptExisting(h.ctx)).toBe("created");
-    const [id] = await h.products();
-    const revision = (d: unknown) => JSON.stringify((d as { header: { revision: unknown } }).header.revision);
-    const before = await h.module.client.get(id);
-    const state = await h.state();
-
-    expect(await adoptExisting(h.ctx)).toBe("skipped");
-    expect(await h.products()).toEqual([id]);
-    expect(revision(await h.module.client.get(id))).toBe(revision(before));
-    expect(await h.state()).toEqual(state);
-  });
-
-  it("a skipped, already-upgraded Studio gets its product file name back", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    expect(await adoptExisting(h.ctx)).toBe("created");
-    const [id] = await h.products();
-    const { updateNode } = await import("@powerhousedao/shared/document-drive");
-    // As if the rename after the upgrade had failed.
-    await h.module.client.execute(h.driveId, "main", [updateNode({ id, name: UPGRADING_PRODUCT_NAME }) as never]);
-    expect(await adoptExisting(h.ctx)).toBe("skipped");
-    const d = await h.module.client.get<DocumentDriveDocument>(h.driveId);
-    expect(d.state.global.nodes.find((n) => n.id === id)?.name).toBe("Todo app");
-  });
-
-  it("a new Studio, a Studio with a product and a one-shot run are left alone", async () => {
-    // Nothing older: the idea screen stays.
-    await h.session([]);
-    expect(await adoptExisting(h.ctx)).toBe("skipped");
-    expect(await h.products()).toEqual([]);
-    // No running reactor.
-    expect(await adoptExisting({ ...h.ctx, folders: undefined })).toBe("skipped");
-    // A product made by the new page.
-    await h.session(["old"]);
-    const id = (
-      await h.module.client.createDocumentInDrive(
-        h.driveId,
-        withSignaturePolicy(StudioProductV1.utils.createDocument(), "legacy"),
-      )
-    ).header.id;
-    await h.module.client.execute(id, "main", [
-      a.initProduct({ name: "New", idea: "new idea", createdAt: NOW }),
-      a.startChange({ id: "c1", kind: "FIRST_BUILD", request: "new idea", startedAt: NOW }),
-    ]);
-    expect(await adoptExisting(h.ctx)).toBe("skipped");
-    expect((await h.state()).changes.map((c) => c.kind)).toEqual(["FIRST_BUILD"]);
-  });
-
-  it("a failure leaves today's view and is logged; the next start completes it", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.ctx.upgradeDeps = {
-      ...h.ctx.upgradeDeps,
-      ensureWorkspaceRepo: async () => {
-        throw new Error("the code isn't on its main line");
-      },
-    };
-    expect(await runUpgrade(h.ctx)).toBe("failed");
-    expect(await h.products()).toEqual([]);
-    expect(h.logs.some((l) => l.startsWith("error") && l.includes("keeps today's view"))).toBe(true);
-
-    // A product document left without its operations (stopped half-way) is completed.
-    const id = (
-      await h.module.client.createDocumentInDrive(
-        h.driveId,
-        withSignaturePolicy(StudioProductV1.utils.createDocument(), "legacy"),
-      )
-    ).header.id;
-    h.ctx.upgradeDeps = { ...h.ctx.upgradeDeps, ensureWorkspaceRepo: async () => {} };
-    expect(await runUpgrade(h.ctx)).toBe("created");
-    expect(await h.products()).toEqual([id]);
-    expect((await h.state()).changes.map((c) => c.kind)).toEqual(["BEFORE_VERSIONS"]);
-  });
-
-  it("a live check that couldn't run is tried again later, and the launch never guesses", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = new Error("Not authorized");
-    expect(await adoptExisting(h.ctx)).toBe("created");
-    expect(readUpgradeRecord(h.workdir).live).toBe("pending");
     expect((await h.state()).liveBeforeVersions).toBeNull();
+  });
 
-    // The launch can't tell which env to adopt yet: it stops instead of making a second address.
-    const ensure = vi.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
+  it("one env that also runs other packages is ambiguous: a new address (E10)", async () => {
+    h = await harness();
+    h.project("todo-app");
+    h.live = [{ ...OLD_ENV, mismatch: "it also runs @acme/other" }];
+    const ensure = vi.fn(async (_n: string, _opts?: { adoptEnvironmentId?: string }) => TARGET);
+    await ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure);
+    expect(ensure).toHaveBeenCalledWith("Todo app");
+    expect((await h.state()).liveBeforeVersions).toBeNull();
+  });
+
+  it("a live check that can't run stops the launch instead of guessing", async () => {
+    h = await harness();
+    h.project("todo-app");
+    h.live = new Error("fetch failed");
+    const ensure = vi.fn(async () => TARGET);
     await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).rejects.toMatchObject({
       code: "CLOUD_UNAVAILABLE",
     });
     expect(ensure).not.toHaveBeenCalled();
-
-    // Signed in later: the retry finds the env and shows it.
-    h.live = [OLD_ENV];
-    expect(await refreshLiveBeforeVersions(h.ctx)).toBe("one");
-    expect((await h.state()).liveBeforeVersions?.environmentId).toBe("env-old");
-    expect(await refreshLiveBeforeVersions(h.ctx)).toBeNull();
   });
 
-  it("the trigger runs the upgrade once, detached, and records it", async () => {
+  it("not signed in during the live check is the owner's missing OK, not an outage", async () => {
+    h = await harness();
     h.project("todo-app");
-    await h.session(["build a todo app"]);
-    const state = existingStudioUpgradeTrigger.state!() as Record<string, unknown>;
-    const tctx = { state, commandContext: h.ctx, context: { log: h.ctx.log } };
-    const poll = existingStudioUpgradeTrigger.poll as (t: unknown) => Promise<unknown>;
-    expect(await poll(tctx)).toBeNull();
-    for (let i = 0; i < 100 && (await h.products()).length === 0; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    for (let i = 0; i < 100 && state.running; i++) await new Promise((r) => setTimeout(r, 20));
-    expect(await h.products()).toHaveLength(1);
-    expect(fs.existsSync(path.join(h.workdir, UPGRADE_RECORD))).toBe(true);
-    // Later polls within the retry window do nothing.
-    expect(await poll(tctx)).toBeNull();
-    expect(state.running).toBe(false);
+    h.live = new Error(NOT_AUTHENTICATED);
+    const ensure = vi.fn(async () => TARGET);
+    await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).rejects.toMatchObject({
+      code: "DELEGATION_MISSING",
+    });
+    expect(ensure).not.toHaveBeenCalled();
   });
 });
 
 describe("before an explicit launch", () => {
-  async function adoptedWithLive(): Promise<void> {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = [OLD_ENV];
-    await adoptExisting(h.ctx);
-  }
+  beforeEach(async () => {
+    h = await harness({ live: OLD_ENV });
+  });
 
   it("the adopted env is never touched while a change is built (no early live target)", async () => {
-    await adoptedWithLive();
-    const [id] = await h.products();
-    await h.module.client.execute(id, "main", [
+    await h.module.client.execute(h.productId, "main", [
       a.startChange({ id: "c1", kind: "CHANGE", request: "add due dates", startedAt: NOW }),
     ]);
-    const ensure = vi.fn(async () => ({
-      appId: "app-1",
-      productionEnvironmentId: "env-old",
-      slug: "bold-crow",
-      liveUrl: "https://bold-crow.vetra.io",
-    }));
+    const ensure = vi.fn(async () => TARGET);
     const ctx = { ...h.ctx, deps: { ensureProduct: ensure } } as unknown as Parameters<typeof runProgress>[0];
     await runProgress(ctx, { action: "title", text: "Due dates" });
     await runProgress(ctx, { action: "plan", steps: [{ kind: "PLAN" }, { kind: "DATA" }] });
@@ -479,63 +253,18 @@ describe("before an explicit launch", () => {
   });
 
   it("a READY change is not launched by itself: Version 1 waits for Make it live (X33)", async () => {
-    await adoptedWithLive();
     const ready = { ...(await h.state()) };
     ready.changes = [
       ...ready.changes,
       { ...ready.changes[0], id: "c1", kind: "CHANGE", status: "READY" },
     ];
     expect(autoLaunchCandidate(ready)).toBeNull();
-    // Also while the live check is still pending: an env found at launch
-    // time would be adopted.
+    // Also without an env live before versions: one found at launch time
+    // would be adopted.
     expect(autoLaunchCandidate({ ...ready, liveBeforeVersions: null })).toBeNull();
     // A product without work from before versions keeps its automatic first launch.
     const fresh = { ...ready, changes: ready.changes.filter((c) => c.kind !== "BEFORE_VERSIONS"), liveBeforeVersions: null };
     expect(autoLaunchCandidate(fresh)?.id).toBe("c1");
-  });
-
-  it("a pending live check and a READY change: nothing launches", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = new Error("fetch failed");
-    await adoptExisting(h.ctx);
-    expect(readUpgradeRecord(h.workdir).live).toBe("pending");
-    const s = await h.state();
-    expect(autoLaunchCandidate({ ...s, changes: [...s.changes, { ...s.changes[0], id: "c1", kind: "CHANGE", status: "READY" }] })).toBeNull();
-  });
-
-  it("not signed in during the live check is the owner's missing OK, not an outage", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = new Error(NOT_AUTHENTICATED);
-    await adoptExisting(h.ctx);
-    const ensure = vi.fn(async () => ({ appId: "a", productionEnvironmentId: "e", slug: "s", liveUrl: "https://s.vetra.io" }));
-    await expect(ensureProductTarget(h.ctx, await h.state(), "Todo app", ensure)).rejects.toMatchObject({
-      code: "DELEGATION_MISSING",
-    });
-    expect(ensure).not.toHaveBeenCalled();
-  });
-
-  it("one env that also runs other packages is ambiguous: a new address (E10)", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    h.live = [{ ...OLD_ENV, mismatch: "it also runs @acme/other" }];
-    await adoptExisting(h.ctx);
-    const s = await h.state();
-    expect(s.liveBeforeVersions).toBeNull();
-    expect(readUpgradeRecord(h.workdir)).toMatchObject({ live: "many", candidates: ["env-old"] });
-  });
-
-  it("the upgrade runs only in a Studio", async () => {
-    h.project("todo-app");
-    await h.session(["build a todo app"]);
-    const ctx = { ...h.ctx, config: { ...h.ctx.config, environmentId: undefined } };
-    const state = existingStudioUpgradeTrigger.state!() as Record<string, unknown>;
-    const poll = existingStudioUpgradeTrigger.poll as (t: unknown) => Promise<unknown>;
-    await poll({ state, commandContext: ctx, context: {} });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(state.started).toBe(false);
-    expect(await h.products()).toEqual([]);
   });
 });
 

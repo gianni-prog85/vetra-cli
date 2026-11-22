@@ -37,7 +37,6 @@ import { studioRedirectTrigger } from './triggers/studio-redirect.js';
 import { productSupervisorTrigger } from './product/supervisor.js';
 import { productRequestsTrigger } from './triggers/product-requests.js';
 import { liveHealthTrigger } from './triggers/live-health.js';
-import { existingStudioUpgradeTrigger } from './product/upgrade-existing.js';
 // @clint:end imports
 import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
@@ -92,8 +91,6 @@ export const cli = defineCli({
     productSupervisorTrigger,
     productRequestsTrigger,
     liveHealthTrigger,
-    // Existing Studios open in the product page: once per start, detached.
-    existingStudioUpgradeTrigger,
   ],
   // @clint:end triggers
 
