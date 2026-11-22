@@ -6,8 +6,16 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 /** cli/e2e */
 export const E2E_DIR = path.resolve(here, "..");
-/** The package root: where `ph-cli run studio` runs. */
+/** The vetra-cli package root (the package the fixture project links). */
 export const REPO_ROOT = path.resolve(E2E_DIR, "..", "..");
+/** The package this checkout is: the fixture project runs its Studio host. */
+export const PACKAGE_NAME = "@powerhousedao/vetra-cli";
+/** What a project runs: the package's Studio host, by reference. */
+export const STUDIO_REF = `${PACKAGE_NAME}/studio`;
+/** The fixture project's package name and version: the project home shows
+ * them. */
+export const FIXTURE_PROJECT_NAME = "e2e-project";
+export const FIXTURE_PROJECT_VERSION = "0.1.0";
 export const CACHE_DIR = path.join(E2E_DIR, ".cache");
 /** Written by global-setup once the studio boots: where to point the test. */
 export const RUN_FILE = path.join(CACHE_DIR, "run.json");
@@ -15,11 +23,16 @@ export const RUN_FILE = path.join(CACHE_DIR, "run.json");
  * rather than waiting out the preview timeout. */
 export const STUDIO_LOG = path.join(CACHE_DIR, "studio.log");
 
-/** The package's own ph-cli entry, run with `process.execPath` (no shell). */
-export function phCliEntry(): string {
-  const require_ = createRequire(path.join(REPO_ROOT, "package.json"));
-  const pkg = require_.resolve("@powerhousedao/ph-cli/package.json");
-  return path.join(path.dirname(pkg), "dist", "cli.mjs");
+/** The ph-cli root `fromDir`'s package.json resolves (the fixture project's
+ * own, linked to the one this package uses). */
+export function phCliRoot(fromDir: string = REPO_ROOT): string {
+  const require_ = createRequire(path.join(fromDir, "package.json"));
+  return path.dirname(require_.resolve("@powerhousedao/ph-cli/package.json"));
+}
+
+/** That ph-cli's entry, run with `process.execPath` (no shell). */
+export function phCliEntry(fromDir: string = REPO_ROOT): string {
+  return path.join(phCliRoot(fromDir), "dist", "cli.mjs");
 }
 
 /** HOME of the run: clint roots its service state at homedir()/.ph/<cli>. */
@@ -27,18 +40,19 @@ export function homeFor(tmp: string): string {
   return path.join(tmp, "home");
 }
 
-/** The Cli's workdir (`-- --workdir`). */
-export function workdirFor(tmp: string): string {
-  return path.join(tmp, "work");
+/** The fixture project: where the Studio runs, and the Cli's workdir. */
+export function projectFor(tmp: string): string {
+  return path.join(tmp, "project");
 }
 
-/** What setup and teardown give every ph-cli they start: the stack's stores,
- * run records and member logs land under `<tmp>/.ph`, its home under
- * `<tmp>/home` (Windows' homedir() reads USERPROFILE). */
+/** What setup and teardown give every ph-cli they start: the project's own
+ * data dir, as a user's run has it (stores, run records and member logs under
+ * `<project>/.ph`), and a home under `<tmp>/home` (Windows' homedir() reads
+ * USERPROFILE). */
 export function stackEnv(tmp: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    PH_USER_DATA_DIR: tmp,
+    PH_USER_DATA_DIR: projectFor(tmp),
     HOME: homeFor(tmp),
     USERPROFILE: homeFor(tmp),
     PORTLE_AUTOSTART: "0",
@@ -49,7 +63,7 @@ export function stackEnv(tmp: string): NodeJS.ProcessEnv {
 export interface RunFile {
   baseUrl: string | null;
   driveId: string | null;
-  /** The `ph-cli run studio` process. */
+  /** The `ph-cli run @powerhousedao/vetra-cli/studio` process. */
   pid: number | null;
   /** Member pids from their run records, by member. */
   members: Record<string, number>;
@@ -138,12 +152,12 @@ export function loadRun(): RunTarget {
   return JSON.parse(readFileSync(RUN_FILE, "utf8")) as RunTarget;
 }
 
-/** The Cli's workdir and log of the run: the temp dir and `STUDIO_LOG` of a
- * boot; attached, `VETRA_E2E_WORKDIR` and `VETRA_E2E_LOG` (undefined when
+/** The Cli's workdir and log of the run: the fixture project and `STUDIO_LOG`
+ * of a boot; attached, `VETRA_E2E_WORKDIR` and `VETRA_E2E_LOG` (undefined when
  * unset, and the checks that need them are skipped). */
 export function cliPaths(): { workdir?: string; log?: string } {
   const tmp = readRunFile()?.tmp;
-  if (tmp) return { workdir: workdirFor(tmp), log: STUDIO_LOG };
+  if (tmp) return { workdir: projectFor(tmp), log: STUDIO_LOG };
   return {
     workdir: process.env.VETRA_E2E_WORKDIR,
     log: process.env.VETRA_E2E_LOG,

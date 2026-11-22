@@ -38,32 +38,36 @@ export function assertNoReplayError(log: string | undefined): void {
   if (m) throw new Error(`replay failed — ${m[0].trim()}`);
 }
 
-/** Start the build the way a customer does. An empty Studio shows the idea
- * screen ("What do you want to build?"): typing the idea there and pressing
- * Build it creates the product, the first conversation and its first message,
- * and the page turns into the build — the step strip over the story (the idea
- * quoted first) and the live preview. Returns the story pane. */
-export async function startBuild(page: Page, prompt: string) {
-  const idea = page.getByRole("textbox", { name: "Your idea" });
-  await expect(idea).toBeVisible({ timeout: 30_000 });
+/** The project home a Studio inside a project shows: the project's header,
+ * its conversations and its specifications. */
+export function projectHome(page: Page) {
+  return {
+    header: page.locator('header[aria-label="Project"]'),
+    conversations: page.locator('aside[aria-label="Conversations"]'),
+    specifications: page.locator('main[aria-label="Specifications"]'),
+  };
+}
+
+/** Talk to the agent the way a customer does: on the project home, start a
+ * conversation ("New session") and send the first message. Returns the
+ * conversation's pane. */
+export async function startConversation(page: Page, prompt: string) {
+  const { conversations } = projectHome(page);
+  await expect(conversations).toBeVisible({ timeout: 60_000 });
   await dismissCookieBanner(page); // in case it painted late, before the next click
-  await expect(
-    page.getByRole("heading", { name: "What do you want to build?" }),
-  ).toBeVisible();
+  await conversations
+    .getByRole("button", { name: "New session", exact: true })
+    .click();
 
-  await idea.fill(prompt);
-  await page.getByRole("button", { name: "Build it", exact: true }).click();
+  const box = conversations.getByPlaceholder("Type a message...");
+  await expect(box).toBeEnabled({ timeout: 60_000 });
+  await box.fill(prompt);
+  await conversations.getByRole("button", { name: "Submit" }).click();
 
-  // The idea screen gives way to the build: the step strip on top and the
-  // story on the left, which opens with the idea in quotes.
-  await expect(idea).toBeHidden({ timeout: 60_000 });
-  await expect(page.locator('header[aria-label="Steps"]')).toBeVisible({
+  // The message is in the conversation, as the customer's.
+  await expect(conversations.getByText(prompt).first()).toBeVisible({
     timeout: 30_000,
   });
-  const story = page.locator('aside[aria-label="Story"]');
-  await expect(
-    story.getByText(`“${prompt}”`, { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
-  console.log("[e2e] build started from the idea screen");
-  return story;
+  console.log("[e2e] conversation started on the project home");
+  return conversations;
 }

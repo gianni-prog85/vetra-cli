@@ -1,29 +1,30 @@
 # vetra e2e (Playwright)
 
-Three specs against the Studio stack (`hosts/studio`): the switchboard, Connect
-and the Cli, booted once per run by `ph-cli run studio` in a temp dir.
+Three specs against the package's Studio stack (`hosts/studio`): the
+switchboard, Connect and the Cli, booted once per run the way a user runs it:
+`ph-cli run @powerhousedao/vetra-cli/studio` in a fixture project in a temp dir.
 
 - **`studio-boot.spec.ts`** — the stack is up: Connect serves the Studio drive and
-  the page shows the empty Studio's idea screen ("What do you want to build?").
+  the page shows the project home (the fixture project's name and version, its
+  conversations, its specifications), not an idea screen; Connect serves
+  `studio.config.json` naming the Cli's local API.
 - **`studio-chat.spec.ts`** — the chat round trip (fixture `chat-spec`, the
-  default): the idea starts the build; the replay writes a document-model spec
-  with `spec-create` and `spec-update`; the story shows the agent's done text;
-  the spec is in the Studio drive with spec-update's state (`findDocuments(search:
-  { type, parentId })` on `<baseUrl>/graphql`); then a file is sent into the
-  build's conversation and the Cli logs `extracted 1 attachment(s)` and writes it
-  to `<workdir>/.ph/vetra/downloads/`. The build page's message box takes text only, so the
-  spec sends the file as the chat box does: reserve and upload through Connect's
-  origin (`/attachments`), then `ADD_USER_MESSAGE` with a `FILE` part naming the
-  `attachment://v1:<sha256>` ref (GraphQL `execute`).
-- **`studio-build.spec.ts`** — seeded (fixture `todo-list`): drives the idea
-  screen to build a todo-list and asserts the generated editor renders inside the
-  BUILD-pane iframe (chat → agent → tools → reactor → studio). It waits for the
-  project's preview on the Cli's local API (`GET
-  <previewServerUrl>/resolve?project=<p>&home=1` = `ready`, the address from
-  `<baseUrl>/studio.config.json`). Its first step,
-  `reactor-project-init`, runs `ph init` against the npm registry at this
-  package's version, so it needs those versions published; expect it red until
-  then.
+  default): a conversation on the project home ("New session", then a message)
+  starts the agent; the replay writes a document-model spec into the project
+  with `spec-create` and `spec-update`; the conversation shows the agent's done
+  text; the spec is in the Studio drive with spec-update's state
+  (`findDocuments(search: { type, parentId })` on `<baseUrl>/graphql`), on the
+  project home and in the project's `specs/`; then a file is sent into the
+  conversation and the Cli logs `extracted 1 attachment(s)` and writes it to
+  `<project>/.ph/vetra/downloads/`. The spec sends the file as the chat box does:
+  reserve and upload through Connect's origin (`/attachments`), then
+  `ADD_USER_MESSAGE` with a `FILE` part naming the `attachment://v1:<sha256>`
+  ref (GraphQL `execute`).
+- **`studio-build.spec.ts`** — seeded (fixture `todo-list`): builds a todo-list
+  and asserts the generated editor renders inside the BUILD-pane iframe. Skipped:
+  its fixture starts with `reactor-project-init` and its preview is the project
+  run, which a Studio inside a project no longer has (C1); it returns with C2's
+  Preview run.
 
 The agent is made **deterministic** without an API key: a replay `AgentProvider`
 (`cli/src/agents/replay-agent.ts`, gated by `VETRA_REPLAY_FIXTURE`) replays a
@@ -39,13 +40,11 @@ Only tool *selection* is canned. What that means for a fixture:
   hash). `attachment-stat`/`-get` need the conversation's id as `documentId`, so
   no step can read the chat file back; the extraction itself reads it through the
   conversation (`documentId`), which is what the chat spec checks.
-- `mastra_workspace_write_file` steps are plain file writes under the workdir.
-  `chat-spec` uses two to stand in for `reactor-project-init` (which installs
-  from npm): a `recipe-box/powerhouse.config.json` and an empty
-  `recipe-box/node_modules/`, which is all the spec commands ask of a project.
-- An empty Studio starts one product, and both `studio-chat` and `studio-build`
-  start one from the idea screen: one of them per boot. Each skips itself under
-  the other's fixture.
+- `mastra_workspace_write_file` steps are plain file writes under the workdir,
+  the fixture project. The spec commands act on it, so no step names a
+  project.
+- One fixture per boot: `studio-chat` and `studio-build` each skip themselves
+  under the other's fixture.
 
 Isolated from the unit suite: lives under `cli/e2e/`, which vitest does not collect.
 
@@ -58,7 +57,6 @@ From the package root, after `pnpm build` and `pnpm build:connect` (the stack se
 pnpm test:e2e:install      # one-time: chromium, with PLAYWRIGHT_SKIP_BROWSER_GC=1
 pnpm test:e2e studio-boot  # boots the stack, opens the Studio, stops the stack
 pnpm test:e2e              # boot + chat (chat-spec); the build spec skips itself
-VETRA_FIXTURE=todo-list pnpm test:e2e studio-boot studio-build
 pnpm test:e2e:report       # open the HTML report after a run
 ```
 
@@ -66,19 +64,27 @@ Set `PLAYWRIGHT_SKIP_BROWSER_GC=1` on every Playwright command (`test:e2e:instal
 sets it itself): without it Playwright deletes the browsers of other Playwright
 versions from the shared cache.
 
-`global-setup` spawns `node <ph-cli>/dist/cli.mjs run studio serve -- --workdir
-<tmp>/work` from the package root (no shell, stdin a pipe), waits for the Cli's
-`Vetra Studio: <url>` line, and writes `.cache/run.json` (`baseUrl`, `driveId`, the
-stack's `pid`, the member pids, `tmp`). `global-teardown` runs `ph-cli run studio
---stop` under the same data dir, waits up to 30 s for those pids, kills the trees of
-any still running as the last resort, copies the logs to `.cache/service-logs/` and
-removes the temp dir.
+`global-setup` makes the fixture project `<tmp>/project`: a `package.json`
+(`e2e-project` 0.1.0), a `powerhouse.config.json`, a `.gitignore` with `.ph`, and
+junctions `node_modules/@powerhousedao/vetra-cli` (this checkout) and
+`node_modules/@powerhousedao/ph-cli` (the ph-cli this checkout uses), as an install
+would link them. It spawns the project's ph-cli, `node <ph-cli>/dist/cli.mjs run
+@powerhousedao/vetra-cli/studio serve`, with the project as its cwd (no shell,
+stdin a pipe): the Cli's workdir is the project. It waits for the Cli's `Vetra
+Studio: <url>` line and writes `.cache/run.json` (`baseUrl`, `driveId`, the stack's
+`pid`, the member pids from `<project>/.ph/run/@powerhousedao/vetra-cli/`, `tmp`).
+`global-teardown` runs `ph-cli run @powerhousedao/vetra-cli/studio --stop` in the
+project, waits up to 30 s for those pids, kills the trees of any still running as
+the last resort, copies the logs to `.cache/service-logs/`, removes the junctions and
+then the temp dir.
 
 ### Isolation
 
-- **Own data dir.** `PH_USER_DATA_DIR=<tmp>`: the stores, run records
-  (`<tmp>/.ph/run`) and member logs (`<tmp>/.ph/services`) stay in the temp dir, so
-  the run neither sees nor stops a Studio of this checkout's own `.ph`.
+- **Own project.** The fixture project is the data dir (`PH_USER_DATA_DIR=<tmp>/project`,
+  as a user's run has it): the stores, `.ph/vetra/` (the Studio's files), run
+  records (`.ph/run/@powerhousedao/vetra-cli/`) and member logs
+  (`.ph/services/@powerhousedao/vetra-cli/`) stay in the temp dir, so the run
+  neither sees nor stops a Studio of this checkout's own `.ph`.
 - **Own home.** `HOME` and `USERPROFILE` are `<tmp>/home`: the Cli's service state
   (`homedir()/.ph/vetra`) never touches your real `~/.ph`.
 - **Stops with the runner.** The stack runs with `PH_STOP_ON_STDIN=1` and the runner
@@ -102,20 +108,22 @@ removes the temp dir.
 Attached to your own stack, start it with the fixture and capture its output:
 
 ```sh
-PORTLE_AUTOSTART=0 VETRA_REPLAY_FIXTURE=$PWD/cli/e2e/fixtures/chat-spec.replay.json \
-  pnpm exec ph-cli run studio -- --workdir <dir> 2>&1 | tee <dir>.log
+# in a project that links this package (node_modules/@powerhousedao/vetra-cli):
+PORTLE_AUTOSTART=0 VETRA_REPLAY_FIXTURE=<vetra-cli>/cli/e2e/fixtures/chat-spec.replay.json \
+  pnpm exec ph-cli run @powerhousedao/vetra-cli/studio 2>&1 | tee <log>
 # in another shell, with the drive id from its "Vetra Studio:" line:
 PLAYWRIGHT_SKIP_BROWSER_GC=1 VETRA_E2E_BASE_URL=http://127.0.0.1:8090 \
-  VETRA_E2E_DRIVE_ID=<id> VETRA_E2E_WORKDIR=<dir> VETRA_E2E_LOG=<dir>.log \
+  VETRA_E2E_DRIVE_ID=<id> VETRA_E2E_WORKDIR=<project> VETRA_E2E_LOG=<log> \
   pnpm test:e2e studio-chat
 ```
 
 ### Fixtures
 
-- `<name>.json` — the assertion fixture: the kickoff `prompt`, the `replay`
-  filename, and what its spec asserts: `preview` (studio-build: project, document
-  name, items with completed state) or `spec` and `attachment` (studio-chat: the
-  spec document the replay writes, the file sent afterwards).
+- `<name>.json` — the assertion fixture: the kickoff `prompt` (the
+  conversation's first message), the `replay` filename, and what its spec
+  asserts: `preview` (studio-build: project, document name, items with completed
+  state) or `spec` and `attachment` (studio-chat: the spec document the replay
+  writes, the file sent afterwards).
 - `<name>.replay.json` — the ordered tool steps the replay agent executes. Generate
   it from a recorded session log:
 

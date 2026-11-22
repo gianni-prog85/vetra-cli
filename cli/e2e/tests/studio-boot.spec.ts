@@ -1,38 +1,49 @@
-import { expect, test, type Page } from "@playwright/test";
-import { loadRun } from "../support/target.js";
+import { expect, test } from "@playwright/test";
+import { dismissCookieBanner, projectHome } from "../support/studio-page.js";
+import {
+  FIXTURE_PROJECT_NAME,
+  FIXTURE_PROJECT_VERSION,
+  loadRun,
+  readRunFile,
+} from "../support/target.js";
 
 /**
- * The Studio stack boots: `ph-cli run studio` (global-setup) serves Connect,
- * which shows an empty Studio's idea screen for the Studio drive.
+ * The Studio stack boots from a project: `ph-cli run
+ * @powerhousedao/vetra-cli/studio` in the fixture project (global-setup)
+ * serves Connect, which shows the project home for the Studio drive: the
+ * project's name and version, its conversations and its specifications.
  */
 const run = loadRun();
-
-/** Connect's cookie banner has a full-screen blur backdrop that intercepts
- * clicks. Dismiss it when it shows (it may paint slightly after load). */
-async function dismissCookieBanner(page: Page): Promise<void> {
-  const reject = page.getByRole("button", { name: /reject all cookies/i });
-  try {
-    await reject.waitFor({ state: "visible", timeout: 3_000 });
-    await reject.click();
-    await expect(reject).toBeHidden();
-  } catch {
-    /* never appeared — fine */
-  }
-}
+/** Booted (not attached): the fixture project's name and version show. */
+const booted = Boolean(readRunFile()?.tmp);
 
 test.describe("Vetra studio — boot", () => {
-  test("the stack serves the Studio idea screen", async ({ page }) => {
+  test("the stack serves the project home", async ({ page }) => {
     await page.goto(`${run.baseUrl}/d/${run.driveId}`, {
       waitUntil: "domcontentloaded",
     });
     await dismissCookieBanner(page);
 
-    await expect(page.getByRole("textbox", { name: "Your idea" })).toBeVisible({
-      timeout: 60_000,
-    });
+    const home = projectHome(page);
+    await expect(home.header).toBeVisible({ timeout: 60_000 });
+    await expect(home.conversations).toBeVisible();
+    await expect(
+      home.specifications.getByRole("heading", { name: "Specifications" }),
+    ).toBeVisible();
+    // No idea screen: Studio creates no project and starts no product.
     await expect(
       page.getByRole("heading", { name: "What do you want to build?" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
+
+    if (booted) {
+      // The project's package.json, read by the Cli's local API.
+      await expect(
+        home.header.getByRole("heading", { name: FIXTURE_PROJECT_NAME }),
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(home.header.locator("[data-project-version]")).toHaveText(
+        FIXTURE_PROJECT_VERSION,
+      );
+    }
   });
 
   test("Connect serves studio.config.json naming the Cli's local API", async () => {

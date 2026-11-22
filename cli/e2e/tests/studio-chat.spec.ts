@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createRemoteAttachmentService } from "@powerhousedao/reactor-attachments/client";
-import { assertNoReplayError, dismissCookieBanner, startBuild } from "../support/studio-page.js";
+import {
+  assertNoReplayError,
+  dismissCookieBanner,
+  projectHome,
+  startConversation,
+} from "../support/studio-page.js";
 import {
   cliPaths,
   loadFixture,
@@ -13,13 +18,13 @@ import {
 } from "../support/target.js";
 
 /**
- * The chat round trip without an LLM key. The idea starts the build; the
- * replay agent (chat-spec fixture) writes a document-model spec through the
- * real spec commands and closes with its done text. Then a file goes into the
- * build's conversation and the Cli extracts it to disk.
+ * The chat round trip without an LLM key. A conversation on the project home
+ * starts the agent; the replay agent (chat-spec fixture) writes a
+ * document-model spec into the project through the real spec commands and
+ * closes with its done text. Then a file goes into the conversation and the
+ * Cli extracts it to disk.
  *
- * The build page's message box (the steer box) takes text only, so the file
- * is sent the way the chat box sends one: reserve and upload through
+ * The file is sent the way the chat box sends one: reserve and upload through
  * Connect's origin, then the user message with a FILE part naming the ref.
  */
 const fixture = loadFixture();
@@ -74,7 +79,7 @@ test.describe("Vetra studio — chat round trip", () => {
     `fixture "${fixture.name}" has no spec and attachment: boot with VETRA_FIXTURE=chat-spec`,
   );
 
-  test("idea to spec in the drive, and a chat file extracted by the Cli", async ({
+  test("a conversation to a spec in the project, and a chat file extracted by the Cli", async ({
     page,
   }) => {
     const spec = fixture.spec!;
@@ -84,12 +89,12 @@ test.describe("Vetra studio — chat round trip", () => {
 
     await page.goto(studioHome, { waitUntil: "domcontentloaded" });
     await dismissCookieBanner(page);
-    const story = await startBuild(page, fixture.prompt);
+    const conversation = await startConversation(page, fixture.prompt);
 
-    // The replay ran: the agent's closing text is in the story. The chat
-    // watch heard the first message over the realtime socket (no poll
+    // The replay ran: the agent's closing text is in the conversation. The
+    // chat watch heard the first message over the realtime socket (no poll
     // fallback for a first message).
-    const doneLine = story.locator('li[data-line="reply"]', { hasText: done! });
+    const doneLine = conversation.getByText(done!).first();
     await expect
       .poll(
         async () => {
@@ -116,7 +121,16 @@ test.describe("Vetra studio — chat round trip", () => {
       .toMatchObject({ id: spec.modelId, name: spec.name, description: spec.description });
     console.log(`[e2e] spec ${specDoc?.id} in the Studio drive`);
 
-    // The build's conversation: the drive's only chat session.
+    // The project home lists it with the project's specifications.
+    await expect(
+      projectHome(page).specifications.getByText(spec.name, { exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+    // And the project holds it: the spec commands write the project's specs/.
+    if (workdir) {
+      expect(existsSync(path.join(workdir, "specs")), "the project's specs/").toBe(true);
+    }
+
+    // The conversation: the drive's only chat session.
     const sessions = await findInStudio("powerhouse/chat-session");
     expect(sessions).toHaveLength(1);
     const sessionId = sessions[0].id;
@@ -161,10 +175,10 @@ test.describe("Vetra studio — chat round trip", () => {
     });
     console.log(`[e2e] sent ${ref} in conversation ${sessionId}`);
 
-    // The tab hears the message: the story shows it as the customer's.
-    await expect(
-      story.locator('li[data-line="steer"]', { hasText: attachment.text }),
-    ).toBeVisible({ timeout: 60_000 });
+    // The tab hears the message: the conversation shows it.
+    await expect(conversation.getByText(attachment.text).first()).toBeVisible({
+      timeout: 60_000,
+    });
 
     if (!log || !workdir) {
       test.info().annotations.push({

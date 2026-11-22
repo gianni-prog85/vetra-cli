@@ -1,5 +1,13 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { createWriteStream, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  createWriteStream,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -7,16 +15,21 @@ import type { FullConfig } from "@playwright/test";
 import { STUDIO_MEMBERS, memberPids, stopStudio } from "./cleanup.js";
 import {
   CACHE_DIR,
+  FIXTURE_PROJECT_NAME,
+  FIXTURE_PROJECT_VERSION,
+  PACKAGE_NAME,
   REPO_ROOT,
   RUN_FILE,
   type RunFile,
   STUDIO_LOG,
+  STUDIO_REF,
   homeFor,
   loadFixture,
   phCliEntry,
+  phCliRoot,
+  projectFor,
   replayFixturePath,
   stackEnv,
-  workdirFor,
 } from "./target.js";
 
 /** studioUrlTrigger prints this once the stack is up; whole lines only. */
@@ -27,9 +40,45 @@ function writeRunFile(run: RunFile): void {
   writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
 }
 
-/** Boots `ph-cli run studio` (switchboard, Connect and the Cli in REPLAY mode)
- * with its stores, records and home in a temp dir, and records the Studio URL,
- * drive id and pids in RUN_FILE; VETRA_E2E_BASE_URL attaches instead. */
+/** A folder link (a junction on Windows, which needs no privilege). */
+function linkDir(target: string, link: string): void {
+  mkdirSync(path.dirname(link), { recursive: true });
+  symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+}
+
+/** The project a user runs Studio in, as small as it can be: a package.json,
+ * a powerhouse.config.json, `.ph` ignored, and this package and its ph-cli
+ * linked into node_modules (as an install would). */
+function createFixtureProject(project: string): void {
+  mkdirSync(project, { recursive: true });
+  writeFileSync(
+    path.join(project, "package.json"),
+    `${JSON.stringify(
+      {
+        name: FIXTURE_PROJECT_NAME,
+        version: FIXTURE_PROJECT_VERSION,
+        private: true,
+        type: "module",
+        devDependencies: {
+          [PACKAGE_NAME]: "*",
+          "@powerhousedao/ph-cli": "*",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(path.join(project, "powerhouse.config.json"), "{}\n");
+  writeFileSync(path.join(project, ".gitignore"), ".ph\nnode_modules\n");
+  const scope = path.join(project, "node_modules", "@powerhousedao");
+  linkDir(REPO_ROOT, path.join(scope, "vetra-cli"));
+  linkDir(realpathSync(phCliRoot()), path.join(scope, "ph-cli"));
+}
+
+/** Boots `ph-cli run @powerhousedao/vetra-cli/studio` (switchboard, Connect
+ * and the Cli in REPLAY mode) in a fixture project in a temp dir, as a user
+ * runs it in theirs, and records the Studio URL, drive id and pids in
+ * RUN_FILE; VETRA_E2E_BASE_URL attaches instead. */
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   mkdirSync(CACHE_DIR, { recursive: true });
   rmSync(RUN_FILE, { force: true });
@@ -46,13 +95,16 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
 
   const fixture = loadFixture();
   const tmp = mkdtempSync(path.join(os.tmpdir(), "vetra-e2e-"));
+  const project = projectFor(tmp);
   mkdirSync(homeFor(tmp), { recursive: true });
-  mkdirSync(workdirFor(tmp), { recursive: true });
+  createFixtureProject(project);
   const child = spawn(
     process.execPath,
-    [phCliEntry(), "run", "studio", "serve", "--", "--workdir", workdirFor(tmp)],
+    // The project's own ph-cli, the package's host: the Cli's workdir is the
+    // project.
+    [phCliEntry(project), "run", STUDIO_REF, "serve"],
     {
-      cwd: REPO_ROOT,
+      cwd: project,
       // The stop stream: its end (this process ending too) stops the stack.
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -97,7 +149,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     if (!driveId) throw new Error(`Could not parse drive id from "${url.href}"`);
     run.baseUrl = url.origin;
     run.driveId = driveId;
-    run.members = memberPids(tmp, STUDIO_MEMBERS);
+    run.members = memberPids(project, STUDIO_MEMBERS);
     writeRunFile(run);
   } catch (err) {
     child.stdin.end();
@@ -131,7 +183,7 @@ function waitForStudio(child: ChildProcess): Promise<string> {
       cleanup();
       reject(
         new Error(
-          `ph-cli run studio exited (code ${code}) before the Studio was ready. ` +
+          `ph-cli run ${STUDIO_REF} exited (code ${code}) before the Studio was ready. ` +
             `See the boot log above and ${STUDIO_LOG}.`,
         ),
       );

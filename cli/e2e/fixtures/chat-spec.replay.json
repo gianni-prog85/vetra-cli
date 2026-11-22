@@ -3,23 +3,8 @@
   "prompt": "A recipe box for our family recipes",
   "steps": [
     {
-      "tool": "mastra_workspace_write_file",
-      "args": {
-        "path": "recipe-box/powerhouse.config.json",
-        "content": "{}\n"
-      }
-    },
-    {
-      "tool": "mastra_workspace_write_file",
-      "args": {
-        "path": "recipe-box/node_modules/.keep",
-        "content": ""
-      }
-    },
-    {
       "tool": "spec-create",
       "args": {
-        "project": "recipe-box",
         "type": "powerhouse/document-model",
         "name": "Recipe Box"
       }
@@ -27,7 +12,6 @@
     {
       "tool": "spec-update",
       "args": {
-        "project": "recipe-box",
         "name": "Recipe Box",
         "actions": [
           {

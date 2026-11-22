@@ -1,5 +1,9 @@
 import { expect, test, type FrameLocator, type Page } from "@playwright/test";
-import { assertNoReplayError, dismissCookieBanner, startBuild } from "../support/studio-page.js";
+import {
+  assertNoReplayError,
+  dismissCookieBanner,
+  startConversation,
+} from "../support/studio-page.js";
 import {
   type StudioFixture,
   cliPaths,
@@ -9,12 +13,16 @@ import {
 } from "../support/target.js";
 
 /**
- * Seeded end-to-end. Against a freshly-booted, EMPTY studio (global-setup), we
- * type the prompt into the idea screen (which starts the product and its first
- * conversation), and let the replay agent drive the REAL build (project init →
- * model → editor → preview). We then assert the generated editor renders in
- * the preview pane's iframe with the preview data —
- * proving the whole loop: chat → agent → tools → reactor → studio.
+ * Seeded end-to-end. Against a freshly-booted studio (global-setup), we start
+ * a conversation and let the replay agent drive the REAL build (model →
+ * editor → preview). We then assert the generated editor renders in the
+ * preview pane's iframe with the preview data — proving the whole loop:
+ * chat → agent → tools → reactor → studio.
+ *
+ * Out of C1: its fixture starts with `reactor-project-init` and the preview
+ * is the project run, which a Studio inside a project no longer has (no init,
+ * the run opt-in, no preview pane on the project home). It returns with C2's
+ * Preview run.
  */
 const fixture = loadFixture();
 const run = loadRun();
@@ -23,9 +31,9 @@ const { log } = cliPaths();
 
 /** The project's preview is up: the Cli's local API resolves the project's
  * preview drive root to `ready` (its `ph run vetra dev` record is live). */
-async function projectPreviewReady(project: string): Promise<boolean> {
+async function projectPreviewReady(): Promise<boolean> {
   try {
-    const params = new URLSearchParams({ project, home: "1" });
+    const params = new URLSearchParams({ home: "1" });
     const res = await fetch(`${await localApi(run.baseUrl)}/resolve?${params}`, {
       signal: AbortSignal.timeout(5_000),
     });
@@ -42,10 +50,7 @@ async function projectPreviewReady(project: string): Promise<boolean> {
  * spec-preview-show lands. If it hasn't after the build has landed, pick the
  * editor's tab under the preview, as a customer would. The whole cold build
  * can take minutes. */
-async function waitForReadyPreview(
-  page: Page,
-  project: string,
-): Promise<FrameLocator> {
+async function waitForReadyPreview(page: Page): Promise<FrameLocator> {
   const iframe = page.locator('main iframe[title="Preview"]');
   const firstTab = page
     .getByRole("tablist", { name: "Screens" })
@@ -59,9 +64,9 @@ async function waitForReadyPreview(
     assertNoReplayError(log);
     if (await iframe.isVisible().catch(() => false)) break;
     // Once the project's preview resolves ready the build has landed.
-    if (readySeenAt === null && (await projectPreviewReady(project))) {
+    if (readySeenAt === null && (await projectPreviewReady())) {
       readySeenAt = Date.now();
-      console.log(`[e2e] the preview of ${project} is ready`);
+      console.log("[e2e] the project's preview is ready");
     }
     // Give following a fair chance before picking the tab by hand.
     if (
@@ -127,6 +132,7 @@ async function assertNoMissingModelBanner(page: Page): Promise<void> {
 }
 
 test.describe("Vetra studio — seeded build", () => {
+  test.skip(true, "out of C1: needs reactor-project-init and the project run (C2's Preview run)");
   test.skip(
     !fixture.preview,
     `fixture "${fixture.name}" has no preview: boot with VETRA_FIXTURE=todo-list`,
@@ -139,9 +145,9 @@ test.describe("Vetra studio — seeded build", () => {
     await page.goto(studioHome, { waitUntil: "domcontentloaded" });
     await dismissCookieBanner(page);
 
-    await startBuild(page, fixture.prompt);
+    await startConversation(page, fixture.prompt);
 
-    const preview = await waitForReadyPreview(page, expected.project);
+    const preview = await waitForReadyPreview(page);
     await assertEditor(preview, expected);
     await assertNoMissingModelBanner(page);
   });

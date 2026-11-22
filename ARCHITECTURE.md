@@ -183,9 +183,10 @@ is needed: a switchboard without a keypair generates one at
    export VETRA_ENVIRONMENT_ID=local-signed-check   # any value: the Cli signs as the agent
    export ADMINS=<your wallet address>              # the only wallet the agent may act for
    export VETRA_SESSION_EXPORT_SECRET=<long random string>
-   # optional, a chat without an LLM key:
+   # optional, a chat without an LLM key (its spec commands need the workdir
+   # to be a project: a powerhouse.config.json and a node_modules):
    export VETRA_REPLAY_FIXTURE=$PWD/cli/e2e/fixtures/chat-spec.replay.json
-   pnpm exec ph-cli run studio-signed -- --workdir <fresh workdir>
+   pnpm exec ph-cli run studio-signed -- --workdir <fresh project>
    ```
 
    Expect `Switchboard identity initialized: did:key:…` and no `No signer is

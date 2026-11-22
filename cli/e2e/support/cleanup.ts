@@ -1,8 +1,26 @@
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
 import path from "node:path";
 import { killTree } from "@powerhousedao/host-core/kill-tree";
-import { CACHE_DIR, REPO_ROOT, type RunFile, homeFor, phCliEntry, stackEnv } from "./target.js";
+import {
+  CACHE_DIR,
+  PACKAGE_NAME,
+  type RunFile,
+  STUDIO_REF,
+  homeFor,
+  phCliEntry,
+  projectFor,
+  stackEnv,
+} from "./target.js";
 
 /** The studio compound's own-process members (the Cli runs in its process). */
 export const STUDIO_MEMBERS = ["switchboard", "connect"] as const;
@@ -12,24 +30,26 @@ const STOP_COMMAND_MS = 90_000;
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** `ph-cli run studio --stop` under the run's data dir; its output is echoed. */
+/** `ph-cli run @powerhousedao/vetra-cli/studio --stop` in the fixture
+ * project, by the ref it was started with; its output is echoed. */
 function runStop(tmp: string): Promise<number | null> {
+  const project = projectFor(tmp);
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [phCliEntry(), "run", "studio", "--stop"], {
-      cwd: REPO_ROOT,
+    const child = spawn(process.execPath, [phCliEntry(project), "run", STUDIO_REF, "--stop"], {
+      cwd: project,
       env: stackEnv(tmp),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
     const timer = setTimeout(() => {
-      console.log("[e2e] ph-cli run studio --stop did not end; killing it");
+      console.log(`[e2e] ph-cli run ${STUDIO_REF} --stop did not end; killing it`);
       child.kill();
     }, STOP_COMMAND_MS);
     const echo = (chunk: Buffer) => process.stdout.write(`[e2e] ${chunk.toString()}`);
     child.stdout.on("data", echo);
     child.stderr.on("data", echo);
     child.on("error", (err) => {
-      console.log(`[e2e] ph-cli run studio --stop: ${err.message}`);
+      console.log(`[e2e] ph-cli run ${STUDIO_REF} --stop: ${err.message}`);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -44,7 +64,8 @@ function runStop(tmp: string): Promise<number | null> {
 export async function stopStudio(run: RunFile): Promise<void> {
   if (!run.tmp) return;
   const tmp = run.tmp;
-  const members = { ...memberPids(tmp, STUDIO_MEMBERS), ...run.members };
+  const project = projectFor(tmp);
+  const members = { ...memberPids(project, STUDIO_MEMBERS), ...run.members };
   const pids = [...(run.pid ? [run.pid] : []), ...Object.values(members)];
   console.log(
     `[e2e] stopping studio: pid ${run.pid ?? "-"}, members ${JSON.stringify(members)}`,
@@ -60,7 +81,7 @@ export async function stopStudio(run: RunFile): Promise<void> {
 
   collectServiceLogs(
     [
-      { label: "ph", dir: path.join(tmp, ".ph", "services") },
+      { label: "ph", dir: path.join(project, ".ph", "services") },
       { label: "home", dir: path.join(homeFor(tmp), ".ph") },
     ],
     path.join(CACHE_DIR, "service-logs"),
@@ -69,8 +90,23 @@ export async function stopStudio(run: RunFile): Promise<void> {
     console.log(`[e2e] kept temp dir for inspection: ${tmp}`);
     return;
   }
+  unlinkFixtureLinks(project);
   // Windows may hold a file a moment past its process.
   rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+}
+
+/** The fixture project's links into this checkout and its ph-cli go first, so
+ * removing the temp dir never walks into a linked package. */
+function unlinkFixtureLinks(project: string): void {
+  const scope = path.join(project, "node_modules", "@powerhousedao");
+  for (const name of ["vetra-cli", "ph-cli"]) {
+    const link = path.join(scope, name);
+    try {
+      if (lstatSync(link).isSymbolicLink()) unlinkSync(link);
+    } catch {
+      // no link
+    }
+  }
 }
 
 export function alive(pid: number): boolean {
@@ -104,7 +140,8 @@ export function killTrees(pids: readonly number[]): void {
   }
 }
 
-/** Pids of the members' run records under `<userData>/.ph/run`, by member. */
+/** Pids of the members' run records, by member: a package's hosts keep theirs
+ * under `<userData>/.ph/run/<package>/`. */
 export function memberPids(
   userData: string,
   members: readonly string[],
@@ -112,7 +149,7 @@ export function memberPids(
   const pids: Record<string, number> = {};
   for (const member of members) {
     try {
-      const file = path.join(userData, ".ph", "run", `${member}.json`);
+      const file = path.join(userData, ".ph", "run", PACKAGE_NAME, `${member}.json`);
       const record = JSON.parse(readFileSync(file, "utf8")) as { pid?: unknown };
       if (typeof record.pid === "number") pids[member] = record.pid;
     } catch {
