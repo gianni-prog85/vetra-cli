@@ -2,23 +2,22 @@ catalog:
   # @powerhousedao monorepo packages, at the version the monorepo's next/6.4
   # packages carry (pinned together for local-link compatibility).
   # cli/scripts/build-assets.ts reads the ph-cli entry as the Powerhouse version marker.
-  '@powerhousedao/clint': '6.3.0-dev.6'
-  # Private in the monorepo, not on npm at this version yet: installs only linked.
-  '@powerhousedao/clint-common': '6.3.0-dev.6'
-  '@powerhousedao/connect': '6.3.0-dev.6'
-  '@powerhousedao/design-system': '6.3.0-dev.6'
-  '@powerhousedao/host-core': '6.3.0-dev.6'
-  '@powerhousedao/ph-cli': '6.3.0-dev.6'
-  '@powerhousedao/powerhouse-vetra-packages': '6.3.0-dev.6'
-  '@powerhousedao/reactor': '6.3.0-dev.6'
-  '@powerhousedao/reactor-attachments': '6.3.0-dev.6'
-  '@powerhousedao/reactor-browser': '6.3.0-dev.6'
-  '@powerhousedao/shared': '6.3.0-dev.6'
-  '@powerhousedao/switchboard': '6.3.0-dev.6'
-  '@powerhousedao/vetra': '6.3.0-dev.6'
-  '@renown/sdk': '6.3.0-dev.6'
-  document-model: '6.3.0-dev.6'
-  ph-cmd: '6.3.0-dev.6'
+  '@powerhousedao/clint': '6.4.0-next.1'
+  '@powerhousedao/clint-common': '6.4.0-next.1'
+  '@powerhousedao/connect': '6.4.0-next.1'
+  '@powerhousedao/design-system': '6.4.0-next.1'
+  '@powerhousedao/host-core': '6.4.0-next.1'
+  '@powerhousedao/ph-cli': '6.4.0-next.1'
+  '@powerhousedao/powerhouse-vetra-packages': '6.4.0-next.1'
+  '@powerhousedao/reactor': '6.4.0-next.1'
+  '@powerhousedao/reactor-attachments': '6.4.0-next.1'
+  '@powerhousedao/reactor-browser': '6.4.0-next.1'
+  '@powerhousedao/shared': '6.4.0-next.1'
+  '@powerhousedao/switchboard': '6.4.0-next.1'
+  '@powerhousedao/vetra': '6.4.0-next.1'
+  '@renown/sdk': '6.4.0-next.1'
+  document-model: '6.4.0-next.1'
+  ph-cmd: '6.4.0-next.1'
 
   # The monorepo catalog's pins, which clint and clint-common resolve: the
   # copies on both sides of a local link (or one copy, from npm) agree.
@@ -50,7 +49,7 @@ overrides:
 
   # Image-size dedupe (Trim 4): each collapses a duplicate-version train in the
   # store.
-  'date-fns': '4.4.0'   # ~-11.5 MiB; all consumers on major 4 (leaner build)
+  'date-fns': '4.4.0' # ~-11.5 MiB; all consumers on major 4 (leaner build)
   # ~-19 MiB; collapses the rolldown binding train. Set for the vite that
   # builder-tools built Connect with (vite 8.3.4, rolldown ~1.2.12): vite 8.3
   # emits `import.meta.ROLLDOWN_FILE_URL_*` asset refs that rolldown 1.0.x
@@ -65,12 +64,12 @@ overrides:
   # same document-model instance as the PHDocumentController it is fed into
   # (cloud-client/controller.ts), a class-identity hazard. Unscoped, so
   # local-link's overrides replace them with links to the monorepo.
-  document-model: '6.3.0-dev.6'
-  '@powerhousedao/shared': '6.3.0-dev.6'
-  '@powerhousedao/builder-tools': '6.3.0-dev.6'
-  '@powerhousedao/common': '6.3.0-dev.6'
-  '@powerhousedao/connect': '6.3.0-dev.6'
-  '@powerhousedao/design-system': '6.3.0-dev.6'
+  document-model: '6.4.0-next.1'
+  '@powerhousedao/shared': '6.4.0-next.1'
+  '@powerhousedao/builder-tools': '6.4.0-next.1'
+  '@powerhousedao/common': '6.4.0-next.1'
+  '@powerhousedao/connect': '6.4.0-next.1'
+  '@powerhousedao/design-system': '6.4.0-next.1'
   #
   # Not applied:
   # - @opentelemetry/* (~121 MiB, 81 dirs, multiple SDK majors): no single safe pin; needs an audit.
@@ -91,6 +90,7 @@ allowBuilds:
   protobufjs: true
   sqlite3: true
   unrs-resolver: true
+  '@datadog/pprof': true
 
 # pnpm scripts and `pnpm exec` never reinstall: an install linked to the local
 # monorepo (local-link) stays in place until the next explicit `pnpm install`.

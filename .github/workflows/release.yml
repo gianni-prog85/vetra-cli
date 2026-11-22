@@ -7,7 +7,7 @@ name: release
 # publishes whatever version is committed on the branch it runs from.
 #
 #   branch     dist-tag   registry
-#   next/6.4   dev        registry.npmjs.org
+#   next/6.4   next       registry.npmjs.org
 #
 # npm can only trust a workflow for a package that exists: the first publish
 # is manual, the trust is configured on npmjs.com after it, and only then does
@@ -40,7 +40,7 @@ jobs:
         id: meta
         run: |
           case "$GITHUB_REF" in
-            refs/heads/next/6.4) echo "tag=dev" >> "$GITHUB_OUTPUT" ;;
+            refs/heads/next/6.4) echo "tag=next" >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::release runs from next/6.4 only (got $GITHUB_REF)"; exit 1 ;;
           esac
 
