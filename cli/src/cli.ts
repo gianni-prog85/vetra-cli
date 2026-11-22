@@ -133,7 +133,7 @@ export const cli = defineCli({
         description: 'Create and refine product specs at the workspace root — brand, problem and audience sheets, features and their work breakdown structure (ordering, outcome links, feature bets, WBS tasks). For a product/app request, write them alongside the build, never instead of it.',
       },
       'reactor-project-management': {
-        description: 'Initialize, build, and publish Reactor Package projects',
+        description: "Start (when its run is on), build, and publish the Reactor Package project Studio runs in",
         inputSchema: z.object({
           mode: z
             .enum(['expert', 'discovery', 'one-shot'])

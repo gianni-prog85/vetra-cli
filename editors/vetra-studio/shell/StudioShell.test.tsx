@@ -49,9 +49,10 @@ vi.mock("../ChatPane.js", () => ({
   ConversationPane: ({ sessionId }: { sessionId: string }) => (
     <div>Conversation {sessionId}</div>
   ),
+  ChatPane: () => <div>Chat sessions</div>,
 }));
-vi.mock("../idea/IdeaScreen.js", () => ({
-  IdeaScreen: () => <textarea aria-label="Your idea" />,
+vi.mock("./useProjectPackage.js", () => ({
+  useProjectPackage: () => ({ name: "@acme/shop", version: "1.0.9" }),
 }));
 vi.mock("../BuildSection.js", () => ({
   PreviewBody: () => <div>Preview pane</div>,
@@ -192,20 +193,27 @@ beforeEach(() => {
 });
 
 describe("StudioShell", () => {
-  it("an old Studio without a product document opens the old view", () => {
+  it("a drive with conversations but no product document opens the project home", () => {
     hoisted.documents = [chatDoc(SESSION_ID, 3)];
     const container = render(
       <StudioShell document={driveDoc([SESSION])} dispatch={() => {}} />,
     );
-    expect(container.textContent).toContain("Old Studio view");
+    expect(container.textContent).not.toContain("Old Studio view");
+    expect(container.querySelector('[aria-label="Project"]')).not.toBeNull();
+    expect(container.textContent).toContain("Chat sessions");
   });
 
-  it("idea state when the drive has no product", () => {
+  it("a drive without a product shows the project home, never the idea screen", () => {
     hoisted.documents = [];
     const container = render(
       <StudioShell document={driveDoc([])} dispatch={() => {}} />,
     );
-    expect(container.querySelector('[aria-label="Your idea"]')).not.toBeNull();
+    expect(
+      container.querySelector('[aria-label="Project"]')?.textContent,
+    ).toContain("@acme/shop");
+    expect(container.querySelector('[aria-label="Your idea"]')).toBeNull();
+    expect(container.textContent).not.toContain("What do you want to build?");
+    expect(container.textContent).not.toContain("Build it");
     expect(container.querySelector('[aria-label="Steps"]')).toBeNull();
     expectNoForbiddenWords(container);
   });

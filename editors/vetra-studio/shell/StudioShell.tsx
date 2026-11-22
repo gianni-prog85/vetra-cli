@@ -1,9 +1,10 @@
 /**
- * The Studio page (spec §5.1, G1): one page whose state follows the product
- * document — the idea screen, the build (story | preview) or the live
- * product — under one step strip that is the only navigation. Older Studios
- * without a product document keep today's view until they are converted
- * (ruling F4, Task 3.7).
+ * The Studio page (spec §5.1, G1). A Studio runs inside one project: without
+ * a product document it shows the project home (the project, its
+ * conversations and specifications). Studio starts no product and creates no
+ * project, so the product states — the build (story | preview) or the live
+ * product, under one step strip that is the only navigation — show only for
+ * a drive that already holds a product document.
  */
 import { isChatSessionDocument } from "@powerhousedao/clint-common/document-models/chat-session";
 import {
@@ -35,9 +36,7 @@ import { SignInModal, useFailureHandlers } from "../failures/FailureLine.js";
 import { failureFor, withFailure } from "../failures/failureStates.js";
 import { useStudioRestarting } from "../failures/useStudioRestarting.js";
 import { GithubStatusLine } from "../github/GithubStatusLine.js";
-import { IdeaScreen } from "../idea/IdeaScreen.js";
 import { useStudioSignIn } from "../idea/useStudioSignIn.js";
-import { sessionToOpen, startProduct } from "../idea/startProduct.js";
 import { LiveSurface } from "../change/LiveSurface.js";
 import { ReadyBar } from "../change/ReadyBar.js";
 import { startChange } from "../change/startChange.js";
@@ -55,8 +54,8 @@ import { StepStrip } from "../strip/StepStrip.js";
 import { openChange, stripChange, stripModel } from "../strip/stripModel.js";
 import { PHASE_AVERAGES } from "../strip/timeLeft.js";
 import { useVersionsPanel } from "../versions/VersionsPanel.js";
-import { VetraStudio } from "../VetraStudio.js";
 import { showsFirstVersionBar } from "./firstVersion.js";
+import { ProjectHome } from "./ProjectHome.js";
 import { useStudioState } from "./useStudioState.js";
 
 const STORY_WIDTH_STORAGE_KEY = "vetra-studio:story-width";
@@ -73,37 +72,10 @@ export type StudioShellProps = {
 
 export function StudioShell({ document, dispatch }: StudioShellProps) {
   const result = useStudioState(document);
-  // While a start runs, the new conversation can be listed before the
-  // product: that drive must not be mistaken for an older Studio.
-  const [startInFlight, setStartInFlight] = useState(false);
-  const [startedSession, setStartedSession] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // "Change who can use it" opens Settings straight on the access switch.
   const [settingsOnAccess, setSettingsOnAccess] = useState(false);
   const [showDebug] = useState(isProductDebugEnabled);
-  const driveRef = useRef(document);
-  driveRef.current = document;
-
-  const status =
-    result.status === "legacy" && startInFlight ? "idea" : result.status;
-
-  useEffect(() => {
-    if (result.status === "building" || result.status === "live") {
-      setStartInFlight(false);
-    }
-  }, [result.status]);
-
-  const startFromIdea = useCallback(async (idea: string) => {
-    setStartInFlight(true);
-    try {
-      return sessionToOpen(
-        await startProduct({ drive: driveRef.current, idea }),
-      );
-    } catch (err) {
-      setStartInFlight(false);
-      throw err;
-    }
-  }, []);
 
   const openSettings = useCallback(() => {
     setSettingsOnAccess(false);
@@ -118,21 +90,19 @@ export function StudioShell({ document, dispatch }: StudioShellProps) {
     setSettingsOnAccess(false);
   }, []);
 
-  if (status === "loading") return <ShellLoading />;
-  if (status === "legacy") {
-    return <VetraStudio document={document} dispatch={dispatch} />;
-  }
+  if (result.status === "loading") return <ShellLoading />;
 
-  const product = result.status === "loading" ? null : result.product;
-  const productId = result.status === "loading" ? null : result.productId;
-  const documents = result.status === "loading" ? [] : result.documents;
+  const { status, product, productId, documents } = result;
+  // No product document (a fresh drive, or one with conversations or specs
+  // only): the project home.
+  const home = status === "idea" || status === "legacy";
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
-      {status === "idea" ? (
-        <IdeaScreen
-          onStart={startFromIdea}
-          onStarted={setStartedSession}
+      {home ? (
+        <ProjectHome
+          drive={document}
+          dispatch={dispatch}
           onOpenSettings={openSettings}
         />
       ) : (
@@ -141,7 +111,6 @@ export function StudioShell({ document, dispatch }: StudioShellProps) {
           documents={documents}
           product={product}
           live={status === "live"}
-          fallbackSessionId={startedSession}
           productId={productId}
           onOpenSettings={openSettings}
           onOpenAccess={openAccessSettings}
@@ -213,7 +182,6 @@ function StudioPage({
   documents,
   product,
   live,
-  fallbackSessionId,
   productId,
   onOpenSettings,
   onOpenAccess,
@@ -222,7 +190,6 @@ function StudioPage({
   documents: readonly PHDocument[];
   product: StudioProductState | null;
   live: boolean;
-  fallbackSessionId: string | undefined;
   productId: string | null;
   onOpenSettings: () => void;
   onOpenAccess: () => void;
@@ -258,7 +225,7 @@ function StudioPage({
   }, [change, right]);
   const [openStep, setOpenStep] = useState<StepKind | null>(null);
 
-  const sessionId = change?.chatSessionId ?? fallbackSessionId;
+  const sessionId = change?.chatSessionId ?? undefined;
   const sessionState = useDocumentSafe(sessionId ?? null);
   const sessionDocument =
     sessionState.status === "success" &&

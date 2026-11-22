@@ -336,14 +336,17 @@ export type ProjectPackageResult =
   | { kind: "unknown-project"; project: string; error: string }
   | { kind: "no-package"; project: string; error: string };
 
-/** Read a project's package identity (name + version) from its package.json. */
+/** Read a project's package identity (name + version) from its package.json;
+ * no `project`: the project the Studio runs in. */
 export async function fetchProjectPackage(args: {
-  project: string;
+  project?: string;
   signal?: AbortSignal;
 }): Promise<ProjectPackageResult> {
-  const params = new URLSearchParams({ project: args.project });
+  const query = args.project
+    ? `?${new URLSearchParams({ project: args.project })}`
+    : "";
   const { base } = await previewBase();
-  const res = await fetch(`${base}/project-package?${params}`, {
+  const res = await fetch(`${base}/project-package${query}`, {
     headers: await ownerHeaders(),
     signal: args.signal,
   });

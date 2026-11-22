@@ -57,13 +57,14 @@ describe("vetra spec-* (e2e)", () => {
         "spec-generate",
         "spec-schema-list",
         "spec-schema",
-        "reactor-project-init",
         "reactor-project-build",
         "reactor-project-check",
         "reactor-project-publish",
       ]) {
         expect(stdout).toContain(cmd);
       }
+      // Studio creates no project: no init command.
+      expect(stdout).not.toContain("reactor-project-init");
     },
     TIMEOUT,
   );

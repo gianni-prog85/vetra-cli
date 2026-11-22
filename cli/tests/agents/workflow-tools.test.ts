@@ -7,9 +7,9 @@ import { selectTools } from '../../src/agents/phase-tools.js';
 import { registeredToolNames } from './tool-names.js';
 
 /**
- * M0 regression (0.0.8-dev.9 on staging): the workflow said "go straight to
- * `reactor-project-init`" while the PLAN step's tool set had no init tool. The
- * agent concluded the Studio had none and hand-wrote a project. Every tool
+ * M0 regression (0.0.8-dev.9 on staging): the workflow named a tool the PLAN
+ * step's tool set did not have. The agent concluded the Studio had none and
+ * hand-wrote a project. Every tool
  * the workflow, or a skill it loads for a step, tells the agent to use in a
  * step must be visible in that step (and be a real tool, so visible in NONE).
  */
@@ -91,9 +91,10 @@ describe('workflow and step tool sets agree (M0)', () => {
   it('bootstrap is reachable in PLAN, the step a build starts in', () => {
     const row = tableRows().get('PLAN')!;
     expect(namedSkills(row)).toEqual(expect.arrayContaining(['reactor-project-management', 'product-specs']));
-    const bootstrap = /Empty workspace[^]*?\n\n/.exec(WORKFLOW)?.[0] ?? '';
+    const bootstrap = /The project is your workdir[^]*?\n\n/.exec(WORKFLOW)?.[0] ?? '';
     const tools = namedTools(bootstrap);
-    expect(tools).toEqual(expect.arrayContaining(['reactor-project-init', 'reactor-project-ls', 'reactor-project-start']));
+    expect(tools).toEqual(expect.arrayContaining(['reactor-project-start']));
+    expect(tools).not.toContain('reactor-project-init');
     expect(hidden(tools, 'PLAN')).toEqual([]);
   });
 

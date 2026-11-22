@@ -89,20 +89,22 @@ describe('main agent builds by default (R18)', () => {
   });
 });
 
-// R20: the staging run spent ~4 steps on `reactor-project-start` of the
-// workspace root (its powerhouse.config.json looked like a project) before
-// `reactor-project-init`.
-describe('empty workspace goes straight to init (R20)', () => {
-  it('workflow routes an empty workspace to reactor-project-init and never starts the root', async () => {
+// Studio runs inside one project: the workdir is the project, Studio makes
+// no other one, and its run is opt-in.
+describe('the workdir is the project', () => {
+  it('workflow: no project is created, the run is opt-in', async () => {
     const text = flat(await mainInstructions());
-    expect(text).toMatch(/Empty workspace \(`reactor-project-ls` lists no project\): go straight to `reactor-project-init`/);
-    expect(text).toMatch(/The workspace root is not a project.{0,80}never `reactor-project-start` it/);
+    expect(text).toMatch(/The project is your workdir: Studio runs inside it and creates no other project/);
+    expect(text).toMatch(/never hand-write a new project's files/);
+    expect(text).toMatch(/The project's run is opt-in: without `reactor-project-start` in your tools the preview is off/);
+    expect(text).not.toMatch(/reactor-project-init/);
   }, 60_000);
 
   it('the bootstrap skill says the same', () => {
     const preamble = flat(readFileSync(path.join(PROMPTS_DIR, 'skills-tpl', 'reactor-project-management', '.preamble.md'), 'utf-8'));
-    expect(preamble).toMatch(/Empty workspace[^.]*call `reactor-project-init` next/);
-    expect(preamble).toMatch(/The workspace root is not a project — never start it/);
+    expect(preamble).toMatch(/The project is your workdir: Studio runs inside one Reactor Package project and creates no other one/);
+    expect(preamble).toMatch(/`reactor-project-start` is in your tools only when the Studio turns the project run on/);
+    expect(preamble).not.toMatch(/reactor-project-init/);
   });
 });
 

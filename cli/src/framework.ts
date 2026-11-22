@@ -23,8 +23,7 @@ export const configSchema = z.object({
   model: z.string().default('anthropic/claude-sonnet-4.6').describe('OpenRouter model id for the main agent (env VETRA_MODEL)'),
   agentLogging: z.boolean().default(false).describe('Enable agent conversation logging'),
   memoryModel: z.string().default('deepseek/deepseek-v4.1-flash-1017').describe('Model for observational memory (background compression of long chat histories)'),
-  phVersion: z.string().optional().describe(`Powerhouse version for new reactor projects (defaults to ${DEFAULT_PH_VERSION})`),
-  reactorProjectClonePath: z.string().optional().describe('Path to a pre-scaffolded reactor-project. When set, reactor-project-init clones it via `ph init --clone` (fast path). Typically baked into container images.'),
+  phVersion: z.string().optional().describe(`Powerhouse version the services of a new cloud environment pin (defaults to ${DEFAULT_PH_VERSION})`),
   registryUrl: z.string().optional().describe('Registry URL to use when publishing packages. When unset, resolution falls through to PH_REGISTRY_URL, powerhouse.config.json, then the registry implied by the cloud switchboard (prod: https://registry.vetra.io). A missing registry is an error, never a dev default'),
   cloudSwitchboardUrl: z.string().optional().describe('Vetra Cloud switchboard base URL the deploy commands talk to (env VETRA_CLOUD_SWITCHBOARD_URL); required for cloud commands, no default'),
   cloudRenownUrl: z.string().optional().describe('Renown identity service URL for the cloud login flow (defaults to https://www.renown.id)'),
@@ -39,14 +38,6 @@ export const configSchema = z.object({
     .optional()
     .describe(
       'The studio environment document id used to scope the GitHub repo (env VETRA_ENVIRONMENT_ID)',
-    ),
-  packageManager: z
-    .preprocess(
-      (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
-      z.enum(['npm', 'pnpm']).optional().catch(undefined),
-    )
-    .describe(
-      'Package manager for `ph init` on fresh reactor projects. Unset: prefer pnpm when installed, else npm. An unrecognized value is ignored (falls back to inference). The --clone fast path always uses pnpm (ph requires it). Env VETRA_PACKAGE_MANAGER.',
     ),
   subagentModel: z
     .string()

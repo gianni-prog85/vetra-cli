@@ -117,7 +117,7 @@ export const reactorProject = defineService({
     checkWorkdir(
       isProjectFolder,
       'Not a Reactor Package project',
-      'Run reactor-project-start --workdir <project>, or create one with /reactor-project-init',
+      'Run Studio inside a Reactor Package project; ph init creates one',
     ),
     checkWorkdir(
       (cwd) => fs.existsSync(path.join(cwd, 'hosts', PREVIEW_HOST, 'host.js')),

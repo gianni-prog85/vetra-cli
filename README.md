@@ -96,8 +96,12 @@ pnpm dev:reset
 
 ## Your first session
 
-Type your idea in the Studio page, or open the Cli's shell in the terminal
-(`pnpm exec ph-cli run studio -- -i --workdir ../vetra-test`). Once the REPL is
+Studio works inside one project (the workdir). The Studio page opens on the
+project home: the project's name and version, your conversations with the
+agent and the project's specifications. Start a session there, or open the
+Cli's shell in the terminal
+(`pnpm exec ph-cli run studio -- -i --workdir ../vetra-test`). Studio creates no
+project: a new app starts with `ph init`, then Studio in it. Once the REPL is
 up you'll see:
 
 ```
@@ -113,9 +117,9 @@ Try a build, end to end:
   a done flag, and a priority. Then generate an editor for it.
 ```
 
-The agent designs the schema, generates the model and editor, and boots Vetra
-Studio. Open the printed `http://127.0.0.1:8090/d/<driveId>` URL and edit your
-new document type in the browser. Iterate by continuing the conversation.
+The agent designs the schema and generates the model and editor in the
+project. Open the printed `http://127.0.0.1:8090/d/<driveId>` URL to follow
+along. Iterate by continuing the conversation.
 
 Type `/` at any time to see the available slash commands (publishing, service
 control, auth, and more).
@@ -145,14 +149,10 @@ npm install -g ph-cmd vetra --registry=https://registry.vetra.io # or: pnpm add 
 vetra                                    # launch the agent REPL
 ```
 
-`ph init` scaffolds new projects with pnpm when it's installed, else npm (set
-`VETRA_PACKAGE_MANAGER` to force `npm`/`pnpm`/`yarn`/`bun`).
-
 Installer env knobs (non-exhaustive — see the header of `install.sh`):
 `VETRA_VERSION`, `PH_VERSION`, `VETRA_REGISTRY` (registry for the `vetra`
 package; defaults to the pre-release registry `https://registry.vetra.io`),
-`VETRA_PM=npm|pnpm` (installer PM),
-`VETRA_PACKAGE_MANAGER` (PM for scaffolded projects), `VETRA_SKIP_PH=1`,
+`VETRA_PM=npm|pnpm` (installer PM), `VETRA_SKIP_PH=1`,
 `VETRA_YES=1` (non-interactive), `VETRA_NO_LAUNCH=1`.
 
 ## Project layout

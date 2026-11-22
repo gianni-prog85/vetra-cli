@@ -54,25 +54,23 @@ export const PROJECT_MCP = 'reactor-project-mcp__*';
 const ATTACHMENTS = ['attachment-preprocess', 'attachment-upload'];
 
 export const PHASE_TOOLS: Record<StepKind | 'NONE', readonly string[]> = {
-  // Bootstrap first, then product specs at the workspace root (and naming
-  // the product). The project installs while the specs are written; without
-  // init/start here the agent read "go straight to init" as "no init tool".
+  // Bootstrap first (start the project's run when it is on), then product
+  // specs (and naming the product). Studio creates no project: the workdir
+  // is the project.
   PLAN: [
     ...SPEC_BUILD,
     'spec-delete',
     'spec-extract',
-    'reactor-project-init',
     'reactor-project-start',
     'reactor-project-stop',
     'reactor-project-restart',
   ],
-  // Bootstrap + Model: project, spec-driven model, hand-written reducers.
+  // Bootstrap + Model: project run, spec-driven model, hand-written reducers.
   DATA: [
     ...SPEC_BUILD,
     'spec-preview-*',
     ...WORKSPACE_WRITE,
     SHELL,
-    'reactor-project-init',
     'reactor-project-start',
     'reactor-project-stop',
     'reactor-project-restart',
@@ -301,12 +299,11 @@ const MISSING_AFTER =
   "(?:\\s+tools?)?\\s+(?:is\\s+|are\\s+)?(?:missing|unavailable|absent|not (?:available|exposed|listed|offered|present|there|in)|isn'?t (?:there|available|listed|exposed)|(?:doesn'?t|does not) exist)";
 
 /**
- * Tools visible in `phases` that `reason` claims are missing (the dev.9
- * staging agent marked itself stuck on "no project-init tool is exposed"
- * while reactor-project-init was in its tool list). The tool must sit inside
- * the claim ("no reactor-project-init tool", "reactor-project-init is
- * missing"), so a real failure that names a tool ("spec-generate keeps
- * failing: missing type X") is not caught.
+ * Tools visible in `phases` that `reason` claims are missing (a staging agent
+ * marked itself stuck on a missing tool that was in its tool list). The tool
+ * must sit inside the claim ("no reactor-project-start tool",
+ * "spec-extract is missing"), so a real failure that names a tool
+ * ("spec-generate keeps failing: missing type X") is not caught.
  */
 export function claimedMissingTools(reason: string, phases: StepKind[] | null): string[] {
   return namedVisibleTools(phases).filter((name) =>

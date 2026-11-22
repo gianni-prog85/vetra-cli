@@ -73,7 +73,7 @@ describe('phase tool sets', () => {
       'spec-schema',
       'spec-generate',
       'mastra_workspace_edit_file',
-      'reactor-project-init',
+      'reactor-project-start',
       'reactor-project-check',
       'agent-agentDocumentModel',
       'reactor-project-mcp__addActions',
@@ -133,11 +133,11 @@ describe('phase tool sets', () => {
   it('an active change between steps gets its next unfinished step, never deploy (F18)', async () => {
     h = await productHarness();
     await runProgress(h.ctx, { action: 'plan', steps: [{ kind: 'PLAN' }, { kind: 'DATA' }, { kind: 'EDITORS' }] });
-    // Not started: the plan step's tools, bootstrap included (M0: an empty
-    // workspace is initialised and started first, in PLAN).
+    // Not started: the plan step's tools, bootstrap included (the project's
+    // run is started first, in PLAN, when it is on).
     const tools = await visibleTools(h);
     expect(tools).toContain('spec-create');
-    expect(tools).toContain('reactor-project-init');
+    expect(tools).toContain('spec-extract');
     expect(tools).toContain('reactor-project-start');
     expect(tools).not.toContain('mastra_workspace_write_file');
     expect(tools).not.toContain('mastra_workspace_execute_command');
@@ -169,7 +169,7 @@ describe('phase tool sets', () => {
     expect(tools).toContain('agent-agentEditor');
     expect(tools).toContain('spec-preview-show');
     expect(tools).not.toContain('agent-agentDocumentModel');
-    expect(tools).not.toContain('reactor-project-init');
+    expect(tools).not.toContain('spec-extract');
     expect(tools!.filter((n) => /^(deploy|github)-/.test(n))).toEqual([]);
     expect(tools!.length).toBeLessThan(names.length);
   });

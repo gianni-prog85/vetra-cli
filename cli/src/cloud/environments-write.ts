@@ -150,7 +150,7 @@ Please select a different environment or create a new one for deployments.`,
 }
 
 /** Create a new environment owned by the signed-in user. Services pin to
- * `version ?? config.phVersion ?? DEFAULT_PH_VERSION` (reactor-project-init's precedence). */
+ * `version ?? config.phVersion ?? DEFAULT_PH_VERSION`. */
 export async function createCloudEnvironment(
   ctx: ReadContext,
   options: { label: string; services?: CloudServiceType[]; version?: string },

@@ -1,6 +1,8 @@
 /**
  * Read a reactor-project's published package identity (name + version) from
- * its package.json. Powers the Deploy section's read-only package display.
+ * its package.json. No project: the workdir itself, the project the Studio
+ * runs in (its project home). Powers the project home's header and the
+ * Deploy section's read-only package display.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,12 +21,9 @@ export async function readProjectPackage(
   workdir: string,
   project: string,
 ): Promise<ProjectPackageResult> {
-  if (!project) {
-    return { kind: "unknown-project", project, error: "No project specified." };
-  }
   let projectPath: string;
   try {
-    projectPath = await resolveReactorProjectPath(workdir, project, {
+    projectPath = await resolveReactorProjectPath(workdir, project || undefined, {
       soleProjectDefault: false,
     });
   } catch (err) {

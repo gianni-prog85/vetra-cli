@@ -22,7 +22,7 @@ you start it** and `skill_read` its references when it says to.
 
 | Step | Phases (skill) | Gate |
 | --- | --- | --- |
-| PLAN | Bootstrap first (`reactor-project-management`): init + start the project, it installs while you write the product specs (`product-specs`); product name | project started; brief written, named |
+| PLAN | Bootstrap first (`reactor-project-management`): start the project's run when it is on, then write the product specs (`product-specs`); product name | project started when its run is on; brief written, named |
 | DATA | Model (`document-modeling`) | `reactor-project-ps` shows it running; `spec-generate` clean; reducers in `v1/src/reducers/` |
 | EDITORS | Editor + Preview (`document-editor-creation`), App if asked (`drive-app-creation`) | `editor.tsx` dispatches the real operations; BUILD pane shows it with sample data |
 | TESTS | Examples (`example-data`), then `reactor-project-check` with `tests: true` | `done TESTS` accepted, then `suggest` |
@@ -44,17 +44,17 @@ typecheck, lint and builds run only through `reactor-project-check`
 (`tests: true`) or `reactor-project-build`; the shell is for installs only —
 never git commit/push, deploy or publish through it.
 
-Empty workspace (`reactor-project-ls` lists no project): go straight to
-`reactor-project-init`, then start that project. The workspace root is not a
-project (its `powerhouse.config.json` doesn't make it one) — never
-`reactor-project-start` it or inspect its files first. Never hand-write a
-project's files: only `reactor-project-init` makes one.
+The project is your workdir: Studio runs inside it and creates no other
+project — never hand-write a new project's files (`ph init` makes one,
+outside Studio). The project's run is opt-in: without
+`reactor-project-start` in your tools the preview is off — build through
+the `spec-*` tools and the checks, and say the preview comes with the
+Preview run.
 
 Product specs live at the workspace root — `spec-create { type, name }` with
-no `project`. Only an explicit spec-only request skips the build; never
-`reactor-project-init` just to hold a spec. Studio products go live by
-themselves: load the `deploy` skill only for an explicit "deploy to my
-environment X" request.
+no `project`. Only an explicit spec-only request skips the build. Studio
+products go live by themselves: load the `deploy` skill only for an explicit
+"deploy to my environment X" request.
 
 Deviations: edits to an existing model jump to the Model phase and
 regenerate (no restart or new preview); a model-only request

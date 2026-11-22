@@ -212,10 +212,11 @@ is needed: a switchboard without a keypair generates one at
 
 4. Open the printed `Vetra Studio: http://127.0.0.1:8090/d/<id>` and sign in
    with Renown in the tab (the account menu) with the same wallet before
-   Build it: the tab creates the product and the conversation, and a
+   starting a conversation: the tab creates the conversation, and a
    `v2-required` document refuses an unsigned create. On `127.0.0.1` the tab
    does not ask for the sign-in itself.
-5. Send the idea. Expect the agent's answer, then every operation the agent
+5. Start a session in the project home and send a message. Expect the
+   agent's answer, then every operation the agent
    wrote carrying its key: find the conversation with
    `findDocuments(search: { type: "powerhouse/chat-session", parentId: "<id>" })`,
    then on `http://127.0.0.1:8090/graphql`:
@@ -316,15 +317,17 @@ is missing it is a 404 and the SPA sends nothing to the local API.
 
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
-via the vetra drive's `preferredEditor` field. The editor renders:
-
-- Left rail: list of chat session documents in the drive, plus a
-  "What will you build today?" entry point that creates a new session.
-- Right pane: the **active workflow scaffold** for the current chat
-  session. Default scaffold renders four vertical step cards
-  (`ideate`, `specify`, `build`, `deploy`). The BUILD card hosts an
-  iframe deep-linked into the chat session's current reactor-project
-  Connect.
+via the vetra drive's `preferredEditor` field. A Studio runs inside one
+project, so a drive without a product document shows the **project home**
+(`shell/ProjectHome.tsx`): the project's name and version (its
+`package.json`, from `GET /project-package` with no parameter), the
+conversations with the agent (the chat pane: sessions list, a new session,
+the conversation) and the specifications in the drive, read-only. There is
+no idea screen and no "Build it": Studio starts no product and creates no
+project (a new app starts with `ph init`, then Studio in it). The product
+layer (the step strip over the build, versions, launch, the live product)
+shows only for a drive that already holds a `vetra/studio-product`
+document, which nothing in C1 creates.
 
 ### vetra local API
 
@@ -618,8 +621,9 @@ Created via `cli.configureAgent(createAgent)`. Mastra-backed.
 Tool surface for MVP (see `HANDOFF.md` for the implementation
 checklist):
 
-- **Existing project lifecycle:** `reactor-project-init`,
-  `reactor-project-start`, `reactor-project-stop`, `reactor-project-ls`.
+- **Existing project lifecycle:** `reactor-project-start`,
+  `reactor-project-stop`, `reactor-project-ls` (the project run is opt-in;
+  there is no init: the workdir is the project).
 - **Existing spec lifecycle:** `spec-create`, `spec-get`, `spec-list`,
   `spec-update`, `spec-delete`, `spec-extract`, `spec-generate`.
 - **Preview document lifecycle (planned):** `spec-preview-create`,
@@ -985,10 +989,12 @@ These are limitations of the current direction; not bugs.
   tests check so far. `ReactorContext.client` is typed as the full client, so a call
   `GraphQLReactorClient` lacks would fail at run time, not in the type
   check; the Cli, the spec sync and clint's folder operations use only
-  calls both clients have. Studios from before the product page are not
-  upgraded: a product starts from the idea screen; one whose story starts
-  with work from before versions still launches through
-  `ensureProductTarget` (`product/upgrade-existing.ts`). The attach carries the switchboard's
+  calls both clients have. No product starts in a Studio inside a project
+  (no idea screen); a drive that holds one from before still shows the build
+  page, and one whose story starts with work from before versions still
+  launches through `ensureProductTarget` (`product/upgrade-existing.ts`).
+  That layer commits, tags and deletes files in the workdir, so it must not
+  run on an existing repository until git managed by Studio is designed. The attach carries the switchboard's
   attachment service: the chat watch reads a message's file through its
   conversation (`documentId`), which the switchboard admits by the reference
   it indexes from the message's `AttachmentRef` field

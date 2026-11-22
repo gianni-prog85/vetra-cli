@@ -98,7 +98,7 @@ describe("product-progress", () => {
     );
     // Back from the finished change (LIVE tools) to PLAN: its tools return.
     expect(await runProgress(h.ctx, { action: "back", step: "PLAN", reason: "Add due dates" })).toMatch(
-      /^Back to Plan\. Now available: spec-create, .*reactor-project-init/,
+      /^Back to Plan\. Now available: spec-create, .*spec-extract/,
     );
     expect(
       await runProgress(h.ctx, { action: "stuck", reason: "Dates do not save", tried: ["a", "b", "c"] }),
@@ -159,7 +159,7 @@ describe("product-progress", () => {
       expect(done).toContain(tool);
     }
     // Tools PLAN already had are not repeated.
-    expect(done).not.toContain("reactor-project-init");
+    expect(done).not.toContain("reactor-project-start");
     expect(done).not.toContain("spec-create");
     const started = await runProgress(h.ctx, { action: "start", step: "DATA" });
     expect(started).toBe("Data started.");
@@ -169,28 +169,28 @@ describe("product-progress", () => {
     h = await productHarness();
     await runProgress(h.ctx, { action: "plan", steps: [{ kind: "PLAN" }, { kind: "DATA" }] });
     await runProgress(h.ctx, { action: "start", step: "PLAN" });
-    // The staging wording: the init tool was in the tool list at the time.
+    // The staging wording: the tool was in the tool list at the time.
     expect(
       await runProgress(h.ctx, {
         action: "stuck",
-        reason: "no project-init/start tool is exposed in this session",
+        reason: "no project-start tool is exposed in this session",
         tried: ["a", "b", "c"],
       }),
-    ).toBe("Refused: reactor-project-init is available in this step — use it.");
+    ).toBe("Refused: reactor-project-start is available in this step — use it.");
     expect(
       await runProgress(h.ctx, {
         action: "stuck",
-        reason: "reactor-project-init is missing and there is no reactor-project-start tool",
+        reason: "spec-extract is missing and there is no reactor-project-start tool",
         tried: ["a"],
       }),
-    ).toBe("Refused: reactor-project-init, reactor-project-start are available in this step — use them.");
+    ).toBe("Refused: spec-extract, reactor-project-start are available in this step — use them.");
     expect(
-      await runProgress(h.ctx, { action: "stuck", reason: "there is no reactor-project-init tool", tried: ["a"] }),
-    ).toBe("Refused: reactor-project-init is available in this step — use it.");
+      await runProgress(h.ctx, { action: "stuck", reason: "there is no spec-extract tool", tried: ["a"] }),
+    ).toBe("Refused: spec-extract is available in this step — use it.");
     expect((await h.state()).changes[0].stuck).toBeNull();
     // The same reason again is accepted: the refusal never leaves the agent without a way out.
     expect(
-      await runProgress(h.ctx, { action: "stuck", reason: "there is no reactor-project-init tool", tried: ["a"] }),
+      await runProgress(h.ctx, { action: "stuck", reason: "there is no spec-extract tool", tried: ["a"] }),
     ).toBe("Marked as stuck; the customer will be asked for help.");
   });
 

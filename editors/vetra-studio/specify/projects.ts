@@ -90,3 +90,15 @@ export function deriveProjects(
   }
   return projects;
 }
+
+/** The drive's spec documents, wherever they are filed, by name (then id). */
+export function specDocuments(files: readonly FileNode[]): ProjectDocument[] {
+  return files
+    .filter((file) => SPECIFY_TYPES.has(file.documentType))
+    .map((file) => ({
+      id: file.id,
+      name: file.name,
+      documentType: file.documentType,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
