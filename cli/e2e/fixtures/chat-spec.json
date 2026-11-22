@@ -1,0 +1,17 @@
+{
+  "name": "chat-spec",
+  "prompt": "A recipe box for our family recipes",
+  "replay": "chat-spec.replay.json",
+  "spec": {
+    "documentType": "powerhouse/document-model",
+    "name": "Recipe Box",
+    "modelId": "powerhouse/recipe-box",
+    "description": "Family recipes with their ingredients and steps."
+  },
+  "attachment": {
+    "fileName": "grandma-notes.txt",
+    "mimeType": "text/plain",
+    "content": "Apple pie: 6 apples, 200 g butter, 300 g flour, a pinch of cinnamon.\n",
+    "text": "Here are grandma's notes for the first recipe."
+  }
+}

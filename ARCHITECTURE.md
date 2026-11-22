@@ -863,10 +863,12 @@ These are limitations of the current direction; not bugs.
   upgraded: a product starts from the idea screen; one whose story starts
   with work from before versions still launches through
   `ensureProductTarget` (`product/upgrade-existing.ts`). The attach carries the switchboard's
-  attachment service, but a chat attachment cannot be read back yet: the
-  chat-session model types its attachment fields as `String`, so the
-  switchboard indexes no reference from a message and refuses a read
-  through the chat document.
+  attachment service: the chat watch reads a message's file through its
+  conversation (`documentId`), which the switchboard admits by the reference
+  it indexes from the message's `AttachmentRef` field
+  (`cli/e2e/tests/studio-chat.spec.ts` runs it). The build page's message
+  box sends text only; files reach a conversation from the chat-session
+  editor or the API.
 
 - **Hosts (B2).** The package's form (`ph run
   @powerhousedao/vetra-cli/studio` from another project) is not supported

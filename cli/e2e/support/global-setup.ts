@@ -172,8 +172,9 @@ async function discoverDriveId(baseUrl: string): Promise<string> {
   const id = loc.match(/\/d\/([^/?#]+)/)?.[1];
   if (!id) {
     throw new Error(
-      `${baseUrl}/ did not redirect to /d/<driveId> (got ${res.status} ${loc}). ` +
-        `Is a vetra studio running there in replay mode?`,
+      `${baseUrl}/ did not redirect to /d/<driveId> (got ${res.status} ${loc}): ` +
+        `Connect does not redirect to the Studio drive. Set VETRA_E2E_DRIVE_ID to ` +
+        `the id in the stack's "Vetra Studio:" line.`,
     );
   }
   return id;

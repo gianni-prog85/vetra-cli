@@ -1,0 +1,56 @@
+{
+  "name": "chat-spec",
+  "prompt": "A recipe box for our family recipes",
+  "steps": [
+    {
+      "tool": "mastra_workspace_write_file",
+      "args": {
+        "path": "recipe-box/powerhouse.config.json",
+        "content": "{}\n"
+      }
+    },
+    {
+      "tool": "mastra_workspace_write_file",
+      "args": {
+        "path": "recipe-box/node_modules/.keep",
+        "content": ""
+      }
+    },
+    {
+      "tool": "spec-create",
+      "args": {
+        "project": "recipe-box",
+        "type": "powerhouse/document-model",
+        "name": "Recipe Box"
+      }
+    },
+    {
+      "tool": "spec-update",
+      "args": {
+        "project": "recipe-box",
+        "name": "Recipe Box",
+        "actions": [
+          {
+            "type": "SET_MODEL_ID",
+            "input": {
+              "id": "powerhouse/recipe-box"
+            }
+          },
+          {
+            "type": "SET_MODEL_NAME",
+            "input": {
+              "name": "Recipe Box"
+            }
+          },
+          {
+            "type": "SET_MODEL_DESCRIPTION",
+            "input": {
+              "description": "Family recipes with their ingredients and steps."
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "done": "Done. The Recipe Box document model spec is written; send me your recipes next."
+}
