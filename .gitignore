@@ -4,8 +4,6 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
-# skills and agent profiles (cli.ts prompts.artifacts reads gen/skills)
-/gen/
 /dist/connect.bak/
 
 # Test / coverage

@@ -104,7 +104,8 @@ export const cli = defineCli({
 
   // @clint:begin prompts
   prompts: {
-    artifacts: [path.join(CLI_ROOT, 'gen', 'skills'), path.join(CLI_ROOT, 'dist', 'gen', 'skills')],
+    // `ph run cli build` (part of `pnpm build`) writes dist/skills/{skills,agent-profiles}.
+    artifacts: [path.join(CLI_ROOT, 'dist', 'skills', 'skills')],
     agents: {
       'vetra-agent': {
         name: 'vetra-agent',

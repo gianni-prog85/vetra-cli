@@ -77,12 +77,14 @@ describe('reactor-project --renown-namespace', () => {
   // the Studio's sync goes anonymous mid-session and the switchboard answers
   // Forbidden (staging 2026-10-20, zesty-ibis). The preview reactor is public
   // and needs no login, so it gets a namespace of its own.
+  // The Studio's namespace is the Connect host's `config.renown.namespace`.
   const studioNamespace = (): string => {
-    const pkg = JSON.parse(
-      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
-    ) as { scripts: Record<string, string> };
-    const match = /--renown-namespace\s+(\S+)/.exec(pkg.scripts['build:connect'] ?? '');
-    if (!match) throw new Error('package.json build:connect sets no --renown-namespace');
+    const host = readFileSync(
+      new URL('../../../hosts/connect/host.js', import.meta.url),
+      'utf8',
+    );
+    const match = /renown:\s*\{\s*namespace:\s*"([^"]+)"/.exec(host);
+    if (!match) throw new Error('hosts/connect/host.js sets no config.renown.namespace');
     return match[1];
   };
 

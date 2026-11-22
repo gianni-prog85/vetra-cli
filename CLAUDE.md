@@ -73,9 +73,11 @@ service manager tracks and stops; don't `pkill -f` them.
 Two non-obvious bundle facts:
 - **`dist/` is gitignored build output.** The browser client's sync
   query (`PollSyncEnvelopes`) is baked into the Studio bundle
-  (`dist/connect`), **not** the node-side packages. `build:connect`
-  needs the 6.4 connect host (`ph connect build` is `ph run connect
-  build`), so the bundle does not build until B2.
+  (`dist/connect`), **not** the node-side packages. `pnpm build:connect`
+  is `ph connect build`, i.e. `ph run connect build` over
+  `hosts/connect`: it builds the package again, then the SPA into
+  `dist/connect`. `pnpm build` leaves `dist/connect` and `dist/skills`
+  in place (it cleans `dist/browser` and `dist/node` only).
 - The node-side routine poll and the browser poll are **separate code
   paths**. Verifying one does not verify the other — exercise the
   browser (load `/d/<drive-id>` and check the `pollSyncEnvelopes` POST)
@@ -92,25 +94,31 @@ are a stale artifact, not a real bug.
 
 | You changed… | To see it |
 |---|---|
-| Studio UI / editors / document models (`editors/`, `document-models/`) | Served by the Connect host from B2; this package has no Studio dev loop until then. |
-| Cli source (`cli/src/` — CLI, agents, triggers) | Restart the REPL: Ctrl+C, `pnpm dev`. `dev` is `tsx cli/src/main.ts` (no build step). |
-| **Agents or skills** (`cli/src/cli.ts` `prompts.agents`, anything under `prompts/`) | No build step until B2 — see "Generated assets" below. |
-| The built Studio bundle (`dist/connect`) | Not buildable until B2 (needs the connect host). |
+| Studio UI / editors / document models (`editors/`, `document-models/`) | `pnpm build` (the switchboard loads the package from `dist/node`) and `pnpm build:connect`, then restart the stack (`ph run studio`). `ph run studio dev` serves the sources through Vite instead. |
+| Cli source (`cli/src/` — CLI, agents, triggers) | Restart the REPL: Ctrl+C, `pnpm dev`. `dev` is `tsx cli/src/main.ts` (no build step). The stack's Cli runs the built `./cli`: `pnpm build`, then restart it. |
+| **Agents or skills** (`cli/src/cli.ts` `prompts.agents`, anything under `prompts/`) | `pnpm build`, or only its last step, `pnpm exec ph-cli run cli build` — see "Generated assets" below. |
+| The built Studio bundle (`dist/connect`) | `pnpm build:connect`, then restart the stack (Connect serves `dist/connect` with no watch). |
 | A linked framework package (`clint` / `clint-common`) | Rebuild it in the monorepo, then restart `pnpm dev`. No HMR across a built-dep boundary. |
 
-## Generated assets (`gen/`) — the silent-stale gotcha
+Both builds may need a larger heap: `NODE_OPTIONS=--max-old-space-size=4096`.
+Run them one at a time.
+
+## Generated assets (`dist/skills/`) — the silent-stale gotcha
 
 Agent profiles and `SKILL.md` files are **generated** from
-`cli/src/cli.ts` (`prompts.agents`) + `prompts/` into `gen/` (and
-`dist/gen/`). At runtime `getAgentInstructions(<id>)` reads
-`gen/agent-profiles/<name>.md`; a missing file throws and the agent
-never runs (e.g. a chat box that types but never replies).
+`cli/src/cli.ts` (`prompts.agents`, `prompts.skills`) + `prompts/` into
+`dist/skills/skills/<skill>/` and `dist/skills/agent-profiles/`, by
+`ph run cli build` (the cli host's `build` verb, the last step of
+`pnpm build`; it loads the built `./cli` for its metadata, so it runs
+after `ph-cli build`). At runtime `getAgentInstructions(<id>)` reads
+`agent-profiles/<name>.md` next to the `prompts.artifacts` directory
+(`dist/skills/skills`); a missing file throws and the agent never runs
+(e.g. a chat box that types but never replies).
 
-This package has no step that writes `gen/` until B2 (`ph run <cli host>
-build`); `build:assets` is gone. `pnpm dev` reads whatever `gen/` an
-earlier build left, so a new or renamed agent or skill has no profile
-until then. Profiles are read once at agent-definition time, so a
-restart is required after `gen/` changes.
+`pnpm dev` reads whatever `dist/skills` the last build left, so a new or
+renamed agent or skill has no profile until the next build. Profiles are
+read once at agent-definition time, so a restart is required after
+`dist/skills` changes.
 
 ### Framework source
 

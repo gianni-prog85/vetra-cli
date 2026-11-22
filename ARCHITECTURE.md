@@ -183,46 +183,34 @@ produced.
 **Build-output split — two independent commands.** The package ships
 two artifact families and they are built separately:
 
-- `pnpm build` (the ph-version writer, then `ph-cli build`) emits
-  `dist/{browser,node,types}` — the package's consumable exports,
-  `./cli` included.
-- `pnpm exec ph-cli connect build --outDir dist/connect
-  --default-drives-url http://__ph_drive_url__` emits the SPA bundle
-  Connect serves. The bundle freezes a
-  snapshot of `powerhouse.manifest.json` and the local editor modules
-  at build time. The `--default-drives-url` flag bakes the
-  `CONNECT_DRIVE_URL_PLACEHOLDER` sentinel in place of the real drive
-  URL (see "Default-drive URL stamping" below); always pass it, or the
-  runtime stamping hook has no token to replace.
+- `pnpm build` (the ph-version writer, `ph-cli build`, then
+  `ph-cli run cli build`) emits `dist/{browser,node,types}` — the
+  package's consumable exports, `./cli` included — and the skills and
+  agent profiles in `dist/skills/{skills,agent-profiles}`.
+- `pnpm build:connect` (`ph-cli connect build`, i.e. `ph run connect
+  build` over `hosts/connect`) builds the package again, then the SPA
+  bundle Connect serves into `dist/connect` (`runner.outDir`), with the
+  host's branding, favicon and Renown namespace. The bundle freezes a
+  snapshot of `powerhouse.manifest.json` and the local editor modules at
+  build time.
 
-`pnpm build` does **not** rebuild `dist/connect/`. Editing
-`editors/*`, `powerhouse.manifest.json`, or anything the SPA loads
-requires running both commands and restarting Connect (it serves
-`dist/connect` with no watch). On the 6.4 line `ph connect build` needs
-a Connect host, so `build:connect` stops working until B2. A common
-failure mode: the source manifest lists the new app under `apps[]`
-but the bundled SPA still carries the empty pre-edit manifest, so
-Connect falls back to `GenericDriveExplorer` and the new drive
-editor never shows up.
+`pnpm build` does **not** rebuild `dist/connect/`, and leaves it and
+`dist/skills` in place. Editing `editors/*`, `powerhouse.manifest.json`,
+or anything the SPA loads requires running both commands and restarting
+Connect (it serves `dist/connect` with no watch). A common failure mode:
+the source manifest lists the new app under `apps[]` but the bundled SPA
+still carries the empty pre-edit manifest, so Connect falls back to
+`GenericDriveExplorer` and the new drive editor never shows up.
 
-**Default-drive URL stamping.** Connect reads
-`PH_CONNECT_DEFAULT_DRIVES_URL` from a build-time literal
-(Vite-inlined `import.meta.env`); it cannot take the value from a
-runtime source. But vetra's drive id is a random UUID minted on
-first run, unknown at bundle-build time. So the connect build bakes
-the `http://__ph_drive_url__` placeholder, and the
-`connect-drive-url` lifecycle hook
-(`cli/src/lifecycle/connect-drive-url.ts`) swaps it for the live
-URL on startup. It listens for `powerhouse:switchboard:ready`, which only
-an embedded switchboard emits, so on the remote path it stays idle until
-B2 moves the stamping into host data. On that event it
-string-replaces the prior token across `dist/connect/assets/*.js`
-(the placeholder on first boot, the last-applied URL afterwards —
-tracked in a `dist/connect/.default-drive-url` cache), and leaves the
-bundle pointing at the live drive. A browser reload applies the
-change. The swap is a plain literal replacement — no rebuild, no
-toolchain, no install — so it works in a published, source-less
-install where `ph-cli connect build` cannot run.
+**The drive URL.** Connect's server merges the host's config over the
+baked `powerhouse.config.json` per request (`serve`): the Studio drive
+and the remote backend come from the switchboard's outputs, written as
+`${origin}/d/studio` because Connect proxies the switchboard. Nothing is
+stamped into `dist/connect` for it. The `connect-drive-url` lifecycle hook
+(`cli/src/lifecycle/connect-drive-url.ts`) still exists but stays idle:
+it waits for `powerhouse:switchboard:ready`, which only an embedded
+switchboard emits. So it writes no `studio.config.json` either, and the
+SPA falls back to `127.0.0.1:5180` for the local API.
 
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
@@ -885,11 +873,9 @@ These are limitations of the current direction; not bugs.
   `ctx.attachments` is unset on the runner path, so chat attachments are
   skipped.
 
-- **Hosts (B2).** The hosts exist (see "Hosts"). Still open in B2: the
-  builds (`build:connect` through `hosts/connect`, the skill and
-  agent-profile build through `ph run cli build`; until then
-  `prompts.artifacts` points at a `gen/skills` that nothing writes) and the
-  Cli in the stack (`studioUrlTrigger`, the embedded proxy's port).
+- **Hosts (B2).** The hosts and builds exist (see "Hosts" and
+  "Build-output split"). Still open in B2: the Cli in the stack
+  (`studioUrlTrigger`, the embedded proxy's port).
 
 The live publish path — `commands/reactor-project/publish.ts` and
 `publish-status.ts` — is unaffected: those are the deploy-flow tools that

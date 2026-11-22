@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Pre-build step: writes `cli/src/ph-version.gen.ts` from the workspace
- * catalog. Skills and agent profiles are not built here: B2's
- * `ph run <cli host> build` compiles them into `dist/skills`.
+ * catalog. Skills and agent profiles are not built here:
+ * `ph run cli build` (the last step of `pnpm build`) compiles them into
+ * `dist/skills`.
  */
 import fs from 'node:fs';
 import path from 'node:path';

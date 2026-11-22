@@ -167,17 +167,19 @@ scripts are gone.
 
 ## Troubleshooting
 
-- **"I fixed it but nothing changed."** The Studio service is detached and
-survives the REPL, so rebuilds aren't picked up until it's cycled. Stop it
-with `vetra vetra-studio-stop`, then re-run `pnpm dev`. Don't `pkill` the
-processes — the managed stop command kills the whole group cleanly.
-- **Port collision (8090 / 27370 / 59220).** Vetra derives its Studio,
-Connect, and Switchboard ports from the CLI name with no fallback. Free those
-ports (stop any prior `vetra-studio`) before starting.
+- **"I fixed it but nothing changed."** The Studio's Connect serves the
+built `dist/connect` and its switchboard the built `dist/node`, with no
+watch. Rebuild (`pnpm build`, `pnpm build:connect`) and restart the stack:
+`ph-cli run studio --stop`, then `ph-cli run studio`. Don't `pkill` the
+processes: `--stop` stops the members in order.
+- **Ports (8090 / 8091 / 5180).** Connect (the Studio's address) is 8090,
+its switchboard 8091, the vetra local API 5180. A taken port moves to the
+next free one; the Cli prints the address it got (`Vetra Studio: <url>`).
+- **A build runs out of memory.** `pnpm build` and `pnpm build:connect` may
+need `NODE_OPTIONS=--max-old-space-size=4096`. Run them one at a time.
 - **Agent types but never replies / a profile is missing.** Agent profiles and
-skills are generated into `gen/`, which no script in this package writes
-until the host build (`ph run <cli host> build`) arrives; `pnpm dev` reads
-what an earlier build left there.
+skills are generated into `dist/skills` by `pnpm build` (its last step,
+`ph-cli run cli build`); `pnpm dev` reads what the last build left there.
 
 More detail on the dev-daemon model and reload story lives in
 [CLAUDE.md](CLAUDE.md).
