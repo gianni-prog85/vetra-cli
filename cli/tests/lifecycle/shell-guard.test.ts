@@ -5,7 +5,7 @@ import {
   GIT_REFUSAL,
   MERGE_REFUSAL,
   extractCommand,
-  refuseCommand,
+  refuseCommand as refuseOn,
   shellGuard,
 } from "../../src/lifecycle/shell-guard.js";
 
@@ -18,7 +18,9 @@ async function toolWrap(): Promise<ToolWrap> {
   return handle.contribute!.tool!;
 }
 
-describe("refuseCommand", () => {
+describe("refuseCommand (POSIX shell)", () => {
+  const refuseCommand = (command: string) => refuseOn(command, "linux");
+
   it.each([
     "vitest run",
     "npx vitest run document-models/todo/v1/tests/tasks.test.ts 2>&1 | tail -40",
@@ -80,6 +82,54 @@ describe("refuseCommand", () => {
     "node scripts/seed.js",
   ])("allows %s", (command) => {
     expect(refuseCommand(command)).toBeNull();
+  });
+});
+
+describe("refuseCommand (Windows: the workspace shell is cmd)", () => {
+  const refuseCommand = (command: string) => refuseOn(command, "win32");
+
+  it.each([
+    "node_modules\\.bin\\vitest.CMD run",
+    ".\\node_modules\\.bin\\jest",
+    "npx.cmd vitest run",
+    "C:\\work\\todo\\node_modules\\.bin\\tsc.cmd --noEmit",
+    "Vitest run",
+    "cd todo & vitest run",
+    "cd todo && pnpm.cmd test",
+    "set CI=1 && pnpm test",
+    "call npm.cmd run build",
+    "npm.cmd test",
+    'cmd /c "vitest run"',
+    'cmd.exe /C "cd todo && npx eslint ."',
+    'powershell -Command "npx tsc --noEmit"',
+    'pwsh -c "pnpm run lint"',
+    "node node_modules\\.bin\\vitest run",
+    "npx vitest run 2>&1 | findstr FAIL",
+  ])("refuses check runner %s", (command) => {
+    expect(refuseCommand(command)).toBe(CHECKS_REFUSAL);
+  });
+
+  it.each(["git.exe commit -m wip", "cd todo & git push", 'cmd /c "git push origin main"'])(
+    "refuses %s",
+    (command) => {
+      expect(refuseCommand(command)).toBe(GIT_REFUSAL);
+    },
+  );
+
+  it.each([
+    "pnpm.cmd add zod",
+    "npm.cmd install",
+    "cd todo & pnpm install",
+    "dir /b",
+    "type package.json | findstr vitest",
+    'cmd /c "pnpm install"',
+    "node scripts\\seed.js",
+  ])("allows %s", (command) => {
+    expect(refuseCommand(command)).toBeNull();
+  });
+
+  it("is what the guard reads on this machine's platform", () => {
+    expect(refuseOn("npx.cmd vitest run")).toBe(process.platform === "win32" ? CHECKS_REFUSAL : null);
   });
 });
 

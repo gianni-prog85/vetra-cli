@@ -11,6 +11,10 @@
  * and everything else still run. Not caught: programs started inside command
  * substitution (`$(…)`, backticks) or from a script file.
  *
+ * On Windows the workspace shell is cmd: a command also ends at `&`, a
+ * program may be written `node_modules\.bin\vitest.CMD`, and `cmd /c "…"` and
+ * `powershell -Command "…"` are read like `sh -c "…"`.
+ *
  * Same hook point as gen-guard: a `tool` wrap on the workspace tool.
  */
 import type { LifecycleHook } from "@powerhousedao/clint";
@@ -34,12 +38,27 @@ const PM_VALUE_FLAGS = new Set(["--filter", "-F", "-C", "--dir", "--prefix", "--
 /** Wrappers whose next word is the real program. */
 const WRAPPERS = new Set(["npx", "bunx", "env", "time", "nice", "nohup", "sudo"]);
 
+type Platform = NodeJS.Platform;
+
 function unquote(word: string): string {
   return word.replace(/^['"]|['"]$/g, "");
 }
 
-function program(word: string | undefined): string {
-  return (word ?? "").split("/").pop() ?? "";
+/** A command word's program: its last path segment; on Windows either
+ * separator, any case, and no executable extension. */
+function program(word: string | undefined, platform: Platform): string {
+  if (platform !== "win32") return (word ?? "").split("/").pop() ?? "";
+  const last = (word ?? "").split(/[\\/]/).pop() ?? "";
+  return last.toLowerCase().replace(/\.(cmd|exe|bat|ps1|com)$/, "");
+}
+
+/** The command after the first word matching `flag`, for a shell run as
+ * `<shell> <flag> "<command>"`. */
+function innerCommand(segment: string, words: string[], flag: RegExp): string | null {
+  const word = words.find((w) => flag.test(w));
+  if (!word) return null;
+  const at = segment.indexOf(` ${word}`) + word.length + 1;
+  return unquote(segment.slice(at).trim());
 }
 
 /** The first non-flag word after `start`, skipping flags that take a value. */
@@ -57,32 +76,38 @@ function firstArg(words: string[], start: number): { word: string; at: number } 
 }
 
 /** Why one simple command (no `&&`/`;`/`|`) is refused, or null. */
-function refuseSimple(segment: string): string | null {
+function refuseSimple(segment: string, platform: Platform): string | null {
   let words = segment.trim().split(/\s+/).filter(Boolean).map(unquote);
   // Leading `VAR=value` assignments and wrappers.
-  while (words.length > 0 && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || WRAPPERS.has(program(words[0])))) {
+  while (
+    words.length > 0 &&
+    (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) ||
+      WRAPPERS.has(program(words[0], platform)) ||
+      (platform === "win32" && program(words[0], platform) === "call"))
+  ) {
     words = words.slice(1);
     while (words[0]?.startsWith("-")) words = words.slice(1);
   }
-  const prog = program(words[0]);
+  const prog = program(words[0], platform);
   if (!prog) return null;
   if (prog === "sh" || prog === "bash" || prog === "zsh") {
     // `-c`, `-lc`, `-ec`, …: any short-flag cluster containing `c`.
-    const flag = words.find((w) => /^-[a-z]*c[a-z]*$/.test(w));
-    if (flag) {
-      const at = segment.indexOf(` ${flag}`) + flag.length + 1;
-      return refuseCommand(unquote(segment.slice(at).trim()));
-    }
-    return null;
+    const inner = innerCommand(segment, words, /^-[a-z]*c[a-z]*$/);
+    return inner === null ? null : refuseCommand(inner, platform);
+  }
+  if (platform === "win32" && (prog === "cmd" || prog === "powershell" || prog === "pwsh")) {
+    const flag = prog === "cmd" ? /^\/[ck]$/i : /^-(c|command)$/i;
+    const inner = innerCommand(segment, words, flag);
+    return inner === null ? null : refuseCommand(inner, platform);
   }
   // `node node_modules/.bin/vitest …` runs the runner directly.
-  if (prog === "node" && RUNNERS.has(program(firstArg(words, 1)?.word))) return CHECKS_REFUSAL;
+  if (prog === "node" && RUNNERS.has(program(firstArg(words, 1)?.word, platform))) return CHECKS_REFUSAL;
   if (RUNNERS.has(prog)) return CHECKS_REFUSAL;
   if (prog === "pnpm" || prog === "yarn" || prog === "bun") {
     const arg = firstArg(words, 1);
     if (!arg) return null;
     if (arg.word === "exec" || arg.word === "dlx" || arg.word === "x") {
-      return RUNNERS.has(program(firstArg(words, arg.at + 1)?.word)) ? CHECKS_REFUSAL : null;
+      return RUNNERS.has(program(firstArg(words, arg.at + 1)?.word, platform)) ? CHECKS_REFUSAL : null;
     }
     const script = arg.word === "run" ? firstArg(words, arg.at + 1)?.word : arg.word;
     return script && (PM_SCRIPTS.has(script) || RUNNERS.has(script)) ? CHECKS_REFUSAL : null;
@@ -104,9 +129,13 @@ function refuseSimple(segment: string): string | null {
 }
 
 /** Why the shell command is refused, or null when it may run. */
-export function refuseCommand(command: string): string | null {
-  for (const segment of command.split(/&&|\|\||;|\||\n/)) {
-    const reason = refuseSimple(segment);
+export function refuseCommand(
+  command: string,
+  platform: Platform = process.platform,
+): string | null {
+  const separators = platform === "win32" ? /&&|\|\||&|;|\||\n/ : /&&|\|\||;|\||\n/;
+  for (const segment of command.split(separators)) {
+    const reason = refuseSimple(segment, platform);
     if (reason) return reason;
   }
   return null;
