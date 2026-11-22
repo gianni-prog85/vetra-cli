@@ -53,9 +53,6 @@ const studioDocumentModels = [
 export const cli = defineCli({
   name: CLI_NAME,
   version: CLI_VERSION,
-  // @clint:begin root
-  root: CLI_ROOT,
-  // @clint:end root
   description: `${CLI_NAME} v${CLI_VERSION}`,
   configSchema,
   secretsSchema,

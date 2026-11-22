@@ -14,7 +14,7 @@ import { defaultConfig } from '../spec/_fixtures.js';
 import { recordFixture } from './run-record.js';
 
 function buildCtx(): ServiceBuildContext<Config> {
-  return { config: defaultConfig(), proxy: { basePath: '' } };
+  return { config: defaultConfig() };
 }
 
 describe('reactor-project as a host service', () => {
