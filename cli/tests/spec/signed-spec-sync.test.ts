@@ -42,6 +42,7 @@ interface FakeReactor {
     get: Mock;
     create: Mock;
     execute: Mock;
+    getOperations: Mock;
     addRelationship: Mock;
   };
 }
@@ -60,6 +61,7 @@ function fakeReactor(docs = new Map<string, unknown>()): FakeReactor {
       return Promise.resolve(doc);
     }),
     execute: vi.fn(() => Promise.resolve({})),
+    getOperations: vi.fn(() => Promise.resolve({ results: [] })),
     addRelationship: vi.fn(() => Promise.resolve({})),
   };
   return { client };
@@ -122,7 +124,7 @@ describe("applyFsChangesToReactor in a v2 Studio", () => {
         : Promise.reject(new Error("missing"));
     });
     // The reactor already has every global action in the file.
-    (client as unknown as { getOperations: Mock }).getOperations = vi.fn(() =>
+    client.getOperations.mockImplementation(() =>
       Promise.resolve({
         results: (onDisk.operations.global ?? []).map((op: unknown) => op),
       }),
@@ -187,7 +189,7 @@ describe("mirrorSignedSpec", () => {
     const { client } = fakeReactor(
       new Map([[doc.header.id, { ...doc, state: doc.state }]]),
     );
-    (client as unknown as { getOperations: Mock }).getOperations = vi.fn(() =>
+    client.getOperations.mockImplementation(() =>
       Promise.resolve({ results: doc.operations.global ?? [] }),
     );
 

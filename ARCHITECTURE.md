@@ -284,10 +284,11 @@ so it gets the framework's `ServiceManager` + event-bus access via
   `id === "reactor-project"`. The editor refetches `/resolve` on
   any event. 15s heartbeat keeps the stream alive through quiet
   periods.
-- `GET /sessions` — gated. Lists the embedded drive's chat-session
-  documents (`{ id, name, status, startedAt, threadId, agent }`),
-  enriched from each doc's state. `503 reactor-unavailable` when no
-  reactor is running.
+- `GET /sessions` — gated. Lists the Studio drive's chat-session
+  documents (`{ id, name, status, startedAt, threadId, agent }`):
+  `client.find({ type, parentId: <drive> })`, the drive's `child`
+  documents, every page. `503 reactor-unavailable` when no reactor is
+  attached.
 - `GET /sessions/export?id=<session>` — gated. Returns a zip
   (`application/zip`, attachment) bundling the session for debugging:
   `chat-session.json` (the reactor doc state), `chat-session-operations.json`
@@ -576,16 +577,20 @@ Registered in `cli.ts`. Run as part of clint's routine loop.
   **external-change detector**: hand-edited `.phd`, `git pull`,
   reactor-project writes. Watches the workdir root recursively, so
   `specs/` subtrees for projects created after startup are picked up
-  automatically (no `poll()` reconcile step), replays each `.phd`'s
-  operations via
-  `loadBatch`, and attaches the doc to the Home drive
-  under an ADD_FOLDER node named after its project (idempotent
-  ensure-folder + ensure-file). This is the project↔folder mapping
-  `specSyncTrigger` reads back. The shared push/remove logic lives in
-  `helpers/spec-drive-sync.ts` (`applyFsChangesToReactor`,
-  `removeSpecFromDrive`); the `spec-*` write commands call it directly
-  (see below), so for command-originated changes this watcher only
-  observes a convergent no-op (`loadBatch` dedups by `action.id`).
+  automatically (no `poll()` reconcile step). For each `.phd` it
+  materializes a document the switchboard lacks (empty, the file's id
+  and type), executes the content actions whose ids the switchboard does
+  not hold (`client.execute`, one call per scope; there is no load API
+  over the wire), and attaches the doc to the Home drive under an
+  ADD_FOLDER node named after its project with an ADD_FILE node and a
+  `child` relationship (idempotent ensure-folder + ensure-file). This is
+  the project↔folder mapping `specSyncTrigger` reads back. The shared
+  push/remove logic lives in `helpers/spec-drive-sync.ts`
+  (`applyFsChangesToReactor`, `removeSpecFromDrive`, one sync at a time
+  per process); the `spec-*` write commands call it directly (see
+  below), so for command-originated changes this watcher only observes a
+  convergent no-op. The switchboard's store persists, so a spec deleted
+  while the Cli was down stays in the drive.
 
 The `spec-*` write commands (`spec-create`, `spec-update`,
 `spec-extract`, `spec-delete`) write the filesystem `specs/`
@@ -595,8 +600,10 @@ synchronously** via the same `spec-drive-sync.ts` helpers. The
 running-reactor signal is `helpers/embedded-drive.ts` →
 `getEmbeddedDrive(ctx)`: it gates on `ctx.folders` (wired once the
 reactor is attached with a personal drive, absent in one-shot CLI) so a standalone
-`vetra spec-create` never boots a reactor just to write a spec. When
-present, `ctx.reactor()` returns the already-cached instance.
+`vetra spec-create` never attaches just to write a spec. When
+present, `ctx.reactor()` returns the attached reactor. Lookups by type
+in the drive (the product document, chat sessions) use
+`findInDrive` there: `client.find({ type, parentId })` over every page.
 - `previewServerTrigger` — runs the local API server. Triggers
   receive `commandContext.services` + `commandContext.on`, which is
   exactly what the http handlers need. `setup()` boots the server,
@@ -883,15 +890,15 @@ These are limitations of the current direction; not bugs.
   `cli/src/auth/studio-mode.ts`): every Studio runs `legacy`, and the
   studio-bootstrap trigger and `studioReactorSigning` have no effect.
   `configureReactor.remote` is static data, so nothing in it can depend
-  on the workdir or the config. `GraphQLReactorClient` lacks calls this
-  package or clint's folder operations use: `loadBatch` (spec-fs-sync
-  replay, `helpers/spec-drive-sync.ts`), `addRelationship` and
-  `removeRelationship` (same file), `createDocumentInDrive`
-  (`product/upgrade-existing.ts`), `write.rename` and `drives.addFile`
-  (clint `powerhouse/folders.ts`). These fail at run time, not in the type
-  check: `ReactorContext.client` is typed as the full client.
-  `ctx.attachments` is unset on the runner path, so chat attachments are
-  skipped.
+  on the workdir or the config. `GraphQLReactorClient` lacks
+  `createDocumentInDrive` (`product/upgrade-existing.ts`); it fails at
+  run time, not in the type check: `ReactorContext.client` is typed as
+  the full client. The spec sync and clint's folder operations use only
+  calls both clients have. The attach carries the switchboard's
+  attachment service, but a chat attachment cannot be read back yet: the
+  chat-session model types its attachment fields as `String`, so the
+  switchboard indexes no reference from a message and refuses a read
+  through the chat document.
 
 - **Hosts (B2).** The package's form (`ph run
   @powerhousedao/vetra-cli/studio` from another project) is not supported

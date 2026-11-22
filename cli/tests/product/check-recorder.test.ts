@@ -209,6 +209,7 @@ describe("check-recorder", () => {
           execute: async () => {
             executed++;
           },
+          find: client.find.bind(client),
         },
       }),
     };

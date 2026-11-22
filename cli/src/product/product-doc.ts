@@ -2,11 +2,11 @@
  * Read and write the Studio's `vetra/studio-product` document — the single
  * read model the Studio page renders from.
  *
- * The document lives in the Studio drive (the embedded reactor's personal
- * drive) and is created by the browser under the legacy signature policy
+ * The document lives in the Studio drive (the Cli's personal drive on the
+ * switchboard) and is created by the browser under the legacy signature policy
  * (Ruling R17), so the agent writes it unsigned like the other Studio-drive
- * documents. Reads and writes only happen when a reactor is already running
- * (`getEmbeddedDrive`): one-shot CLI runs never boot one just for this.
+ * documents. Reads and writes only happen when the reactor is attached
+ * (`getEmbeddedDrive`): one-shot CLI runs never attach just for this.
  */
 import type { Action } from "document-model";
 import { StudioProductV1 } from "document-models";
@@ -15,7 +15,11 @@ import type {
   ChangeStatus,
   StudioProductState,
 } from "document-models/studio-product";
-import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
+import {
+  findInDrive,
+  getEmbeddedDrive,
+  type DriveFindClient,
+} from "../helpers/embedded-drive.js";
 
 export const STUDIO_PRODUCT_TYPE = "vetra/studio-product";
 
@@ -31,7 +35,7 @@ export const IN_PROGRESS: readonly ChangeStatus[] = [
 ];
 
 /** The minimal reactor client surface the product helpers use. */
-export interface ProductClient {
+export interface ProductClient extends DriveFindClient {
   get(documentId: string): Promise<unknown>;
   execute(documentId: string, branch: string, actions: Action[]): Promise<unknown>;
 }
@@ -53,29 +57,19 @@ export class ProductRefusedError extends Error {
   }
 }
 
-interface DriveNode {
-  id: string;
-  kind: string;
-  documentType?: string;
-}
-
 interface DocumentLike {
   state?: { global?: StudioProductState };
 }
 
+// The drive's product document: a `child` of the drive, found by type.
 async function productLocation(
   ctx: ProductContext,
 ): Promise<{ client: ProductClient; driveId: string; id: string } | null> {
   const drive = await getEmbeddedDrive(ctx);
   if (!drive) return null;
   const client = drive.reactor.client as unknown as ProductClient;
-  const driveDoc = (await client.get(drive.driveId)) as {
-    state?: { global?: { nodes?: DriveNode[] } };
-  };
-  const node = (driveDoc?.state?.global?.nodes ?? []).find(
-    (n) => n.kind === "file" && n.documentType === STUDIO_PRODUCT_TYPE,
-  );
-  return node ? { client, driveId: drive.driveId, id: node.id } : null;
+  const [product] = await findInDrive(client, drive.driveId, STUDIO_PRODUCT_TYPE);
+  return product ? { client, driveId: drive.driveId, id: product.header.id } : null;
 }
 
 /** The Studio's product document, or null when there is none (yet). */

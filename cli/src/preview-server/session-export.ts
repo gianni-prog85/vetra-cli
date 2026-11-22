@@ -7,19 +7,16 @@ import { strToU8, zipSync } from "fflate";
 import { createWorkdirStore } from "@powerhousedao/clint";
 import { getMastraPaths } from "@powerhousedao/clint/mastra";
 import { CLI_NAME } from "../config.js";
-import type { EmbeddedDrive } from "../helpers/embedded-drive.js";
+import {
+  findInDrive,
+  type DriveFindClient,
+  type EmbeddedDrive,
+} from "../helpers/embedded-drive.js";
 
 const CHAT_SESSION_TYPE = "powerhouse/chat-session";
 
 // Loopback resource id the agent loop threads under (ph-clint mastra glue).
 const DEFAULT_RESOURCE_ID = "cli-user";
-
-interface DriveNode {
-  id: string;
-  name?: string;
-  kind?: string;
-  documentType?: string;
-}
 
 interface ChatSessionGlobal {
   threadId?: string | null;
@@ -35,7 +32,7 @@ interface ReactorDoc {
 }
 
 // Minimal reactor client slice this module reads.
-interface DriveClient {
+interface DriveClient extends DriveFindClient {
   get: (id: string) => Promise<unknown>;
   getOperations?: (id: string) => Promise<OperationsPage>;
 }
@@ -57,33 +54,21 @@ function driveGlobal(doc: unknown): Record<string, unknown> {
   return (doc as ReactorDoc)?.state?.global ?? {};
 }
 
-// List the drive's chat-session documents, enriched from each doc's state.
+// List the drive's chat-session documents, from the state `find` returns.
 export async function listSessions(drive: EmbeddedDrive): Promise<SessionSummary[]> {
   const client = drive.reactor.client as unknown as DriveClient;
-  const driveDoc = await client.get(drive.driveId);
-  const raw = driveGlobal(driveDoc).nodes;
-  const nodes = (Array.isArray(raw) ? (raw as DriveNode[]) : []).filter(
-    (n) => n.documentType === CHAT_SESSION_TYPE,
-  );
-
-  return Promise.all(
-    nodes.map(async (node) => {
-      let g: ChatSessionGlobal = {};
-      try {
-        g = driveGlobal(await client.get(node.id));
-      } catch {
-        // Node listed but doc unreadable — still surface the id/name.
-      }
-      return {
-        id: node.id,
-        name: node.name,
-        status: g.status ?? null,
-        startedAt: g.startedAt ?? null,
-        threadId: g.threadId ?? null,
-        agent: g.agent ?? null,
-      };
-    }),
-  );
+  const sessions = await findInDrive(client, drive.driveId, CHAT_SESSION_TYPE);
+  return sessions.map((doc) => {
+    const g = driveGlobal(doc) as ChatSessionGlobal;
+    return {
+      id: doc.header.id,
+      name: doc.header.name,
+      status: g.status ?? null,
+      startedAt: g.startedAt ?? null,
+      threadId: g.threadId ?? null,
+      agent: g.agent ?? null,
+    };
+  });
 }
 
 async function collectOperations(client: DriveClient, docId: string): Promise<unknown[]> {

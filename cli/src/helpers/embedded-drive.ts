@@ -1,17 +1,17 @@
 /**
- * Running-reactor accessor for the `spec-*` write commands.
+ * Running-reactor accessor for the commands that write the Studio drive.
  *
- * The commands write the filesystem `specs/` unconditionally (codegen's source
- * of truth) and, when a reactor is already running, ALSO push the change into
- * the embedded `vetra` drive so Vetra Studio reflects it directly — without
- * waiting on the `spec-fs-sync` watcher round-trip.
+ * The `spec-*` commands write the filesystem `specs/` unconditionally
+ * (codegen's source of truth) and, when the Cli serves, ALSO push the change
+ * into the Studio drive on the switchboard so Vetra Studio reflects it
+ * directly — without waiting on the `spec-fs-sync` watcher round-trip.
  *
- * `context.folders` is the non-booting "reactor running" signal: the daemon's
- * startup sequence wires it only when a personal drive exists, and one-shot CLI
- * never does. Calling `ctx.reactor()` blindly would lazily boot a full reactor
- * just to write a spec — so we gate on `folders` first and only then resolve the
- * already-cached reactor. The configured `vetra` drive has role 'personal',
- * so `personalDriveId` is set; fall back to `driveId` for safety.
+ * `context.folders` is the "reactor attached" signal: the Cli's startup wires
+ * it only when a personal drive exists, and a one-shot run never does. Calling
+ * `ctx.reactor()` blindly would attach just to write a spec — so we gate on
+ * `folders` first and only then resolve the already-attached reactor. The
+ * Studio drive has role 'personal', so `personalDriveId` is set; fall back to
+ * `driveId` for safety.
  */
 import type { ReactorContext } from "@powerhousedao/clint";
 
@@ -37,9 +37,43 @@ interface RunningReactorCtx {
 export async function getEmbeddedDrive(
   ctx: RunningReactorCtx,
 ): Promise<EmbeddedDrive | undefined> {
-  if (!ctx.folders) return undefined; // one-shot → no boot, FS only
-  const reactor = await ctx.reactor?.(); // cached in the daemon, no boot
+  if (!ctx.folders) return undefined; // one-shot → no attach, FS only
+  const reactor = await ctx.reactor?.(); // attached at start, no new attach
   const driveId = reactor?.personalDriveId ?? reactor?.driveId;
   if (!reactor || !driveId) return undefined;
   return { reactor: reactor as Pick<ReactorContext, "client">, driveId };
+}
+
+/** A document `find` returns. */
+export interface FoundDocument {
+  header: { id: string; name?: string };
+  state?: { global?: Record<string, unknown> };
+}
+
+interface FindPage {
+  results: FoundDocument[];
+  next?: () => Promise<FindPage>;
+}
+
+/** The `find` both reactor clients have (the drive's `child` documents). */
+export interface DriveFindClient {
+  find(search: { type: string; parentId: string }): Promise<FindPage>;
+}
+
+/**
+ * The documents of `type` the drive holds as `child`, over every page: the
+ * type filter applies per page, so a match can sit behind an empty one.
+ */
+export async function findInDrive(
+  client: DriveFindClient,
+  driveId: string,
+  type: string,
+): Promise<FoundDocument[]> {
+  const found: FoundDocument[] = [];
+  let page: FindPage | undefined = await client.find({ type, parentId: driveId });
+  while (page) {
+    found.push(...page.results);
+    page = page.next ? await page.next() : undefined;
+  }
+  return found;
 }

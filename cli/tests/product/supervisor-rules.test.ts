@@ -280,6 +280,13 @@ describe("supervisor rules: metrics", () => {
 /* ---------- the trigger's pass, against a real in-memory reactor ---------- */
 
 describe("supervise", () => {
+  type ReadClient = Pick<InProcessReactorClientModule["client"], "get" | "find">;
+  // The real client's reads, for a fake that replaces its writes.
+  const reads = (client: ReadClient) => ({
+    get: (i: string) => client.get(i),
+    find: client.find.bind(client),
+  });
+
   let module: InProcessReactorClientModule | undefined;
   afterEach(async () => {
     await module?.reactor.kill().completed;
@@ -373,11 +380,11 @@ describe("supervise", () => {
       ...ctx,
       reactor: async () => {
         const r = await ctx.reactor!();
-        const client = r!.client as { get: (id: string) => Promise<unknown>; execute: (...x: never[]) => Promise<unknown> };
+        const client = r!.client as ReadClient & { execute: (...x: never[]) => Promise<unknown> };
         return {
           ...r!,
           client: {
-            get: (i: string) => client.get(i),
+            ...reads(client),
             execute: (...x: never[]) => (failing ? Promise.reject(new Error("write failed")) : client.execute(...x)),
           },
         };
@@ -399,8 +406,8 @@ describe("supervise", () => {
       ...ctx,
       reactor: async () => {
         const r = await ctx.reactor!();
-        const client = r!.client as { get: (id: string) => Promise<unknown> };
-        return { ...r!, client: { get: (i: string) => client.get(i), execute: () => Promise.reject(new Error("write failed")) } };
+        const client = r!.client as ReadClient;
+        return { ...r!, client: { ...reads(client), execute: () => Promise.reject(new Error("write failed")) } };
       },
     };
     const done = new Set<string>();
@@ -413,8 +420,7 @@ describe("supervise", () => {
   it("gives up on a continue that can't be delivered, then marks the change stuck", async () => {
     const { ctx, productId, chatId } = await setup();
     await turn(chatId, "tool-calls");
-    const real = (await ctx.reactor!())!.client as {
-      get: (id: string) => Promise<unknown>;
+    const real = (await ctx.reactor!())!.client as ReadClient & {
       execute: (id: string, branch: string, actions: Action[]) => Promise<unknown>;
     };
     // The chat refuses every write; the product document takes them.
@@ -423,7 +429,7 @@ describe("supervise", () => {
       reactor: async () => ({
         ...(await ctx.reactor!())!,
         client: {
-          get: (i: string) => real.get(i),
+          ...reads(real),
           execute: (i: string, b: string, x: Action[]) =>
             i === chatId ? Promise.reject(new Error("chat unavailable")) : real.execute(i, b, x),
         },
@@ -473,8 +479,8 @@ describe("supervise", () => {
       ...ctx,
       reactor: async () => {
         const r = await ctx.reactor!();
-        const client = r!.client as { get: (id: string) => Promise<unknown> };
-        return { ...r!, client: { get: (i: string) => client.get(i), execute: () => Promise.reject(new Error("write failed")) } };
+        const client = r!.client as ReadClient;
+        return { ...r!, client: { ...reads(client), execute: () => Promise.reject(new Error("write failed")) } };
       },
     };
     const carried = await supervise({ ctx: broken, done: new Set(), now: () => new Date(T0 + 60_000), log: { warn: (m) => warnings.push(m) } });

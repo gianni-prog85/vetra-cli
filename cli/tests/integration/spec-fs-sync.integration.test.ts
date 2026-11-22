@@ -1,11 +1,12 @@
 /**
- * Integration tests for the FS → embedded drive direction of spec sync.
+ * Integration tests for the FS → Studio drive direction of spec sync.
  *
  * Exercises `applyFsChangesToReactor` against an in-memory reactor with
- * the vetra document models registered:
+ * the vetra document models registered (it makes only calls the switchboard's
+ * GraphQL client has too):
  *   - create a `.phd` on disk (no reactor involved), apply → drive materializes it
  *   - mutate the `.phd` offline, apply → drive picks up the new ops
- *   - apply the same file twice → reactor's per-action.id dedup makes pass #2 a no-op
+ *   - apply the same file twice → only unknown action ids execute, pass #2 is a no-op
  *   - round-trip with `syncSpecsToFs` (the drive→FS direction) → no infinite loop
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -31,7 +32,6 @@ import { withSignaturePolicy } from "document-model";
 import { baseLoadFromFile } from "document-model/node";
 import {
   applyFsChangesToReactor,
-  buildLoadJobsForFile,
   projectForPath,
   specForPath,
 } from "../../src/helpers/spec-drive-sync.js";
@@ -268,6 +268,11 @@ describe("spec-fs-sync FS → drive", () => {
       const fileNode = nodes.find((n) => n.kind === "file" && n.id === draft.header.id);
       expect(fileNode).toBeDefined();
       expect(fileNode?.parentFolder ?? null).toBeNull();
+      // The content arrived (executed, not loaded), and the drive holds the
+      // doc as a `child`, which lookups by type read.
+      expect((inDrive.state.global as { name: string }).name).toBe("fresh-app");
+      const children = await module.client.find({ type: "powerhouse/app", parentId: driveId });
+      expect(children.results.map((d) => d.header.id)).toEqual([draft.header.id]);
     } finally {
       await producer.reactor.kill().completed;
     }
@@ -401,6 +406,24 @@ describe("spec-fs-sync FS → drive", () => {
     expect(opsAfter.results.length).toBe(countBefore);
   }, 15_000);
 
+  // A command's push and the watcher's poll of the same edit run one after
+  // the other, so the second finds the action known.
+  it("two concurrent syncs of one offline edit execute it once", async () => {
+    const { id, path: filePath } = await makeSpecFile("race-app");
+    const loaded = await baseLoadFromFile(filePath, AppModuleV1.reducer);
+    await saveSpec(AppModuleV1.reducer(loaded, setAppName({ name: "raced" })), tmpDir);
+    const before = (await module.client.getOperations(id)).results.length;
+
+    const { logs, api: log } = makeLog();
+    await Promise.all([
+      applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log),
+      applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log),
+    ]);
+
+    expect((await module.client.getOperations(id)).results.length).toBe(before + 1);
+    expect(logs.some((l) => l.level === "error")).toBe(false);
+  }, 15_000);
+
   // ── Round-trip: drive ↔ FS closes naturally ──────────────────────
 
   it("round-trips drive → FS → drive without an infinite loop or extra ops", async () => {
@@ -438,9 +461,10 @@ describe("spec-fs-sync FS → drive", () => {
     const bogus = path.join(tmpDir, "not-specs.phd");
     await fs.writeFile(bogus, "garbage");
     const { logs, api: log } = makeLog();
-    const jobs = await buildLoadJobsForFile(bogus, tmpDir, log);
-    expect(jobs).toEqual([]);
+    const synced = await applyFsChangesToReactor([bogus], tmpDir, contextOf(module), driveId, log);
+    expect(synced).toBe(0);
     expect(logs.filter((l) => l.level === "warn")).not.toEqual([]);
+    expect(await driveNodes()).toEqual([]);
   });
 
   // ── Live watcher: the path the unit tests don't cover ────────────

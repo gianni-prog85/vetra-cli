@@ -1,9 +1,9 @@
 /**
  * Spec-sync trigger — Vetra-drive → filesystem mirror.
  *
- * Subscribes to spec document changes in the CLI's embedded reactor and writes
- * each doc to disk via `@powerhousedao/vetra/codegen#saveSpec`. The embedded
- * `vetra` drive holds one folder per reactor project; each doc is routed to
+ * Subscribes to spec document changes on the Studio switchboard and writes
+ * each doc to disk via `@powerhousedao/vetra/codegen#saveSpec`. The Studio
+ * drive holds one folder per reactor project; each doc is routed to
  * `<workdir>/<project>/specs/<subdir>/` by reading the doc's file node and its
  * parent folder name (the project) off the drive's node tree.
  *
@@ -12,7 +12,7 @@
  * `<workdir>/specs/<subdir>/`.
  *
  * Sibling of `spec-fs-sync` (FS → drive). The loop closes via that trigger's
- * `loadBatch`/node dedup — re-feeding a `.phd` it just wrote is a no-op.
+ * action-id and node dedup — re-feeding a `.phd` it just wrote is a no-op.
  */
 import { createDocumentChangeTrigger } from "@powerhousedao/clint";
 import path from "node:path";

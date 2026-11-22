@@ -2,7 +2,7 @@
  * Spec-fs-sync trigger — filesystem → Vetra-drive mirror for EXTERNAL edits.
  *
  * Watches every reactor project's `specs/**\/*.phd` under the workdir and pushes
- * changes into the embedded reactor + `vetra` drive via
+ * changes into the Studio drive on the switchboard via
  * `applyFsChangesToReactor` (shared with the `spec-*` write commands, in
  * `helpers/spec-drive-sync.ts`). Command-originated writes already push the
  * drive directly and synchronously, so this watcher's job is the rest:
@@ -14,9 +14,9 @@
  * case (`<workdir>` is itself a project, specs at `<workdir>/specs/`) is also
  * supported — those docs attach at the drive root.
  *
- * The reactor's load-job executor filters incoming operations by `action.id`,
- * so re-feeding a file the commands already pushed is a convergent no-op — no
- * echo-guard needed.
+ * The sync executes only the actions whose ids the reactor does not hold, one
+ * sync at a time, so re-feeding a file the commands already pushed is a
+ * convergent no-op — no echo-guard needed.
  */
 import chokidar from "chokidar";
 import path from "node:path";
@@ -104,7 +104,7 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
     // filters events down to `specs/<known-subdir>/*.phd` for both the
     // workdir-as-project and workspace (`<workdir>/<project>/specs/`) layouts.
     // ignoreInitial:false so specs written before this daemon started are
-    // synced on boot too (loadBatch + node attach are idempotent).
+    // synced on boot too (the replay and the node attach are idempotent).
     // Traversal is scoped to specs/ folders (outOfSpecScope) and only .phd
     // files are retained in the watch set, so chokidar tracks specs — not whole
     // project trees.
@@ -161,9 +161,9 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
   },
 
   async poll(ctx) {
-    // No boot-time orphan reconciliation: the embedded drive is rebuilt from
-    // the FS scan on each daemon restart, so offline/one-shot deletes
-    // self-heal. This only mirrors deletes observed live this session.
+    // No boot-time orphan reconciliation: this only mirrors deletes observed
+    // live this session. The switchboard's store persists, so a spec deleted
+    // while the Cli was down stays in the drive.
     if (ctx.state.changed.size === 0 && ctx.state.removed.size === 0)
       return null;
     const reactor = await ctx.reactor();

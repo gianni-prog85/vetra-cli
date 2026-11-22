@@ -93,10 +93,11 @@ against.
    **external-change detector** (hand-edited `.phd`, `git pull`,
    reactor-project writes): it watches the workdir root recursively, so
    `specs/` subtrees for projects created after startup are picked up
-   automatically (no `poll()` reconcile step), replays ops via
-   `loadBatch`, and ADD_FOLDER/ADD_FILEs each doc into its
-   project folder, but for command writes it now observes a convergent
-   no-op (`loadBatch` dedups by `action.id`). `specSyncTrigger`
+   automatically (no `poll()` reconcile step), executes the actions
+   whose ids the switchboard lacks (`client.execute`; no load API over
+   GraphQL), and ADD_FOLDER/ADD_FILEs each doc into its project folder
+   with a `child` relationship, but for command writes it now observes a
+   convergent no-op (one sync at a time, unknown ids only). `specSyncTrigger`
    (drive→FS) reads the project↔folder mapping back to route writes to
    `<workdir>/<project>/specs/`. The push/remove + path-inference logic
    moved out of `triggers/spec-fs-sync.ts` into the shared

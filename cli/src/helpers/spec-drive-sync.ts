@@ -1,32 +1,34 @@
 /**
- * Spec ↔ embedded-drive sync primitives.
+ * Spec ↔ Studio-drive sync primitives.
  *
  * Shared between the `spec-fs-sync` chokidar trigger (filesystem → drive mirror
  * for external edits) and the `spec-*` write commands (which push their FS
- * writes straight into the running reactor). Both call `applyFsChangesToReactor`
- * to materialize-if-absent → replay content ops → attach the doc to the drive.
- * `spec-delete` calls `removeSpecFromDrive` to tear a doc back out.
+ * writes straight into the Studio switchboard). Both call
+ * `applyFsChangesToReactor` to materialize-if-absent → replay content actions
+ * → attach the doc to the drive. `spec-delete` calls `removeSpecFromDrive` to
+ * tear a doc back out.
  *
  * A spec `.phd` carries content-scope (`global` / `local`) ops plus the
  * `document`-scope create ops `createDocument()` records. The reactor can't
  * replay a create for a document it materializes itself, so the document is
- * materialized separately (`materializeIfAbsent`) and only content scopes are
- * replayed. Those ops keep their file `action.id`s, so `loadBatch` dedups:
- * re-feeding the same file is a no-op and later edits ship as deltas.
+ * materialized separately and only content scopes are replayed: the actions
+ * whose ids the reactor does not hold yet are executed through the client, so
+ * re-feeding the same file is a no-op and later edits ship as deltas. The
+ * calls are ones both clients have (the in-process client and the
+ * switchboard's GraphQL client); there is no load API over the wire.
  *
  * Drive attachment mirrors the per-project folder structure Vetra Studio reads
  * (`drive.state.global.nodes`): an ADD_FOLDER node per project, an ADD_FILE node
- * per spec doc. Both steps check existing nodes and skip when present, so
- * re-attaching is a no-op. ADD_FILE/ADD_FOLDER mutate the drive document
- * (`powerhouse/document-drive`), not a spec type, so they never feed back into
- * `spec-sync` (drive → FS).
+ * and a `child` relationship per spec doc. Both steps check existing nodes and
+ * skip when present, so re-attaching is a no-op. ADD_FILE/ADD_FOLDER mutate the
+ * drive document (`powerhouse/document-drive`), not a spec type, so they never
+ * feed back into `spec-sync` (drive → FS).
  */
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { baseLoadFromFile } from "document-model/node";
 import { signaturePolicyOf } from "document-model";
 import type { ReactorContext } from "@powerhousedao/clint";
-import type { LoadJobPlan } from "@powerhousedao/reactor";
 import {
   createSpecDocument,
   listSpecTypes,
@@ -59,7 +61,40 @@ export interface DriveNode {
   documentType?: string;
 }
 
-type DriveClient = Pick<ReactorContext, "client">["client"];
+interface OperationLike {
+  index?: number;
+  action?: { id?: string; scope?: string };
+}
+
+interface OperationsPage {
+  results: OperationLike[];
+  next?: () => Promise<unknown>;
+}
+
+/** The client calls the sync makes. */
+export interface SpecDriveClient {
+  get(id: string): Promise<unknown>;
+  create(document: unknown): Promise<unknown>;
+  execute(id: string, branch: string, actions: unknown[]): Promise<unknown>;
+  getOperations(id: string): Promise<OperationsPage>;
+  addRelationship(source: string, target: string, type: string): Promise<unknown>;
+  removeRelationship(source: string, target: string, type: string): Promise<unknown>;
+  deleteDocument(id: string): Promise<unknown>;
+}
+
+function specClient(reactor: Pick<ReactorContext, "client">): SpecDriveClient {
+  return reactor.client as unknown as SpecDriveClient;
+}
+
+// One sync at a time in this process: a command's push and the watcher's poll
+// of the same file would each find its actions unknown and execute them twice,
+// and two attaches to a new project folder would each create it.
+let syncQueue: Promise<unknown> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const run = syncQueue.then(fn);
+  syncQueue = run.catch(() => undefined);
+  return run;
+}
 
 // Built from the merged registry (codegen builder specs + vetra-app domain
 // models like brand-sheet), so every spec type the `spec-*` tools can write is
@@ -118,20 +153,14 @@ interface LoadedDoc {
   operations: Record<string, unknown[]>;
 }
 
-interface LoadedSpec {
-  doc: LoadedDoc;
-  jobs: LoadJobPlan[];
-}
-
 /**
- * Load a `.phd` and build content-scope `LoadJobPlan`s. Returns undefined when
- * the path isn't a known spec or the file fails to load. The `document` scope
- * is left to `materializeIfAbsent`; only content scopes are replayed.
+ * Load a `.phd`. Returns undefined when the path isn't a known spec or the
+ * file fails to load.
  */
 async function loadSpecForFile(
   filePath: string,
   log?: FsSyncLogger,
-): Promise<LoadedSpec | undefined> {
+): Promise<LoadedDoc | undefined> {
   const spec = specForPath(filePath);
   if (!spec) {
     log?.warn?.(
@@ -139,76 +168,140 @@ async function loadSpecForFile(
     );
     return undefined;
   }
-
-  let doc: LoadedDoc;
   try {
-    doc = (await baseLoadFromFile(filePath, spec.reducer as never));
+    return (await baseLoadFromFile(filePath, spec.reducer as never)) as LoadedDoc;
   } catch (err) {
     log?.warn?.(
       `[spec-fs-sync] load failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
   }
+}
 
-  const branch = doc.header.branch || "main";
-  const jobs: LoadJobPlan[] = [];
-  for (const [scope, ops] of Object.entries(doc.operations)) {
-    // `document` scope is handled by materialization, not replay.
-    if (scope === "document" || !Array.isArray(ops) || ops.length === 0) continue;
-    jobs.push({
-      key: `${doc.header.id}:${scope}`,
-      documentId: doc.header.id,
-      scope,
-      branch,
-      operations: ops as LoadJobPlan["operations"],
-      dependsOn: [],
-      externalDeps: [],
-    });
+async function hasDocument(client: SpecDriveClient, id: string): Promise<boolean> {
+  try {
+    await client.get(id);
+    return true;
+  } catch {
+    return false;
   }
-  return { doc, jobs };
+}
+
+/** All operations of a document, grouped by scope. */
+export async function operationsByScope(
+  client: Pick<SpecDriveClient, "getOperations">,
+  docId: string,
+): Promise<Record<string, OperationLike[]>> {
+  const byScope: Record<string, OperationLike[]> = {};
+  let page: OperationsPage | undefined = await client.getOperations(docId);
+  while (page) {
+    for (const op of page.results) {
+      const scope = op.action?.scope ?? "global";
+      (byScope[scope] ??= []).push(op);
+    }
+    page = page.next ? ((await page.next()) as OperationsPage) : undefined;
+  }
+  for (const ops of Object.values(byScope)) {
+    ops.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  }
+  return byScope;
 }
 
 /**
- * Build the content-scope `LoadJobPlan`s for a `.phd` file. Empty when the file
- * has no content operations or isn't a known spec. Exported for tests.
+ * Execute the file's content actions the reactor does not hold, one call per
+ * scope, in file order. An action without an id cannot be matched on the next
+ * sync, so it is skipped rather than replayed on every pass.
  */
-export async function buildLoadJobsForFile(
-  filePath: string,
-  workdir: string,
-  log?: FsSyncLogger,
-): Promise<LoadJobPlan[]> {
-  void workdir;
-  const loaded = await loadSpecForFile(filePath, log);
-  return loaded?.jobs ?? [];
-}
-
-/**
- * Materialize a document in the reactor when it isn't there yet. Creates an
- * empty document carrying the spec's id + type so subsequent content-scope
- * `loadBatch` jobs have a typed document to apply to. Returns true when a doc
- * was created. No-op (returns false) when the document already exists.
- */
-async function materializeIfAbsent(
-  client: DriveClient,
+async function replayUnknownActions(
+  client: SpecDriveClient,
   doc: LoadedDoc,
   log?: FsSyncLogger,
-): Promise<boolean> {
-  const exists = await client.get(doc.header.id).then(
-    () => true,
-    () => false,
-  );
-  if (exists) return false;
-  const fresh = createSpecDocument(doc.header.documentType) as {
-    header: { id: string; name: string; documentType: string };
-  };
-  fresh.header.id = doc.header.id;
-  fresh.header.documentType = doc.header.documentType;
-  fresh.header.name = doc.header.name;
-  await client.create(fresh as never);
-  log?.debug?.(
-    `[spec-fs-sync] materialized ${doc.header.documentType} ${doc.header.id}`,
-  );
-  return true;
+): Promise<number> {
+  const existing = await operationsByScope(client, doc.header.id);
+  const branch = doc.header.branch || "main";
+  let executed = 0;
+  for (const [scope, ops] of Object.entries(doc.operations)) {
+    if (scope === "document" || !Array.isArray(ops) || ops.length === 0) continue;
+    const known = new Set(
+      (existing[scope] ?? []).map((op) => op.action?.id).filter(Boolean),
+    );
+    const actions = ops
+      .map((op) => (op as { action?: Record<string, unknown> }).action)
+      .filter((action): action is Record<string, unknown> => Boolean(action));
+    const withoutId = actions.filter((action) => typeof action.id !== "string");
+    if (withoutId.length > 0) {
+      log?.warn?.(
+        `[spec-fs-sync] ${doc.header.id}: skipped ${withoutId.length} ${scope} action(s) without an id`,
+      );
+    }
+    const unknown = actions.filter(
+      (action) => typeof action.id === "string" && !known.has(action.id),
+    );
+    if (unknown.length === 0) continue;
+    // In a signed Studio the client signs them; it throws SignerNotReadyError
+    // while it cannot, and then nothing is submitted.
+    await client.execute(doc.header.id, branch, unknown);
+    executed += unknown.length;
+  }
+  if (executed > 0) {
+    log?.debug?.(
+      `[spec-fs-sync] executed ${executed} action(s) on ${doc.header.documentType} ${doc.header.id}`,
+    );
+  }
+  return executed;
+}
+
+interface PushedSpec {
+  id: string;
+  name: string;
+  documentType: string;
+}
+
+/**
+ * Bring one loaded spec into the reactor and return the document it now is.
+ * A document the reactor holds gets the file's unknown content actions.
+ * Legacy: a document it lacks is created empty under the file's id and type,
+ * then gets them too. `v2-required`: a document it lacks is created from the
+ * file's state, which holds the content, so nothing is replayed; a signed
+ * file keeps its id, a legacy one can never become a v2 document, so a new
+ * signed one is built.
+ */
+async function pushSpec(
+  client: SpecDriveClient,
+  doc: LoadedDoc,
+  mode: StudioSignatureMode,
+  log?: FsSyncLogger,
+): Promise<PushedSpec> {
+  const { id, name, documentType } = doc.header;
+  if (!(await hasDocument(client, id))) {
+    if (mode === "v2-required") {
+      if (signaturePolicyOf(doc.header as never) === "v2-required") {
+        await client.create(doc);
+        log?.debug?.(`[spec-fs-sync] created signed ${documentType} ${id}`);
+        return { id, name, documentType };
+      }
+      const fresh = createSpecDocument(documentType, {
+        name,
+        initialState: doc.state,
+        signaturePolicy: "v2-required",
+      });
+      await client.create(fresh);
+      log?.info?.(
+        `[spec-fs-sync] created signed ${documentType} "${name}" ${fresh.header.id} from ${id} (this Studio keeps no unsigned documents).`,
+      );
+      return { id: fresh.header.id, name, documentType };
+    }
+    const fresh = createSpecDocument(documentType) as {
+      header: { id: string; name: string; documentType: string };
+    };
+    fresh.header.id = id;
+    fresh.header.documentType = documentType;
+    fresh.header.name = name;
+    await client.create(fresh);
+    log?.debug?.(`[spec-fs-sync] materialized ${documentType} ${id}`);
+  }
+  await replayUnknownActions(client, doc, log);
+  return { id, name, documentType };
 }
 
 interface DriveActions {
@@ -247,7 +340,7 @@ async function getDriveActions(): Promise<DriveActions> {
 }
 
 async function getDriveNodes(
-  client: DriveClient,
+  client: SpecDriveClient,
   driveId: string,
 ): Promise<DriveNode[]> {
   const drive = (await client.get(driveId)) as {
@@ -263,7 +356,7 @@ async function getDriveNodes(
  * folder of the same name is reused.
  */
 async function ensureProjectFolder(
-  client: DriveClient,
+  client: SpecDriveClient,
   driveId: string,
   project: string | undefined,
   log?: FsSyncLogger,
@@ -280,7 +373,7 @@ async function ensureProjectFolder(
   const id = randomUUID();
   const { addFolder } = await getDriveActions();
   await client.execute(driveId, "main", [
-    addFolder({ id, name: project, parentFolder: null }) as never,
+    addFolder({ id, name: project, parentFolder: null }),
   ]);
   log?.debug?.(
     `[spec-fs-sync] created project folder "${project}" folderId=${id} driveId=${driveId}`,
@@ -291,63 +384,65 @@ async function ensureProjectFolder(
 /**
  * Ensure a file node for `docId` exists under `parentFolder`. Idempotent:
  * skips when a file node with the same id is already present. On create, also
- * links the doc into the drive's document graph (parity with how other drive
- * documents become discoverable).
+ * adds the drive's `child` relationship to the doc, which `find({ parentId })`
+ * reads.
  */
 async function ensureFileNode(
-  client: DriveClient,
+  client: SpecDriveClient,
   driveId: string,
-  docId: string,
-  name: string,
-  documentType: string,
+  spec: PushedSpec,
   parentFolder: string | null,
   log?: FsSyncLogger,
 ): Promise<void> {
   const nodes = await getDriveNodes(client, driveId);
-  if (nodes.some((n) => n.kind === "file" && n.id === docId)) return;
+  if (nodes.some((n) => n.kind === "file" && n.id === spec.id)) return;
   const { addFile } = await getDriveActions();
   await client.execute(driveId, "main", [
-    addFile({ id: docId, name, documentType, parentFolder }) as never,
+    addFile({
+      id: spec.id,
+      name: spec.name,
+      documentType: spec.documentType,
+      parentFolder,
+    }),
   ]);
   log?.debug?.(
-    `[spec-fs-sync] created spec in embedded reactor: ${documentType} "${name}" ` +
-      `documentId=${docId} driveId=${driveId} folder=${parentFolder ?? "<root>"}`,
+    `[spec-fs-sync] filed ${spec.documentType} "${spec.name}" ` +
+      `documentId=${spec.id} driveId=${driveId} folder=${parentFolder ?? "<root>"}`,
   );
-  // The file node is what Vetra Studio reads; the graph relationship is parity
-  // with other drive docs. Don't let a relationship failure abort the attach.
+  // The file node is what Vetra Studio reads: a relationship failure is
+  // reported, not allowed to abort the attach.
   try {
-    await client.addRelationship(driveId, docId, "child");
+    await client.addRelationship(driveId, spec.id, "child");
   } catch (err) {
-    log?.debug?.(
-      `[spec-fs-sync] addRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+    log?.warn?.(
+      `[spec-fs-sync] addRelationship failed for ${spec.id}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
 
-/**
- * Sync each `.phd` path into the embedded reactor and the `vetra` drive:
- *   1. materialize any document the reactor hasn't seen (empty doc, file id+type),
- *   2. replay content-scope operations via a single `loadBatch` (idempotent),
- *   3. attach each doc to the drive under a folder named after its project.
- * Returns the number of content load jobs submitted. Used by the trigger's
- * poll, the `spec-*` write commands, and integration tests.
- *
- * `onLoaded` is invoked once per successfully-loaded spec with its file path
- * and document id — the trigger uses it to maintain a path→docId map for
- * resolving external deletes.
- */
 export interface ApplyFsChangesOptions {
   /**
-   * `v2-required` (a new cloud Studio): the reactor accepts only signed
-   * documents, so the FS is not replayed unsigned. Documents the reactor does
-   * not have are created through the client (signed); a legacy file gets a new
-   * signed document from its state. Anything that cannot be signed is refused
-   * and logged, never submitted (Task 5.SIG, X39).
+   * `v2-required` (a signed Studio): documents the reactor does not have are
+   * created through the client (signed), a legacy file gets a new signed
+   * document from its state, and each file is rewritten from the signed
+   * document. A write that cannot be signed is refused and logged, never
+   * submitted unsigned.
    */
   signatureMode?: StudioSignatureMode;
 }
 
-export async function applyFsChangesToReactor(
+/**
+ * Sync each `.phd` path into the reactor and the Studio drive: materialize a
+ * document the reactor lacks, execute the content actions it does not hold,
+ * and attach the doc to the drive under a folder named after its project.
+ * Returns the number of files synced. Used by the trigger's poll, the `spec-*`
+ * write commands, and integration tests.
+ *
+ * `onLoaded` is invoked once per synced spec with its file path and document
+ * id — the trigger uses it to maintain a path→docId map for resolving
+ * external deletes.
+ */
+export function applyFsChangesToReactor(
   paths: ReadonlyArray<string>,
   workdir: string,
   reactor: Pick<ReactorContext, "client">,
@@ -356,179 +451,97 @@ export async function applyFsChangesToReactor(
   onLoaded?: (filePath: string, docId: string) => void,
   options: ApplyFsChangesOptions = {},
 ): Promise<number> {
-  if (options.signatureMode === "v2-required") {
-    return applySignedFsChanges(paths, workdir, reactor, driveId, log, onLoaded);
-  }
-  const loaded: Array<{
-    path: string;
-    project: string | undefined;
-    spec: LoadedSpec;
-  }> = [];
-  for (const p of paths) {
-    const spec = await loadSpecForFile(p, log);
-    if (!spec) continue;
-    onLoaded?.(p, spec.doc.header.id);
-    loaded.push({ path: p, project: projectForPath(p, workdir), spec });
-  }
-  if (loaded.length === 0) return 0;
-
-  // 1. Materialize docs the reactor has never created — content ops can't apply
-  //    to a non-existent document.
-  for (const { spec } of loaded) {
-    try {
-      await materializeIfAbsent(reactor.client, spec.doc, log);
-    } catch (err) {
-      log?.error?.(
-        `[spec-fs-sync] create failed for ${spec.doc.header.documentType} ${spec.doc.header.id}: ${err instanceof Error ? err.message : String(err)}`,
+  return serialized(async () => {
+    const client = specClient(reactor);
+    const mode = options.signatureMode ?? "legacy";
+    let synced = 0;
+    for (const filePath of paths) {
+      const doc = await loadSpecForFile(filePath, log);
+      if (!doc) continue;
+      const project = projectForPath(filePath, workdir);
+      try {
+        const pushed = await pushSpec(client, doc, mode, log);
+        if (mode === "v2-required") {
+          await mirrorSignedSpec(
+            client,
+            pushed.id,
+            project ? path.join(workdir, project) : workdir,
+            log,
+          );
+        }
+        onLoaded?.(filePath, pushed.id);
+        if (driveId) {
+          const folderId = await ensureProjectFolder(client, driveId, project, log);
+          await ensureFileNode(client, driveId, pushed, folderId, log);
+        }
+        synced += 1;
+      } catch (err) {
+        log?.error?.(
+          `[spec-fs-sync] sync failed for ${doc.header.documentType} "${doc.header.name}" (${filePath}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    if (!driveId && synced > 0) {
+      log?.warn?.(
+        `[spec-fs-sync] no drive id — synced ${synced} doc(s) but skipped drive attachment`,
       );
     }
-  }
-
-  // 2. Replay content operations (dedup by action.id — a no-op for unchanged
-  //    files, delta-only for edits).
-  const allJobs = loaded.flatMap((l) => l.spec.jobs);
-  if (allJobs.length > 0) {
-    try {
-      await reactor.client.loadBatch({ jobs: allJobs });
-      log?.debug?.(
-        `[spec-fs-sync] loadBatch submitted ${allJobs.length} job(s)`,
-      );
-    } catch (err) {
-      log?.error?.(
-        `[spec-fs-sync] loadBatch failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-
-  // 3. Attach to the vetra drive under per-project folders.
-  if (!driveId) {
-    log?.warn?.(
-      `[spec-fs-sync] no drive id — materialized ${loaded.length} doc(s) but skipped drive attachment`,
-    );
-    return allJobs.length;
-  }
-  // Sequential: ensureProjectFolder re-reads nodes, so concurrent attaches to
-  // the same new project folder would each miss it and create duplicates.
-  for (const { project, spec } of loaded) {
-    try {
-      const folderId = await ensureProjectFolder(
-        reactor.client,
-        driveId,
-        project,
-        log,
-      );
-      await ensureFileNode(
-        reactor.client,
-        driveId,
-        spec.doc.header.id,
-        spec.doc.header.name,
-        spec.doc.header.documentType,
-        folderId,
-        log,
-      );
-    } catch (err) {
-      log?.error?.(
-        `[spec-fs-sync] drive attach failed for ${spec.doc.header.documentType} "${spec.doc.header.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-  return allJobs.length;
+    return synced;
+  });
 }
 
 /**
- * Remove a spec doc from the embedded drive: delete its file node, drop the
- * parent-child relationship, then delete the document itself. Idempotent — a
+ * Remove a spec doc from the drive: delete its file node, drop the drive's
+ * `child` relationship, then delete the document itself. Idempotent — a
  * missing node, relationship, or document is treated as already-gone and
  * logged at debug, not error.
  */
-export async function removeSpecFromDrive(
+export function removeSpecFromDrive(
   reactor: Pick<ReactorContext, "client">,
   driveId: string,
   docId: string,
   log?: FsSyncLogger,
 ): Promise<void> {
-  const client = reactor.client;
-  try {
-    const nodes = await getDriveNodes(client, driveId);
-    if (nodes.some((n) => n.kind === "file" && n.id === docId)) {
-      const { deleteNode } = await getDriveActions();
-      await client.execute(driveId, "main", [
-        deleteNode({ id: docId }) as never,
-      ]);
+  return serialized(async () => {
+    const client = specClient(reactor);
+    try {
+      const nodes = await getDriveNodes(client, driveId);
+      if (nodes.some((n) => n.kind === "file" && n.id === docId)) {
+        const { deleteNode } = await getDriveActions();
+        await client.execute(driveId, "main", [deleteNode({ id: docId })]);
+        log?.debug?.(
+          `[spec-fs-sync] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
+        );
+      } else {
+        log?.debug?.(
+          `[spec-fs-sync] no file node for ${docId} in drive ${driveId} — skipping node delete`,
+        );
+      }
+    } catch (err) {
       log?.debug?.(
-        `[spec-fs-sync] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
-      );
-    } else {
-      log?.debug?.(
-        `[spec-fs-sync] no file node for ${docId} in drive ${driveId} — skipping node delete`,
+        `[spec-fs-sync] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-  } catch (err) {
-    log?.debug?.(
-      `[spec-fs-sync] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-  try {
-    await client.removeRelationship(driveId, docId, "child");
-  } catch (err) {
-    log?.debug?.(
-      `[spec-fs-sync] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-  try {
-    await client.deleteDocument(docId);
-  } catch (err) {
-    log?.debug?.(
-      `[spec-fs-sync] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-}
-
-/* ── Signed sync for a v2-required cloud Studio (Task 5.SIG, X39) ────────── */
-
-interface SignedClient {
-  get(id: string): Promise<unknown>;
-  create(document: unknown): Promise<unknown>;
-  execute(docId: string, scope: string, actions: unknown[]): Promise<unknown>;
-  getOperations?(docId: string): Promise<{
-    results: Array<{ index?: number; action?: { id?: string; scope?: string } }>;
-    next?: () => Promise<unknown>;
-  }>;
-}
-
-interface OperationLike {
-  index?: number;
-  action?: { id?: string; scope?: string };
-}
-
-/** All operations of a document, grouped by scope (empty without a client). */
-export async function operationsByScope(
-  client: SignedClient,
-  docId: string,
-): Promise<Record<string, OperationLike[]>> {
-  const byScope: Record<string, OperationLike[]> = {};
-  if (!client.getOperations) return byScope;
-  type Page = {
-    results: OperationLike[];
-    next?: () => Promise<unknown>;
-  };
-  let page: Page | undefined = await client.getOperations(docId);
-  while (page) {
-    for (const op of page.results) {
-      const scope = op.action?.scope ?? "global";
-      (byScope[scope] ??= []).push(op);
+    try {
+      await client.removeRelationship(driveId, docId, "child");
+    } catch (err) {
+      log?.debug?.(
+        `[spec-fs-sync] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-    page = page.next ? ((await page.next()) as Page) : undefined;
-  }
-  for (const ops of Object.values(byScope)) {
-    ops.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  }
-  return byScope;
+    try {
+      await client.deleteDocument(docId);
+    } catch (err) {
+      log?.debug?.(
+        `[spec-fs-sync] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  });
 }
 
 /** Write the reactor's (signed) version of a document over its `.phd`. */
 export async function mirrorSignedSpec(
-  client: SignedClient,
+  client: Pick<SpecDriveClient, "get" | "getOperations">,
   docId: string,
   projectDir: string,
   log?: FsSyncLogger,
@@ -537,109 +550,10 @@ export async function mirrorSignedSpec(
     header: { name?: string; documentType: string };
   };
   const operations = await operationsByScope(client, docId);
-  const path = await saveSpec(
+  const written = await saveSpec(
     { ...(doc as unknown as Record<string, unknown>), operations } as never,
     projectDir,
   );
-  log?.debug?.(`[spec-fs-sync] mirrored signed ${doc.header.documentType} "${doc.header.name}" → ${path}`);
-  return path;
-}
-
-async function hasDocument(client: SignedClient, id: string): Promise<boolean> {
-  try {
-    await client.get(id);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Apply `.phd` files to a v2-required reactor. Every write goes through the
- * agent's client, so it is signed; a write that cannot be signed is logged and
- * refused (never submitted unsigned). The files are then rewritten from the
- * signed documents, so a `.phd` in a signed Studio holds signed operations.
- */
-async function applySignedFsChanges(
-  paths: ReadonlyArray<string>,
-  workdir: string,
-  reactor: Pick<ReactorContext, "client">,
-  driveId: string | undefined,
-  log?: FsSyncLogger,
-  onLoaded?: (filePath: string, docId: string) => void,
-): Promise<number> {
-  const client = reactor.client as unknown as SignedClient;
-  let synced = 0;
-  for (const filePath of paths) {
-    const spec = await loadSpecForFile(filePath, log);
-    if (!spec) continue;
-    const project = projectForPath(filePath, workdir);
-    const projectDir = project ? path.join(workdir, project) : workdir;
-    let docId = spec.doc.header.id;
-    try {
-      if (await hasDocument(client, docId)) {
-        const existing = await operationsByScope(client, docId);
-        for (const [scope, ops] of Object.entries(spec.doc.operations)) {
-          if (scope === "document" || !Array.isArray(ops) || ops.length === 0) continue;
-          const known = new Set(
-            (existing[scope] ?? []).map((op) => op.action?.id).filter(Boolean),
-          );
-          const actions = ops
-            .map((op) => (op as { action?: unknown }).action)
-            .filter((action): action is Record<string, unknown> => Boolean(action))
-            .filter((action) => !known.has(action.id as string));
-          if (actions.length === 0) continue;
-          // Signed by the agent's client; throws SignerNotReadyError when the
-          // Studio has no delegation yet — then nothing is submitted.
-          await client.execute(docId, scope, actions);
-        }
-      } else if (signaturePolicyOf(spec.doc.header) === "v2-required") {
-        // A signed document whose file arrived first (create wrote the file).
-        await client.create(spec.doc);
-      } else {
-        // A legacy file (e.g. `ph generate --extract`): it can never become a
-        // v2 document, so a new signed one is built from its state and the
-        // file is rewritten under the signed id below.
-        const fresh = createSpecDocument(spec.doc.header.documentType, {
-          name: spec.doc.header.name,
-          initialState: spec.doc.state,
-          signaturePolicy: "v2-required",
-        });
-        await client.create(fresh);
-        const previous = docId;
-        docId = fresh.header.id;
-        log?.info?.(
-          `[spec-fs-sync] created signed ${fresh.header.documentType} "${fresh.header.name}" ${docId} from ${previous} (this Studio keeps no unsigned documents).`,
-        );
-      }
-      await mirrorSignedSpec(client, docId, projectDir, log);
-      if (driveId) {
-        const doc = (await client.get(docId)) as {
-          header: { name: string; documentType: string };
-        };
-        const folderId = await ensureProjectFolder(
-          client as never,
-          driveId,
-          project,
-          log,
-        );
-        await ensureFileNode(
-          client as never,
-          driveId,
-          docId,
-          doc.header.name,
-          doc.header.documentType,
-          folderId,
-          log,
-        );
-      }
-      onLoaded?.(filePath, docId);
-      synced += 1;
-    } catch (err) {
-      log?.error?.(
-        `[spec-fs-sync] refused ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-  return synced;
+  log?.debug?.(`[spec-fs-sync] mirrored signed ${doc.header.documentType} "${doc.header.name}" → ${written}`);
+  return written;
 }

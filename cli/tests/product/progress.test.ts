@@ -222,6 +222,7 @@ describe("product-progress", () => {
             return doc;
           },
           execute: h!.module.client.execute.bind(h!.module.client),
+          find: h!.module.client.find.bind(h!.module.client),
         },
         personalDriveId: h!.driveId,
       }),
