@@ -6,7 +6,7 @@ import { defineCommand } from "../../framework.js";
 import { projectInputSchema, resolveReactorProjectPath } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
-import { activeStudioSigning } from "../../auth/studio-mode.js";
+import { studioSignatureMode } from "../../auth/studio-mode.js";
 import { phBuildNodeOptions } from "../../helpers/node-memory.js";
 import { loadSpecDocument } from "./registry.js";
 import { slugify } from "./_helpers.js";
@@ -56,13 +56,7 @@ export const specExtract = defineCommand({
   }),
   execute: async (input, context) => {
     const { workdir, runProcess } = context;
-    const signatureMode = activeStudioSigning(workdir, context.config).mode;
     const drive = await getEmbeddedDrive(context);
-    if (signatureMode === "v2-required" && !drive) {
-      // The extracted files are unsigned; without the reactor they could not
-      // be brought into the signed Studio, so refuse rather than write them.
-      throw new Error("The Studio isn't running yet; try again in a moment.");
-    }
     const base = await resolveReactorProjectPath(workdir, input.project);
 
     const command = extractCommand(input.type);
@@ -79,7 +73,9 @@ export const specExtract = defineCommand({
     for (const filePath of written) await backfillSlug(filePath);
 
     // realpath workdir: the subprocess emits realpath-resolved paths, which a
-    // lexical workdir would drop to the drive root in projectForPath.
+    // lexical workdir would drop to the drive root in projectForPath. The
+    // extracted files are legacy; on a v2-required switchboard the sync makes
+    // signed documents of them.
     if (drive && written.length > 0) {
       await applyFsChangesToReactor(
         written,
@@ -88,7 +84,13 @@ export const specExtract = defineCommand({
         drive.driveId,
         context.log,
         undefined,
-        { signatureMode },
+        {
+          signatureMode: await studioSignatureMode(
+            drive.reactor,
+            context.config,
+            context.log,
+          ),
+        },
       );
     }
 

@@ -35,22 +35,16 @@ them across every commit and every edit.
 - **Service state is on disk.** ph-clint's ServiceManager reads
   `<workdir>/.ph/<cli>/services/<id>/<instance>.json`, so externally-
   started services *are* visible to a running CLI's `services.list()`.
-- **vetra-app rebuild after editor/manifest edits.** Editing
-  `vetra-app/editors/*` or `vetra-app/powerhouse.manifest.json` requires
-  *two* builds and a restart: `pnpm build` (refreshes `dist/{browser,
-  node,types}` for vetra's node imports) and `pnpm exec ph-cli
-  connect build --outDir dist/connect --default-drives-url
-  http://__ph_drive_url__` (refreshes the SPA bundle that
-  `connect-server.js` serves). Always pass `--default-drives-url
-  http://__ph_drive_url__`: it bakes the placeholder the
-  `connect-drive-url` startup hook swaps for the live drive URL;
-  omit it and Connect won't open the vetra drive. Then restart
-  vetra. The connect bundle freezes the manifest at build time —
-  skipping the connect build leaves the SPA carrying the pre-edit
+- **Rebuild after editor/manifest edits.** Editing `editors/*` or
+  `powerhouse.manifest.json` requires *two* builds and a restart:
+  `pnpm build` (refreshes `dist/{browser,node,types}`, which the
+  switchboard loads) and `pnpm build:connect` (the SPA bundle the
+  Connect host serves from `dist/connect`). Then restart the stack
+  (`ph run studio`). The Connect bundle freezes the manifest at build
+  time — skipping that build leaves the SPA carrying the pre-edit
   manifest, so Connect falls back to `GenericDriveExplorer` and the
-  new drive editor never appears. See ARCHITECTURE.md → "Embedded
-  Connect (Vetra Studio) → Build-output split" and "Default-drive URL
-  stamping".
+  new drive editor never appears. See ARCHITECTURE.md → "Connect
+  (Vetra Studio) → Build-output split".
 
 ## Overall goal
 
@@ -184,15 +178,21 @@ against.
     `/attachments`, `/mcp`, `/api/*`), and serves the drive and the remote
     backend as `${origin}/d/studio` in the `powerhouse.config.json` it
     merges per request. Nothing is stamped into `dist/connect` for the
-    drive URL: the `connect-drive-url` hook waits for
-    `powerhouse:switchboard:ready`, which the remote path never emits, so it
-    also writes no `studio.config.json` and the SPA uses the direct
-    `127.0.0.1:5180` for the local API. The Cli's embedded proxy moved to
+    drive URL and no `studio.config.json` is written, so the SPA uses the
+    direct `127.0.0.1:5180` for the local API. The Cli's embedded proxy moved to
     an OS port on `127.0.0.1` and carries only `/preview` and the
     reactor-project routes (`/reactor-project/vetra-studio`, the project
     switchboard) until B3 decides its place; the BUILD iframe's proxied
     URLs are B3's. See ARCHITECTURE.md → "Hosts" and "Embedded reverse
     proxy".
+
+15. **Signing follows the switchboard (B3).** The spec writes take the
+    switchboard's create policy (`studioSignatureMode`); the Cli plans no
+    mode, writes no marker and creates no drive (the Studio drive is host
+    data). A cloud Studio attaches with the agent's Renown signer, bearer
+    and user watch (`auth/studio-identity.ts`, `configureReactor.remote` as
+    a function); a local Studio attaches unsigned. No host here runs a
+    signed switchboard yet (`hosts/studio-signed` is B3 V8).
 
 ## Repositories touched
 

@@ -1,36 +1,14 @@
 /**
- * The cloud-Studio signal and the sticky v2 marker (Task 5.SIG, ruling X39).
+ * The cloud-Studio signal and the signature mode, which is the switchboard's
+ * create policy.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { describe, it, expect, vi } from "vitest";
 import {
-  activeStudioSigning,
-  commitStudioSigningPlan,
   environmentIdOf,
-  hasReactorStore,
   isCloudStudio,
-  planStudioSigning,
-  readSigningMarker,
-  reactorStorePath,
-  signingMarkerPath,
-  writeSigningMarker,
+  studioSignatureMode,
+  type StudioSignatureMode,
 } from "../../src/auth/studio-mode.js";
-
-let workdir: string;
-
-beforeEach(() => {
-  workdir = mkdtempSync(path.join(tmpdir(), "studio-mode-"));
-});
-
-afterEach(() => {
-  rmSync(workdir, { recursive: true, force: true });
-});
-
-function seedReactorStore(): void {
-  mkdirSync(reactorStorePath(workdir), { recursive: true });
-}
 
 describe("environmentIdOf", () => {
   it("prefers the config value, trimmed, and falls back to the env", () => {
@@ -43,76 +21,51 @@ describe("environmentIdOf", () => {
 
 describe("isCloudStudio", () => {
   it("is true with an environment id, false on a local Studio", () => {
-    expect(isCloudStudio({ environmentId: "env-1" }, workdir, {})).toBe(true);
-    expect(isCloudStudio({}, workdir, {})).toBe(false);
-  });
-
-  it("is true when only the sticky marker is left (env id lost)", () => {
-    writeSigningMarker(workdir, "env-1");
-    expect(isCloudStudio({}, workdir, {})).toBe(true);
+    expect(isCloudStudio({ environmentId: "env-1" }, {})).toBe(true);
+    expect(isCloudStudio({}, { VETRA_ENVIRONMENT_ID: "env-2" })).toBe(true);
+    expect(isCloudStudio({}, {})).toBe(false);
   });
 });
 
-describe("planStudioSigning", () => {
-  it("makes a fresh cloud Studio v2-required", () => {
-    const plan = planStudioSigning(workdir, { environmentId: "env-1" }, {});
-    expect(plan).toMatchObject({ cloud: true, mode: "v2-required", fresh: true });
+function switchboard(policy: StudioSignatureMode) {
+  return { client: { getCreateSignaturePolicy: vi.fn(() => Promise.resolve(policy)) } };
+}
+
+describe("studioSignatureMode", () => {
+  it("is the switchboard's create policy, read once per client", async () => {
+    const reactor = switchboard("v2-required");
+    const log = { error: vi.fn() };
+    const cloud = { environmentId: "env-1" };
+    expect(await studioSignatureMode(reactor, cloud, log, {})).toBe("v2-required");
+    expect(await studioSignatureMode(reactor, cloud, log, {})).toBe("v2-required");
+    expect(reactor.client.getCreateSignaturePolicy).toHaveBeenCalledTimes(1);
+    expect(log.error).not.toHaveBeenCalled();
+    expect(await studioSignatureMode(switchboard("legacy"), {}, log, {})).toBe("legacy");
+    expect(log.error).not.toHaveBeenCalled();
   });
 
-  it("keeps a local Studio legacy", () => {
-    const plan = planStudioSigning(workdir, {}, {});
-    expect(plan).toMatchObject({ cloud: false, mode: "legacy", fresh: false });
+  it("logs once when a cloud Studio is on a legacy switchboard", async () => {
+    const reactor = switchboard("legacy");
+    const log = { error: vi.fn() };
+    expect(await studioSignatureMode(reactor, { environmentId: "env-1" }, log, {})).toBe("legacy");
+    await studioSignatureMode(reactor, { environmentId: "env-1" }, log, {});
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(String(log.error.mock.calls[0][0])).toContain("v2-required");
   });
 
-  it("keeps an existing cloud Studio (reactor store present) legacy — 2b migrates it", () => {
-    seedReactorStore();
-    const plan = planStudioSigning(workdir, { environmentId: "env-1" }, {});
-    expect(plan).toMatchObject({ cloud: true, mode: "legacy", fresh: false });
-    expect(readSigningMarker(workdir)).toBeUndefined();
+  it("logs when a local Studio is on a v2-required switchboard", async () => {
+    const log = { error: vi.fn() };
+    await studioSignatureMode(switchboard("v2-required"), {}, log, {});
+    expect(String(log.error.mock.calls[0][0])).toContain("VETRA_ENVIRONMENT_ID");
   });
 
-  it("is sticky: once v2, a restart without the env id stays v2", () => {
-    const fresh = planStudioSigning(workdir, { environmentId: "env-1" }, {});
-    commitStudioSigningPlan(workdir, fresh);
-    expect(readSigningMarker(workdir)?.mode).toBe("v2-required");
-
-    seedReactorStore(); // the drive now exists
-    const restart = planStudioSigning(workdir, {}, {});
-    expect(restart).toMatchObject({ cloud: true, mode: "v2-required", fresh: false });
-  });
-
-  it("writes the marker before anything is created (fresh flag only once)", () => {
-    const plan = planStudioSigning(workdir, { environmentId: "env-1" }, {});
-    commitStudioSigningPlan(workdir, plan);
-    expect(planStudioSigning(workdir, { environmentId: "env-1" }, {}).fresh).toBe(false);
-  });
-
-  it("treats an unreadable marker as v2, never downgrading a signed Studio", () => {
-    mkdirSync(path.dirname(signingMarkerPath(workdir)), { recursive: true });
-    writeFileSync(signingMarkerPath(workdir), "{not json");
-    expect(readSigningMarker(workdir)?.mode).toBe("v2-required");
-    expect(planStudioSigning(workdir, {}, {}).mode).toBe("v2-required");
-  });
-
-  it("writes the marker atomically", () => {
-    const marker = writeSigningMarker(workdir, "env-1");
-    const onDisk = JSON.parse(readFileSync(signingMarkerPath(workdir), "utf8"));
-    expect(onDisk).toEqual(marker);
-    expect(marker.since).toMatch(/^\d{4}-/);
-    expect(hasReactorStore(workdir)).toBe(false);
-  });
-});
-
-describe("activeStudioSigning (v2 mode off until B3)", () => {
-  it("runs a fresh cloud Studio and a marked one legacy", () => {
-    expect(activeStudioSigning(workdir, { environmentId: "env-1" }, {})).toMatchObject({
-      cloud: true,
-      mode: "legacy",
-      fresh: false,
-    });
-    writeSigningMarker(workdir, "env-1");
-    expect(activeStudioSigning(workdir, {}, {}).mode).toBe("legacy");
-    // The planner itself is unchanged.
-    expect(planStudioSigning(workdir, {}, {}).mode).toBe("v2-required");
+  it("reads again after a failed read", async () => {
+    const getCreateSignaturePolicy = vi
+      .fn<() => Promise<StudioSignatureMode>>()
+      .mockRejectedValueOnce(new Error("switchboard down"))
+      .mockResolvedValueOnce("legacy");
+    const reactor = { client: { getCreateSignaturePolicy } };
+    await expect(studioSignatureMode(reactor, {}, undefined, {})).rejects.toThrow("switchboard down");
+    expect(await studioSignatureMode(reactor, {}, undefined, {})).toBe("legacy");
   });
 });

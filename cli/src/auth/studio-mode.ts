@@ -1,100 +1,14 @@
 /**
- * Which signature mode a Studio runs in (Task 5.SIG, ruling X39).
+ * Which signature mode a Studio runs in.
  *
- * A **cloud Studio** (an environment id is set) that has never run before is a
- * v2-required Studio: it creates its drive and every Studio document under
- * `v2-required`, and every write carries a v2 signature. Local Studios, and
- * cloud Studios that already existed before this mode (legacy documents),
- * keep the `legacy` policy and today's unsigned agent writes.
- *
- * The mode is **sticky**: the first boot of a new cloud Studio writes a marker
- * into `.ph/vetra/studio-signing.json` *before* anything is created, so a
- * restart — or a boot that lost the environment id — can never fall back to
- * legacy for a Studio whose documents are v2-required. The marker is also the
- * cloud signal for those boots (`isCloudStudio`).
+ * The mode is the Studio switchboard's create policy (`studioSignatureMode`):
+ * the switchboard is the one party that enforces it, so the Cli writes spec
+ * documents the way the switchboard creates documents. A **cloud Studio** (an
+ * environment id is set) attaches with the agent's Renown identity
+ * (`studio-identity.ts`) and belongs on a `v2-required` switchboard; a local
+ * Studio attaches unsigned and belongs on a `legacy` one.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
-import path from "node:path";
-
 export type StudioSignatureMode = "legacy" | "v2-required";
-
-/** CLI store folder (`<workdir>/.ph/vetra`), same root ph-clint uses. */
-export function studioStoreDir(workdir: string): string {
-  return path.join(path.resolve(workdir), ".ph", "vetra");
-}
-
-/** The embedded reactor's PGlite directory; present once a Studio has run. */
-export function reactorStorePath(workdir: string): string {
-  return path.join(studioStoreDir(workdir), "reactor-storage");
-}
-
-/** Marker file recording that this Studio is `v2-required` for good. */
-export function signingMarkerPath(workdir: string): string {
-  return path.join(studioStoreDir(workdir), "studio-signing.json");
-}
-
-export interface StudioSigningMarker {
-  version: 1;
-  mode: "v2-required";
-  /** The environment id that created the Studio, for operators. */
-  environmentId?: string;
-  since: string;
-}
-
-/** The sticky marker, or undefined for a Studio that has never written one.
- * An unreadable marker still counts as present (and v2), so a corrupt file can
- * never downgrade a signed Studio to legacy. */
-export function readSigningMarker(workdir: string): StudioSigningMarker | undefined {
-  const file = signingMarkerPath(workdir);
-  let raw: string;
-  try {
-    raw = readFileSync(file, "utf8");
-  } catch {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<StudioSigningMarker>;
-    if (parsed?.mode === "v2-required") {
-      return {
-        version: 1,
-        mode: "v2-required",
-        environmentId:
-          typeof parsed.environmentId === "string" ? parsed.environmentId : undefined,
-        since: typeof parsed.since === "string" ? parsed.since : "",
-      };
-    }
-    return undefined;
-  } catch {
-    return { version: 1, mode: "v2-required", since: "" };
-  }
-}
-
-/** Write the sticky marker atomically (temp sibling + rename). */
-export function writeSigningMarker(
-  workdir: string,
-  environmentId?: string,
-  now: Date = new Date(),
-): StudioSigningMarker {
-  const marker: StudioSigningMarker = {
-    version: 1,
-    mode: "v2-required",
-    ...(environmentId ? { environmentId } : {}),
-    since: now.toISOString(),
-  };
-  const file = signingMarkerPath(workdir);
-  const dir = path.dirname(file);
-  mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, `.tmp-${randomBytes(6).toString("hex")}`);
-  writeFileSync(tmp, `${JSON.stringify(marker, null, 2)}\n`);
-  renameSync(tmp, file);
-  return marker;
-}
-
-/** Whether a reactor has ever run in this workdir (a pre-existing Studio). */
-export function hasReactorStore(workdir: string): boolean {
-  return existsSync(reactorStorePath(workdir));
-}
 
 /** The environment id config or env names, trimmed. */
 export function environmentIdOf(
@@ -107,94 +21,52 @@ export function environmentIdOf(
 }
 
 /**
- * Whether this is a cloud Studio: an environment id is set, or the Studio
- * already recorded that it is a v2-required cloud Studio (the sticky marker).
- * The owner gate and the signature mode use this one test, so they can never
- * disagree.
+ * Whether this is a cloud Studio: an environment id is set. The owner gate
+ * and the agent's identity use this one test, so they can never disagree.
  */
 export function isCloudStudio(
   config: { environmentId?: unknown } | undefined,
-  workdir?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (environmentIdOf(config, env)) return true;
-  return workdir ? Boolean(readSigningMarker(workdir)) : false;
+  return Boolean(environmentIdOf(config, env));
 }
 
-export interface StudioSigningPlan {
-  cloud: boolean;
-  mode: StudioSignatureMode;
-  /** A new cloud Studio: the marker is not written yet. */
-  fresh: boolean;
-  environmentId?: string;
+interface CreatePolicyClient {
+  getCreateSignaturePolicy(): Promise<StudioSignatureMode>;
 }
+
+const modes = new WeakMap<object, Promise<StudioSignatureMode>>();
 
 /**
- * Decide the signature mode for this boot, without writing anything.
- *
- * - marker present → `v2-required` (sticky, even without an environment id);
- * - cloud and no reactor has ever run → `v2-required` (a new Studio);
- * - otherwise → `legacy` (local Studios and cloud Studios from before the
- *   marker keep working exactly as today).
+ * The create policy of the switchboard the reactor is attached to, read once
+ * per client (a failed read is retried on the next call). The first read logs
+ * one error when the policy does not fit the Studio: a cloud Studio on a
+ * `legacy` switchboard, or a local Studio, which writes unsigned, on a
+ * `v2-required` one. The Studio still starts.
  */
-export function planStudioSigning(
-  workdir: string,
+export function studioSignatureMode(
+  reactor: { client: unknown },
   config: { environmentId?: unknown } | undefined,
+  log?: { error?: (msg: string) => void },
   env: NodeJS.ProcessEnv = process.env,
-): StudioSigningPlan {
-  const environmentId = environmentIdOf(config, env);
-  const marker = readSigningMarker(workdir);
-  if (marker) {
-    return {
-      cloud: true,
-      mode: "v2-required",
-      fresh: false,
-      environmentId: environmentId ?? marker.environmentId,
-    };
-  }
-  const cloud = Boolean(environmentId);
-  const fresh = cloud && !hasReactorStore(workdir);
-  return {
-    cloud,
-    mode: fresh ? "v2-required" : "legacy",
-    fresh,
-    environmentId,
-  };
-}
-
-/**
- * Whether the v2 mode can run. TODO(B3): the Cli attaches to a remote
- * switchboard without the agent's signer (`runCli` passes none, and
- * `powerhouse:writes:ready` never fires), so a v2-required Studio could not
- * sign one write. B3 brings the signer and token through `runCli`.
- */
-export const STUDIO_V2_SIGNING: boolean = false;
-
-/**
- * The plan this boot runs with: {@link planStudioSigning} while
- * {@link STUDIO_V2_SIGNING} is on, else `legacy` for every Studio. The sticky
- * marker guarded the embedded store, which the remote path does not use: its
- * documents live on the switchboard.
- */
-export function activeStudioSigning(
-  workdir: string,
-  config: { environmentId?: unknown } | undefined,
-  env: NodeJS.ProcessEnv = process.env,
-): StudioSigningPlan {
-  const plan = planStudioSigning(workdir, config, env);
-  if (STUDIO_V2_SIGNING || plan.mode === "legacy") return plan;
-  return { ...plan, mode: "legacy", fresh: false };
-}
-
-/**
- * Make the planned mode sticky. Called before the reactor is built: a failure
- * here stops the boot of a new cloud Studio rather than letting it create a
- * legacy drive that could never become signed.
- */
-export function commitStudioSigningPlan(
-  workdir: string,
-  plan: StudioSigningPlan,
-): void {
-  if (!plan.fresh) return;
-  writeSigningMarker(workdir, plan.environmentId);
+): Promise<StudioSignatureMode> {
+  const client = reactor.client as CreatePolicyClient;
+  const known = modes.get(client);
+  if (known) return known;
+  const mode = client.getCreateSignaturePolicy().then((policy) => {
+    const cloud = isCloudStudio(config, env);
+    if (cloud && policy === "legacy") {
+      log?.error?.(
+        "[signing] this cloud Studio's switchboard creates legacy documents: the agent signs, but writes no legacy document. Run it on a switchboard with createSignaturePolicy v2-required.",
+      );
+    } else if (!cloud && policy === "v2-required") {
+      log?.error?.(
+        "[signing] the switchboard creates v2-required documents, but a local Studio writes unsigned, so its writes are refused. Set VETRA_ENVIRONMENT_ID to sign as the agent, or run a legacy switchboard (hosts/switchboard).",
+      );
+    }
+    return policy;
+  });
+  modes.set(client, mode);
+  mode.catch(() => modes.delete(client));
+  return mode;
 }

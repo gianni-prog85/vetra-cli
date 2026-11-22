@@ -21,9 +21,8 @@ import {
   type PreviewServerHandle,
 } from "../preview-server/index.js";
 import { setRequireAdminIdentity } from "../auth/renown.js";
-import { isCloudStudio } from "../auth/studio-mode.js";
-import { resolveCloudConfig } from "../cloud/config.js";
-import { resolveStudioRenownUrl } from "../lifecycle/connect-drive-url.js";
+import { isCloudStudio, studioSignatureMode } from "../auth/studio-mode.js";
+import { resolveCloudConfig, resolveStudioRenownUrl } from "../cloud/config.js";
 import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
 import { DEFAULT_PH_VERSION } from "../ph-version.gen.js";
 import { VETRA_CLI_VERSION } from "../version-banner.js";
@@ -55,10 +54,21 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
     }
 
     const { renownUrl } = resolveCloudConfig(ctx.context.config);
-    // Cloud Studio (the environment id, or the sticky v2 marker): the agent's
-    // Renown identity must be an ADMINS wallet. Same test as the signing mode.
-    const cloud = isCloudStudio(ctx.context.config, workdir);
+    // Cloud Studio (an environment id): the agent's Renown identity must be
+    // an ADMINS wallet. Same test as the agent's identity on the attach.
+    const cloud = isCloudStudio(ctx.context.config);
     setRequireAdminIdentity(cloud);
+    // The switchboard's create policy against that identity, read once at
+    // start without waiting: a mismatch is logged, never a reason not to start.
+    const drive = await getEmbeddedDrive(ctx.commandContext);
+    if (drive) {
+      void studioSignatureMode(drive.reactor, ctx.context.config, ctx.context.log).catch(
+        (err: unknown) =>
+          ctx.context.log?.warn?.(
+            `[signing] could not read the switchboard's create policy: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+      );
+    }
 
     try {
       ctx.state.handle = await startPreviewServer({

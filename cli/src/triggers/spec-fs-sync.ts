@@ -28,7 +28,7 @@ import {
   SPECS_DIRNAME,
 } from "../helpers/spec-drive-sync.js";
 import { defineTrigger } from "../framework.js";
-import { activeStudioSigning, type StudioSignatureMode } from "../auth/studio-mode.js";
+import { studioSignatureMode } from "../auth/studio-mode.js";
 
 interface TriggerState {
   changed: Set<string>;
@@ -188,6 +188,13 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
           .join(", ")}`,
       );
       try {
+        // A v2-required switchboard never gets unsigned files replayed into
+        // its drive.
+        const signatureMode = await studioSignatureMode(
+          reactor,
+          ctx.context.config,
+          log,
+        );
         await applyFsChangesToReactor(
           paths,
           ctx.context.workdir,
@@ -195,10 +202,12 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
           ctx.state.driveId,
           log,
           (filePath, docId) => ctx.state.docIdByPath.set(filePath, docId),
-          { signatureMode: signatureModeOf(ctx.context.config, ctx.context.workdir) },
+          { signatureMode },
         );
-      } catch {
-        // logged in helper
+      } catch (err) {
+        log?.error?.(
+          `[spec-fs-sync] sync of ${paths.length} file(s) failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -234,12 +243,3 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
     return null;
   },
 });
-
-/** The signature mode for this Studio's files (a signed Studio never replays
- * unsigned files into its drive). */
-function signatureModeOf(
-  config: Record<string, unknown>,
-  workdir: string,
-): StudioSignatureMode {
-  return activeStudioSigning(workdir, config).mode;
-}

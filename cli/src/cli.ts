@@ -24,8 +24,6 @@ import { reactorProject, proxyBasePathHook } from './services/reactor-project.js
 import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
-import { connectDriveUrlOnSwitchboardReady } from './lifecycle/connect-drive-url.js';
-import { studioBootstrapTrigger } from './triggers/studio-bootstrap.js';
 import { connectExternalPackagesLayerOrder } from './lifecycle/connect-layer-order.js';
 import { DEFAULT_PREVIEW_SERVER_PORT } from './preview-server/index.js';
 import { genGuard } from './lifecycle/gen-guard.js';
@@ -43,8 +41,9 @@ import { existingStudioUpgradeTrigger } from './product/upgrade-existing.js';
 // @clint:end imports
 import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
+import { studioIdentity } from './auth/studio-identity.js';
 
-// The package root: the Connect stamping hooks write into its dist/connect.
+// The package root: the layer-order hook patches its dist/connect.
 const CONNECT_ASSETS_ROOT = CLI_ROOT;
 
 // Every model the reactor client reduces and signs with.
@@ -90,9 +89,6 @@ export const cli = defineCli({
     previewServerTrigger,
     studioUrlTrigger,
     studioRedirectTrigger,
-    // New cloud Studio: creates its v2-required drive once the agent is
-    // authorized (first-run creation order, Task 5.SIG).
-    studioBootstrapTrigger({ vetraAppDir: CONNECT_ASSETS_ROOT }),
     productSupervisorTrigger,
     productRequestsTrigger,
     liveHealthTrigger,
@@ -259,9 +255,6 @@ export const cli = defineCli({
     tsCheck(),
     // The agent's tool schemas mark the spec inputs it can't leave out.
     agentRequiredInputs(),
-    connectDriveUrlOnSwitchboardReady({
-      vetraAppDir: CONNECT_ASSETS_ROOT,
-    }),
     connectExternalPackagesLayerOrder({
       vetraAppDir: CONNECT_ASSETS_ROOT,
     }),
@@ -298,20 +291,20 @@ export const cli = defineCli({
 // @clint:begin reactor
 // The Cli attaches to a running switchboard: a host runner (or the bin, with
 // VETRA_SWITCHBOARD_URL) hands it the drive address and the reactor holds
-// `remote`. No signer comes with it, so the cloud v2 mode is off
-// (STUDIO_V2_SIGNING in auth/studio-mode.ts). TODO(B3): signer and token
-// through runCli, and a `remote` that reads the workdir and config.
+// `remote`, built at attach: a cloud Studio adds the agent's Renown identity
+// (auth/studio-identity.ts), a local one writes unsigned.
 cli.configureReactor({
   create: async () => {
     throw new Error(
       `${CLI_NAME} attaches to a switchboard: run it from its host (ph run studio), or set VETRA_SWITCHBOARD_URL to a drive address (<switchboard>/d/<slug>).`,
     );
   },
-  remote: {
+  remote: async (setup) => ({
     documentModels: studioDocumentModels,
     drive: { name: 'Home', preferredEditor: 'vetra-studio' },
     subscriptions: {},
-  },
+    ...(await studioIdentity(setup)),
+  }),
 });
 // @clint:end reactor
 

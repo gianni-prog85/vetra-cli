@@ -106,7 +106,7 @@ the files read the same when the package supplies them to another project.
 
 | Host | Runner | What it is |
 |---|---|---|
-| `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (the Cli attaches without a signer until B3). Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
+| `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (a local Studio's Cli attaches without a signer). Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
 | `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: dist/connect` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only |
 | `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
@@ -148,11 +148,13 @@ The `@satisfies {PHHost}` tag sits on the exported expression: in front of
 
 ### Reactor (remote attach)
 
-`cli.configureReactor` in `cli/src/cli.ts` declares `remote`: the document
-models (this package's six, `@powerhousedao/vetra`'s and clint-common's), the
-drive `Home` (`preferredEditor: vetra-studio`, found by name or created) and
-the subscriptions. The runner attaches with clint's `attachDefaultReactor`:
-a `GraphQLReactorClient` on the switchboard, `personalDriveId` = the `Home`
+`cli.configureReactor` in `cli/src/cli.ts` declares `remote` as a function
+clint's runner calls with the setup context at attach: the document models
+(this package's six, `@powerhousedao/vetra`'s and clint-common's), the drive
+`Home` (`preferredEditor: vetra-studio`, found by name; the switchboard host
+declares it) and the subscriptions, plus, in a cloud Studio, the agent's
+identity. The runner attaches with clint's `attachDefaultReactor`: a
+`GraphQLReactorClient` on the switchboard, `personalDriveId` = the `Home`
 drive, no `_module`. `create` only throws: vetra builds no in-process
 reactor.
 
@@ -160,10 +162,24 @@ The Home drive holds: chat session documents, spec documents
 (mirrored from the reactor-project filesystems by the spec-sync
 triggers), and any other domain content the studio surfaces.
 
-The remote path has limits until B3 (see "Open gaps"): no signer, so the
-cloud v2 signing mode is off (`STUDIO_V2_SIGNING` in
-`cli/src/auth/studio-mode.ts`), and several client calls are missing on
-`GraphQLReactorClient`.
+**Signing.** A cloud Studio (`VETRA_ENVIRONMENT_ID` or
+`config.environmentId`; `isCloudStudio` in `cli/src/auth/studio-mode.ts`)
+attaches with the agent's Renown identity (`cli/src/auth/studio-identity.ts`):
+`signer` = the workdir's Renown signer, `tokenProvider` = its bearer while it
+has a user, `onSignerChange` = Renown's `user` event, `legacyDocuments:
+"refuse"`. clint hands them to its writes, emits `powerhouse:writes:ready`
+when the owner authorizes the agent, and reconnects the realtime socket with
+the new bearer. A local Studio passes none: no keypair is written at start,
+and writes go out unsigned. While the signer has no user every write is
+refused, a legacy one included (clint documents this limit), so a signer goes
+only to a cloud Studio, whose switchboard creates `v2-required` documents.
+
+The signature mode of the spec writes is the switchboard's create policy
+(`studioSignatureMode`: `client.getCreateSignaturePolicy()`, read once per
+client). The Cli plans no mode, writes no marker and creates no drive: the
+Studio drive is host data in both modes. A cloud Studio on a `legacy`
+switchboard, or a local one on a `v2-required` switchboard, logs one
+`[signing]` error at start and runs on.
 
 ### Switchboard
 
@@ -206,11 +222,8 @@ still carries the empty pre-edit manifest, so Connect falls back to
 baked `powerhouse.config.json` per request (`serve`): the Studio drive
 and the remote backend come from the switchboard's outputs, written as
 `${origin}/d/studio` because Connect proxies the switchboard. Nothing is
-stamped into `dist/connect` for it. The `connect-drive-url` lifecycle hook
-(`cli/src/lifecycle/connect-drive-url.ts`) still exists but stays idle:
-it waits for `powerhouse:switchboard:ready`, which only an embedded
-switchboard emits. So it writes no `studio.config.json` either, and the
-SPA falls back to `127.0.0.1:5180` for the local API.
+stamped into `dist/connect` for it, and no `studio.config.json` is written:
+the SPA falls back to `127.0.0.1:5180` for the local API.
 
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
@@ -744,20 +757,10 @@ Route sources:
 - **Static `proxyRoutes`** — in-process servers the ServiceManager doesn't
   know about; vetra registers `/preview` → preview-server (`:5180`).
 
-Browser-facing URL policy, per consumer. The `connect-drive-url` hook
-stamps absolute URLs into the prebuilt Studio bundle on
-`powerhouse:switchboard:ready` (placeholder tokens on first run, the
-last-applied value afterwards; one cache file per token):
+Browser-facing URL policy, per consumer. Nothing stamps the proxy's
+address into the Studio bundle, so the Studio SPA and the preview server
+are reached directly:
 
-- **vetra-studio (embedded Connect)** — served at proxy `/`; the hook
-  stamps the *proxied* drive URL
-  (`http://localhost:8090/switchboard/d/<id>`) from the extended
-  switchboard-ready event payload.
-- **preview-server** — the hook stamps `<proxy>/preview` over
-  `PREVIEW_SERVER_URL_PLACEHOLDER` (a literal in the Studio's
-  `preview-server-client.ts`; direct loopback URL when the proxy is
-  off). Vite-dev of the Studio falls back to direct `127.0.0.1:5180`
-  via `import.meta.env.DEV`.
 - **BUILD iframe (reactor-project Connect)** — the service passes
   `ph vetra --base /reactor-project/vetra-studio/` (see
   `REACTOR_PROJECT_CONNECT_PROXY_PATH`) so Vite emits self-contained
@@ -884,13 +887,10 @@ These are limitations of the current direction; not bugs.
   bundle), served by its own host from B2. The live preview path is
   reactor-project + Vite HMR, not dynamic package loading.
 
-- **The remote path until B3.** The runner passes no signer or token
-  and nothing emits `powerhouse:writes:ready`, so the cloud v2 signing
-  mode is off (`STUDIO_V2_SIGNING`, `activeStudioSigning` in
-  `cli/src/auth/studio-mode.ts`): every Studio runs `legacy`, and the
-  studio-bootstrap trigger and `studioReactorSigning` have no effect.
-  `configureReactor.remote` is static data, so nothing in it can depend
-  on the workdir or the config. `GraphQLReactorClient` lacks
+- **The remote path.** No host here runs a signed switchboard: a cloud
+  Studio's signing is checked by unit tests only (a `v2-required`
+  switchboard needs the project's `ph login` identity to create its
+  drive). `GraphQLReactorClient` lacks
   `createDocumentInDrive` (`product/upgrade-existing.ts`); it fails at
   run time, not in the type check: `ReactorContext.client` is typed as
   the full client. The spec sync and clint's folder operations use only

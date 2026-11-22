@@ -19,6 +19,27 @@ export function resolveCloudConfig(config: Pick<Config, "cloudRenownUrl">): {
 }
 
 /**
+ * The Renown the Studio's owner bearers are verified on: RENOWN_URL, else
+ * cloudRenownUrl (VETRA_CLOUD_RENOWN_URL), else undefined (the verifier's
+ * www.renown.id default). Warns when both are set and differ.
+ */
+export function resolveStudioRenownUrl(
+  renownUrlEnv: unknown,
+  cloudRenownUrl: unknown,
+  log: { warn: (msg: string) => void },
+): string | undefined {
+  const fromEnv = typeof renownUrlEnv === "string" ? renownUrlEnv.trim() : "";
+  const fromCloud =
+    typeof cloudRenownUrl === "string" ? cloudRenownUrl.trim() : "";
+  if (fromEnv && fromCloud && fromEnv !== fromCloud) {
+    log.warn(
+      `[renown] RENOWN_URL (${fromEnv}) and VETRA_CLOUD_RENOWN_URL (${fromCloud}) differ; the studio verifies owner sign-ins against RENOWN_URL.`,
+    );
+  }
+  return fromEnv || fromCloud || undefined;
+}
+
+/**
  * The cloud switchboard's GraphQL endpoint. No default: an unset switchboard
  * must fail loudly rather than silently talk to staging (which rejected prod
  * studios' credentials with 401).
