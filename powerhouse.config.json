@@ -19,14 +19,8 @@
       "packageName": "@powerhousedao/vetra",
       "version": "6.3.0-dev.6",
       "provider": "local"
-    },
-    {
-      "packageName": "@powerhousedao/vetra-cloud-package",
-      "version": "0.0.3-dev.93",
-      "provider": "local"
     }
   ],
-  "packageRegistryUrl": "https://registry.vetra.io/",
   "connect": {
     "renown": {
       "url": "https://www.renown.id/"

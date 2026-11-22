@@ -133,8 +133,12 @@ run records `.ph/run/{studio,switchboard,connect}.json` and the member logs
 
 The switchboard loads this package (from `dist/node` at `serve`, through
 the Vite loader at `dev`) and the packages of the project's
-`powerhouse.config.json` (clint-common, `@powerhousedao/vetra`,
-`vetra-cloud-package`). From another project
+`powerhouse.config.json` (clint-common and `@powerhousedao/vetra`, both
+local). The config names no `packageRegistryUrl`, so nothing is fetched
+from a registry. `@powerhousedao/vetra-cloud-package` stays a dependency
+but is no Studio package: its processors and subgraphs belong to the cloud
+switchboard, and the Studio's Deploy view imports its document models
+through `cloud-client/`. From another project
 (`ph run @powerhousedao/vetra-cli/studio`) that and Connect's `outDir` are
 read against the project, not the package: not supported yet.
 
