@@ -97,11 +97,19 @@ describe("POST /restart", () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
-  it("with a secret set, refuses a request without it", async () => {
+  it("with a secret set, a local Studio stays local; a proxied request needs the secret", async () => {
     process.env.VETRA_SESSION_EXPORT_SECRET = "s3cret";
-    expect((await restart(PROJECT)).status).toBe(401);
+    expect((await restart(PROJECT)).status).toBe(202);
     expect(
-      (await restart(PROJECT, { authorization: "Bearer s3cret" })).status,
+      (await restart(PROJECT, { "x-forwarded-for": "203.0.113.9" })).status,
+    ).toBe(401);
+    expect(
+      (
+        await restart(PROJECT, {
+          "x-forwarded-for": "203.0.113.9",
+          authorization: "Bearer s3cret",
+        })
+      ).status,
     ).toBe(202);
   });
 });

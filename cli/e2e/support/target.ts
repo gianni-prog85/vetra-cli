@@ -150,8 +150,19 @@ export function cliPaths(): { workdir?: string; log?: string } {
   };
 }
 
-/** The local API (preview server) of the Cli: `127.0.0.1:5180`. */
-export const LOCAL_API = "http://127.0.0.1:5180";
+/** The Cli's local API (preview server): an OS port, named by
+ * `previewServerUrl` in the Studio's `<baseUrl>/studio.config.json`. */
+export async function localApi(baseUrl: string): Promise<string> {
+  const res = await fetch(`${baseUrl}/studio.config.json`, {
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`${baseUrl}/studio.config.json: ${res.status}`);
+  const config = (await res.json()) as { previewServerUrl?: string };
+  if (!config.previewServerUrl) {
+    throw new Error(`${baseUrl}/studio.config.json names no previewServerUrl`);
+  }
+  return config.previewServerUrl;
+}
 
 /** One GraphQL request to the Studio switchboard through Connect's proxy
  * (`<baseUrl>/graphql`); throws on a transport or GraphQL error. */

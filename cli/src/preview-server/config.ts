@@ -4,10 +4,11 @@
  * The server runs alongside the vetra daemon and gives the embedded
  * vetra-studio editor a way to resolve, on each render, the live URL of the
  * currently previewed reactor-project document — and to start the project if
- * it isn't running yet. The port stays fixed by default so the browser side
- * can hardcode the base URL.
+ * it isn't running yet. It listens on an OS port, so two Studios on one
+ * machine never share one; the tab reads the address from
+ * `studio.config.json` (see `studio-config.ts`).
  */
-export const DEFAULT_PREVIEW_SERVER_PORT = 5180;
+export const DEFAULT_PREVIEW_SERVER_PORT = 0;
 
 export const PREVIEW_SERVER_HOST = "127.0.0.1";
 

@@ -1,14 +1,13 @@
 /**
  * Client-side bindings for the vetra preview-server.
  *
- * The server runs in the vetra daemon (separate process from Connect),
- * reached through the daemon's embedded proxy at `<proxy>/preview`. The
- * proxy URL isn't known at build time, so the daemon writes it into
- * `studio.config.json` (a sibling of `powerhouse.config.json`) on startup;
- * this module fetches that config and caches it once read (a failed fetch is
- * retried on the next call) — no JS asset is mutated.
- * A missing config (vite dev, or before the first write) falls back to the
- * preview-server's direct loopback port.
+ * The server runs in the vetra daemon (separate process from Connect) on an
+ * OS port of its own. The daemon writes its address and the Studio's origin
+ * into `studio.config.json`, which the Studio's Connect serves next to the
+ * bundle (read per request, 404 while missing); this module fetches it and
+ * caches it once read (a missing or failed read is retried on the next call)
+ * — no JS asset is mutated. Until it is read, nothing is sent: the local API's
+ * address is unknown, and a guessed port could be another Studio's.
  *
  * `ready` results carry a proxy-relative `proxiedUrl`; when the base is a
  * proxied `<proxy>/preview` URL we resolve it against the proxy origin so the
@@ -20,13 +19,17 @@
  *
  * Owner-only routes (everything but /healthz, /version, /resolve, /events and
  * /export/status) carry the signed-in user's Renown bearer, minted for this
- * Studio only: `aud` = the Studio's public origin, so a token is worthless at
- * any other Studio (or the switchboard, which refuses `aud` tokens). The daemon
- * checks the wallet against the Studio's owner (ADMINS); without it, 401.
- * No bearer is sent until studio.config.json has named the Studio's origin
- * (never to the 127.0.0.1 fallback).
+ * Studio only: `aud` = the Studio's origin as studio.config.json names it
+ * (`studioOrigin`, so `localhost` and `127.0.0.1` never disagree), sent to a
+ * direct base too. A token is worthless at any other Studio (or the
+ * switchboard, which refuses `aud` tokens). The daemon checks the wallet
+ * against the Studio's owner (ADMINS); without it, 401. No bearer is sent
+ * while the config names no origin.
  */
-const DIRECT_BASE = "http://127.0.0.1:5180";
+
+/** Thrown while studio.config.json has not named the local API. */
+export const LOCAL_API_UNKNOWN =
+  "The Studio's local API is not known yet (studio.config.json not served).";
 
 /** Mints the signed-in user's Renown bearer bound to `aud`; undefined/null
  *  when signed out. */
@@ -92,9 +95,8 @@ export function setPreviewAuthTokenProvider(
 async function ownerHeaders(): Promise<Record<string, string>> {
   try {
     const config = await resolvePreviewConfig();
-    if (!config.loaded || config.base === DIRECT_BASE) return {};
-    const aud = new URL(config.base).origin;
-    const token = await tokenProvider(aud);
+    if (!config.loaded || !config.studioOrigin) return {};
+    const token = await tokenProvider(config.studioOrigin);
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};
@@ -108,20 +110,26 @@ function isRefused(status: number): boolean {
   return status === 401 || status === 403;
 }
 
-// Vite dev serves the editor from source, where no daemon writes the config —
-// use the direct port. Safe access: package builds may lack import.meta.env.
-let devOverride: boolean | undefined;
-const isDev = () =>
-  devOverride ?? (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+// Component tests (vitest) render the editor with no Connect serving the
+// config: it reads as a local Studio's (no environment id) whose local API is
+// unknown, without a request. Safe access: package builds may lack
+// import.meta.env.
+let skipOverride: boolean | undefined;
+const skipConfigRead = () =>
+  skipOverride ??
+  (import.meta as { env?: { MODE?: string } }).env?.MODE === "test";
 
-/** Tests only: force the vite-dev (direct port) path on or off. */
-export function setPreviewDevModeForTests(dev: boolean | undefined): void {
-  devOverride = dev;
+/** Tests only: read studio.config.json (false) or skip it (true). */
+export function setPreviewConfigSkipForTests(skip: boolean | undefined): void {
+  skipOverride = skip;
 }
 
 interface PreviewConfig {
-  // Absolute preview-server base (proxied `<proxy>/preview`, or a direct URL).
-  base: string;
+  // Absolute preview-server base (proxied `<proxy>/preview`, or a direct URL);
+  // null until studio.config.json names it.
+  base: string | null;
+  // The Studio's origin: the `aud` of owner bearers.
+  studioOrigin?: string;
   // Origin+prefix to resolve proxy-relative `proxiedUrl`s against when the base
   // is a proxied `/preview` mount; undefined for a direct/loopback base.
   proxyBase?: string;
@@ -182,7 +190,7 @@ export function memoizeUntilLoaded<T extends { loaded: boolean }>(
 const resolvePreviewConfig = memoizeUntilLoaded(loadPreviewConfig);
 
 async function loadPreviewConfig(): Promise<PreviewConfig> {
-  if (isDev()) return { base: DIRECT_BASE, loaded: true };
+  if (skipConfigRead()) return { base: null, loaded: true };
   try {
     const res = await fetch(`${bundleBase()}studio.config.json`, {
       cache: "no-store",
@@ -190,15 +198,19 @@ async function loadPreviewConfig(): Promise<PreviewConfig> {
     if (res.ok) {
       const cfg = (await res.json()) as {
         previewServerUrl?: string;
+        studioOrigin?: string;
         environmentId?: string;
         packageRegistryUrl?: string;
         cloudSwitchboardUrl?: string;
         studioDriveId?: string;
       };
+      // A file without the local API's address is one written for another
+      // purpose: read again next time.
       if (cfg.previewServerUrl) {
         return {
-          base: cfg.previewServerUrl,
+          base: cfg.previewServerUrl.replace(/\/+$/, ""),
           proxyBase: computeProxyBase(cfg.previewServerUrl),
+          studioOrigin: cfg.studioOrigin,
           environmentId: cfg.environmentId,
           studioDriveId: cfg.studioDriveId,
           packageRegistryUrl: cfg.packageRegistryUrl,
@@ -206,17 +218,18 @@ async function loadPreviewConfig(): Promise<PreviewConfig> {
           loaded: true,
         };
       }
-      return {
-        base: DIRECT_BASE,
-        environmentId: cfg.environmentId,
-        studioDriveId: cfg.studioDriveId,
-        loaded: true,
-      };
     }
   } catch {
-    // fall through to the direct loopback base
+    // not served yet: read again on the next call
   }
-  return { base: DIRECT_BASE, loaded: false };
+  return { base: null, loaded: false };
+}
+
+/** The local API's base, or `LOCAL_API_UNKNOWN` while the config isn't read. */
+async function previewBase(): Promise<{ base: string; proxyBase?: string }> {
+  const { base, proxyBase } = await resolvePreviewConfig();
+  if (!base) throw new Error(LOCAL_API_UNKNOWN);
+  return { base, proxyBase };
 }
 
 /** Whether studio.config.json was read, and the Studio's own cloud id in it. */
@@ -306,7 +319,7 @@ export async function fetchResolve(args: {
   const params = new URLSearchParams({ project: args.project, doc: args.doc });
   if (args.drive) params.set("drive", args.drive);
   if (args.home) params.set("home", "1");
-  const { base, proxyBase } = await resolvePreviewConfig();
+  const { base, proxyBase } = await previewBase();
   const res = await fetch(`${base}/resolve?${params}`, { signal: args.signal });
   if (!res.ok) {
     throw new Error(`preview-server /resolve: ${res.status} ${res.statusText}`);
@@ -329,7 +342,7 @@ export async function fetchProjectPackage(args: {
   signal?: AbortSignal;
 }): Promise<ProjectPackageResult> {
   const params = new URLSearchParams({ project: args.project });
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/project-package?${params}`, {
     headers: await ownerHeaders(),
     signal: args.signal,
@@ -364,7 +377,7 @@ export async function fetchReleaseStatus(args: {
   signal?: AbortSignal;
 }): Promise<ReleaseStatusResult> {
   const params = new URLSearchParams({ project: args.project });
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/release-status?${params}`, {
     headers: await ownerHeaders(),
     signal: args.signal,
@@ -400,7 +413,7 @@ export async function publishProject(args: {
   signal?: AbortSignal;
 }): Promise<PublishProjectResult> {
   const params = new URLSearchParams({ project: args.project });
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/publish?${params}`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -426,7 +439,7 @@ export async function fetchStart(args: {
   signal?: AbortSignal;
 }): Promise<StartResult> {
   const params = new URLSearchParams({ project: args.project });
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/start?${params}`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -460,7 +473,7 @@ export async function fetchRestart(args: {
   signal?: AbortSignal;
 }): Promise<StartResult | null> {
   const params = new URLSearchParams({ project: args.project });
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/restart?${params}`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -484,7 +497,7 @@ export type VersionInfo = { vetraCli: string; ph: string };
 
 /** Fetch the daemon's vetra + ph versions (served from /version). */
 export async function fetchVersion(signal?: AbortSignal): Promise<VersionInfo> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/version`, { signal });
   if (!res.ok) {
     throw new Error(`preview-server /version: ${res.status} ${res.statusText}`);
@@ -497,7 +510,7 @@ export async function fetchVersion(signal?: AbortSignal): Promise<VersionInfo> {
 export async function fetchWorkspaceExport(
   signal?: AbortSignal,
 ): Promise<Response> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   return fetch(`${base}/export?workspace=1`, {
     headers: await ownerHeaders(),
     signal,
@@ -509,7 +522,7 @@ export async function fetchWorkspaceExport(
 export async function fetchExportStatus(
   signal?: AbortSignal,
 ): Promise<{ authorized: boolean }> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/export/status`, {
     headers: await ownerHeaders(),
     signal,
@@ -536,7 +549,7 @@ export type AuthState = {
 export async function fetchAuthStatus(
   signal?: AbortSignal,
 ): Promise<AuthState> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/auth/status`, {
     headers: await ownerHeaders(),
     signal,
@@ -552,7 +565,7 @@ export async function fetchAuthStatus(
 /** Start a login for the agent's identity: the daemon builds the renown.id
  * console URL (returned as `pending.loginUrl`) and stashes the session. */
 export async function startAuth(signal?: AbortSignal): Promise<AuthState> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/auth/start`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -575,7 +588,7 @@ export async function confirmAuth(args?: {
   const params = new URLSearchParams();
   if (args?.waitMs != null) params.set("wait", String(args.waitMs));
   const qs = params.toString();
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/auth/confirm${qs ? `?${qs}` : ""}`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -591,7 +604,7 @@ export async function confirmAuth(args?: {
 
 /** Clear the stored credential (the agent's keypair/DID is kept). */
 export async function logoutAuth(signal?: AbortSignal): Promise<AuthState> {
-  const { base } = await resolvePreviewConfig();
+  const { base } = await previewBase();
   const res = await fetch(`${base}/auth/logout`, {
     method: "POST",
     headers: await ownerHeaders(),
@@ -611,9 +624,15 @@ let sharedSource: EventSource | undefined;
 let creatingSource = false;
 const listeners = new Set<Listener>();
 
+/** How long the tab waits before it reads studio.config.json again. */
+const CONFIG_RETRY_MS = 2_000;
+
 // Opens the shared EventSource once the config resolves. Guards against a
 // concurrent open (the config fetch is async) and a closed prior source.
-function ensureSource(): void {
+// While the config names no local API (the Cli not up yet), it tries again
+// as long as someone listens; the listeners then hear "open" once, so they
+// read what they missed.
+function ensureSource(retried = false): void {
   if (typeof window === "undefined" || typeof EventSource === "undefined")
     return;
   if (sharedSource && sharedSource.readyState !== EventSource.CLOSED) return;
@@ -622,7 +641,22 @@ function ensureSource(): void {
   void resolvePreviewConfig().then(({ base }) => {
     creatingSource = false;
     if (sharedSource && sharedSource.readyState !== EventSource.CLOSED) return;
+    if (!base) {
+      setTimeout(() => {
+        if (listeners.size > 0) ensureSource(true);
+      }, CONFIG_RETRY_MS);
+      return;
+    }
     const src = new EventSource(`${base}/events`);
+    if (retried) {
+      src.addEventListener(
+        "open",
+        () => {
+          for (const fn of listeners) fn("open");
+        },
+        { once: true },
+      );
+    }
     for (const type of [
       "service:starting",
       "service:ready",

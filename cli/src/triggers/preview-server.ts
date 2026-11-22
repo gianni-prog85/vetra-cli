@@ -9,17 +9,25 @@
  *   - `/events` (SSE) needs to bridge the framework's event bus to browser
  *     EventSource clients, which `ctx.context.on` exposes.
  *
- * `setup()` boots the http server and captures the runtime handles in
- * closures shared with the http handlers. `poll()` returns null forever —
- * this trigger never emits work items; it exists purely for its setup-
- * lifetime side effects. `teardown()` closes the server on daemon shutdown.
+ * `setup()` boots the http server on an OS port (each Studio its own) and
+ * writes `studio.config.json` (`preview-server/studio-config.ts`), which the
+ * Studio's Connect serves to the tab. `poll()` returns null forever — this
+ * trigger never emits work items; it exists purely for its setup-lifetime
+ * side effects. `teardown()` removes the file and closes the server.
  */
 import { defineTrigger } from "../framework.js";
 import {
   DEFAULT_PREVIEW_SERVER_PORT,
+  PREVIEW_SERVER_HOST,
   startPreviewServer,
   type PreviewServerHandle,
 } from "../preview-server/index.js";
+import {
+  removeStudioConfig,
+  studioConfigFor,
+  studioConfigPath,
+  writeStudioConfig,
+} from "../preview-server/studio-config.js";
 import { setRequireAdminIdentity } from "../auth/renown.js";
 import { isCloudStudio, studioSignatureMode } from "../auth/studio-mode.js";
 import { resolveCloudConfig, resolveStudioRenownUrl } from "../cloud/config.js";
@@ -30,12 +38,14 @@ import { VETRA_CLI_VERSION } from "../version-banner.js";
 
 interface TriggerState {
   handle: PreviewServerHandle | undefined;
+  /** The studio.config.json this Cli wrote, and the address it names. */
+  studioConfig: { file: string; previewServerUrl: string } | undefined;
 }
 
 export const previewServerTrigger = defineTrigger<TriggerState>({
   id: "preview-server",
   type: "condition",
-  state: () => ({ handle: undefined }),
+  state: () => ({ handle: undefined, studioConfig: undefined }),
 
   async setup(ctx) {
     const services = ctx.commandContext.services;
@@ -71,8 +81,9 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
       );
     }
 
+    let handle: PreviewServerHandle;
     try {
-      ctx.state.handle = await startPreviewServer({
+      handle = ctx.state.handle = await startPreviewServer({
         services,
         subscribe: (event, handler) => on(event, handler),
         workdir,
@@ -102,10 +113,36 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
       ctx.context.log?.error?.(
         `[preview-server] failed to start: ${err instanceof Error ? err.message : String(err)}`,
       );
+      return;
+    }
+
+    // Tell the tab where the local API is, through the Studio's Connect.
+    const previewServerUrl = `http://${PREVIEW_SERVER_HOST}:${handle.port}`;
+    const file = studioConfigPath();
+    try {
+      writeStudioConfig(
+        file,
+        studioConfigFor({
+          previewServerUrl,
+          studioUrl: studioUrlOf(services.list()),
+          studioDriveId: drive?.driveId,
+          config: ctx.context.config,
+          workdir,
+        }),
+      );
+      ctx.state.studioConfig = { file, previewServerUrl };
+      ctx.context.log?.debug?.(`[preview-server] ${previewServerUrl}, named in ${file}`);
+    } catch (err) {
+      ctx.context.log?.error?.(
+        `[preview-server] could not write ${file}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   },
 
   async teardown(ctx) {
+    const written = ctx.state.studioConfig;
+    if (written) removeStudioConfig(written.file, written.previewServerUrl);
+    ctx.state.studioConfig = undefined;
     await ctx.state.handle?.stop();
     ctx.state.handle = undefined;
   },

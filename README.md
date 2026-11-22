@@ -185,9 +185,10 @@ built `dist/connect` and its switchboard the built `dist/node`, with no
 watch. Rebuild (`pnpm build`, `pnpm build:connect`) and restart the stack:
 `ph-cli run studio --stop`, then `ph-cli run studio`. Don't `pkill` the
 processes: `--stop` stops the members in order.
-- **Ports (8090 / 8091 / 5180).** Connect (the Studio's address) is 8090,
-its switchboard 8091, the vetra local API 5180. A taken port moves to the
-next free one; the Cli prints the address it got (`Vetra Studio: <url>`).
+- **Ports (8090 / 8091).** Connect (the Studio's address) is 8090, its
+switchboard 8091. A taken port moves to the next free one; the Cli prints the
+address it got (`Vetra Studio: <url>`). The vetra local API takes an OS port;
+`<studio>/studio.config.json` names it (`previewServerUrl`).
 - **The BUILD pane says "Preview comes with the Preview run".** The project
 run is off by default: Studio starts no stack of the project's own (it would
 open the project's stores). Turn it on for a scaffolded project with

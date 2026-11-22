@@ -7,13 +7,16 @@ type Client = typeof ClientModule;
 async function loadClient(): Promise<Client> {
   vi.resetModules();
   const client = await import("./preview-server-client.js");
-  // Outside vite dev: the client reads studio.config.json (dev skips it).
-  client.setPreviewDevModeForTests(false);
+  // Read studio.config.json (component tests skip it).
+  client.setPreviewConfigSkipForTests(false);
   return client;
 }
 
 const STUDIO = "https://studio-1.vetra.example";
-let config: unknown = { previewServerUrl: `${STUDIO}/preview` };
+let config: unknown = {
+  previewServerUrl: `${STUDIO}/preview`,
+  studioOrigin: STUDIO,
+};
 
 type Call = { url: string; auth: string | null };
 let calls: Call[] = [];
@@ -28,7 +31,7 @@ let c: Client;
 let auds: string[] = [];
 
 beforeEach(async () => {
-  config = { previewServerUrl: `${STUDIO}/preview` };
+  config = { previewServerUrl: `${STUDIO}/preview`, studioOrigin: STUDIO };
   auds = [];
   c = await loadClient();
   calls = [];
@@ -101,15 +104,49 @@ describe("owner-only preview-server calls carry the user's Renown bearer", () =>
     expect(lastAuth("/auth/status")).toBeNull();
   });
 
-  it("never sends a bearer when studio.config.json didn't load (127.0.0.1 fallback)", async () => {
+  it("sends nothing while studio.config.json is missing (no guessed port)", async () => {
     config = null;
+    c = await loadClient();
+    signedIn();
+    await expect(c.fetchAuthStatus()).rejects.toThrow(c.LOCAL_API_UNKNOWN);
+    await expect(c.fetchResolve({ project: "p", doc: "d" })).rejects.toThrow(
+      c.LOCAL_API_UNKNOWN,
+    );
+    expect(calls.map((x) => x.url)).toEqual([
+      "/studio.config.json",
+      "/studio.config.json",
+    ]);
+    expect(auds).toEqual([]);
+
+    // Read again once the Cli has written it.
+    config = {
+      previewServerUrl: "http://127.0.0.1:61234",
+      studioOrigin: STUDIO,
+    };
+    await c.fetchAuthStatus();
+    expect(calls.at(-1)?.url).toBe("http://127.0.0.1:61234/auth/status");
+  });
+
+  it("a direct base gets the bearer too, bound to the Studio's origin", async () => {
+    config = {
+      previewServerUrl: "http://127.0.0.1:61234",
+      studioOrigin: "http://127.0.0.1:8093",
+    };
+    c = await loadClient();
+    signedIn();
+    await c.fetchAuthStatus();
+    expect(lastAuth("http://127.0.0.1:61234/auth/status")).toBe(
+      "Bearer tok-123",
+    );
+    expect(auds).toEqual(["http://127.0.0.1:8093"]);
+  });
+
+  it("no bearer when the config names no Studio origin", async () => {
+    config = { previewServerUrl: `${STUDIO}/preview` };
     c = await loadClient();
     signedIn();
     await c.fetchAuthStatus();
     expect(lastAuth("/auth/status")).toBeNull();
-    expect(calls.find((x) => x.url.includes("/auth/status"))?.url).toContain(
-      "127.0.0.1",
-    );
     expect(auds).toEqual([]);
   });
 

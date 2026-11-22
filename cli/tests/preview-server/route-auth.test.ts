@@ -284,12 +284,15 @@ describe("preview-server route gate", () => {
       expect(res.status).toBe(401);
     });
 
-    it("with an ADMINS list set it is no longer local: bearer required", async () => {
+    it("an ADMINS list (a project's .env may set one) keeps it local; the bearer works too", async () => {
       process.env.ADMINS = OWNER;
-      expect((await call("GET", "/auth/status")).status).toBe(401);
+      expect((await call("GET", "/auth/status")).status).toBe(200);
       expect(
         (await call("GET", "/auth/status", { authorization: "Bearer owner-token" })).status,
       ).toBe(200);
+      // Still loopback only.
+      const res = await call("GET", "/auth/status", { origin: "https://evil.example" });
+      expect(res.status).toBe(401);
     });
   });
 });

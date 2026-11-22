@@ -1,5 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchRestart } from "./preview-server-client.js";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  fetchRestart,
+  setPreviewConfigSkipForTests,
+} from "./preview-server-client.js";
+
+// Read studio.config.json (component tests skip it).
+beforeAll(() => setPreviewConfigSkipForTests(false));
 
 const urls: string[] = [];
 
@@ -9,8 +15,11 @@ function respond(status: number, body: unknown): void {
     "fetch",
     vi.fn((url: string) => {
       urls.push(url);
+      // The Cli's local API, as studio.config.json names it.
       const response = url.endsWith("studio.config.json")
-        ? new Response("{}", { status: 404 })
+        ? new Response(
+            JSON.stringify({ previewServerUrl: "http://127.0.0.1:61234" }),
+          )
         : new Response(JSON.stringify(body), { status });
       return Promise.resolve(response);
     }),

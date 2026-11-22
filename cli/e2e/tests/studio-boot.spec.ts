@@ -34,4 +34,18 @@ test.describe("Vetra studio — boot", () => {
       page.getByRole("heading", { name: "What do you want to build?" }),
     ).toBeVisible();
   });
+
+  test("Connect serves studio.config.json naming the Cli's local API", async () => {
+    const res = await fetch(`${run.baseUrl}/studio.config.json`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    const config = (await res.json()) as {
+      previewServerUrl?: string;
+      studioOrigin?: string;
+    };
+    expect(config.previewServerUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(config.studioOrigin).toBe(new URL(run.baseUrl).origin);
+    const version = await fetch(`${config.previewServerUrl}/version`);
+    expect(((await version.json()) as { vetraCli?: string }).vetraCli).toBeTruthy();
+  });
 });

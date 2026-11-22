@@ -19,7 +19,8 @@ and the Cli, booted once per run by `ph-cli run studio` in a temp dir.
   screen to build a todo-list and asserts the generated editor renders inside the
   BUILD-pane iframe (chat → agent → tools → reactor → studio). It waits for the
   project's preview on the Cli's local API (`GET
-  http://127.0.0.1:5180/resolve?project=<p>&home=1` = `ready`). Its first step,
+  <previewServerUrl>/resolve?project=<p>&home=1` = `ready`, the address from
+  `<baseUrl>/studio.config.json`). Its first step,
   `reactor-project-init`, runs `ph init` against the npm registry at this
   package's version, so it needs those versions published; expect it red until
   then.
@@ -84,7 +85,8 @@ removes the temp dir.
   holds its stdin: if the runner dies, the pipe closes and the stack stops itself.
 - **Ports.** The hosts ask for 8090 (Connect) and 8091 (switchboard); a taken port
   moves to the next free one, and the test reads the real URL from the boot log.
-  The Cli's preview server binds `127.0.0.1:5180`.
+  The Cli's preview server binds `127.0.0.1` on an OS port, which
+  `<baseUrl>/studio.config.json` names.
 
 ## Configure
 

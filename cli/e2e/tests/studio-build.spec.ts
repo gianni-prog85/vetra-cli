@@ -1,11 +1,11 @@
 import { expect, test, type FrameLocator, type Page } from "@playwright/test";
 import { assertNoReplayError, dismissCookieBanner, startBuild } from "../support/studio-page.js";
 import {
-  LOCAL_API,
   type StudioFixture,
   cliPaths,
   loadFixture,
   loadRun,
+  localApi,
 } from "../support/target.js";
 
 /**
@@ -26,7 +26,7 @@ const { log } = cliPaths();
 async function projectPreviewReady(project: string): Promise<boolean> {
   try {
     const params = new URLSearchParams({ project, home: "1" });
-    const res = await fetch(`${LOCAL_API}/resolve?${params}`, {
+    const res = await fetch(`${await localApi(run.baseUrl)}/resolve?${params}`, {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return false;

@@ -11,12 +11,14 @@
  *      opens can't be replayed here) — that verifies: JWT signature + expiry,
  *      then the wallet→app delegation credential on Renown, for a wallet in
  *      the pod's `ADMINS`;
- *   3. local mode only (no studio environment id, no `ADMINS`, no secret):
- *      a direct-loopback request with a loopback Host and browser origin.
- * A cloud Studio (environment id or `ADMINS` set) never takes path 3; with
- * `ADMINS` unset, or no known public origin, it refuses every bearer (fail
- * closed). Every bearer refusal is the same 401, so the gate is no oracle for
- * which wallet is the owner.
+ *   3. local mode only (no studio environment id): a direct-loopback request
+ *      with a loopback Host and browser origin. `ADMINS` or the secret do not
+ *      end local mode: a project's `.env` may set them, and a local Studio's
+ *      owner routes must not then answer 401 to its own tab.
+ * A cloud Studio (an environment id) never takes path 3; with `ADMINS` unset,
+ * or no known public origin, it refuses every bearer (fail closed). Every
+ * bearer refusal is the same 401, so the gate is no oracle for which wallet
+ * is the owner.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -492,8 +494,8 @@ export function createRequestAuthorizer(opts: RequestAuthOptions): RequestAuthor
     }
 
     const hasAdmins = (admins ?? "").trim().length > 0;
-    const localMode = !opts.cloud && !hasAdmins && !secret;
-    if (localMode && isLocalRequest(req)) return { ok: true, via: "local" };
+    // Local by the environment id alone (see the module comment).
+    if (!opts.cloud && isLocalRequest(req)) return { ok: true, via: "local" };
 
     const refused = { ok: false, status: 401, error: "unauthorized" } as const;
     if (!bearer) return refused;

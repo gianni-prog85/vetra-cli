@@ -28,7 +28,7 @@ of the open work.
                   │  ┌────────▼─────────────────┐    │             │
                   │  │ vetra local API          │    │             │
                   │  │ HTTP + SSE on 127.0.0.1  │    │             │
-                  │  │ :5180 — resolve/start/   │    │             │
+                  │  │ :<OS port> — resolve/    │    │             │
                   │  │ events (+ future surface)│    │             │
                   │  └──────────────────────────┘    │             │
                   └──────────────────────────────────┼─────────────┘
@@ -122,10 +122,11 @@ so the switchboard must declare that name or the Cli creates a second drive.
 the Cli works in the project root. `ph run studio dev` runs the members at
 `dev` (the Cli still at `run`, from the built `./cli`).
 
-Ports: 8090 Connect (the Studio's address), 8091 the switchboard, 5180 the
-vetra local API, 8092-8093 kept free for a preview run. Neither runner sets
-`strictPort`, so a taken port moves to the next free one and the outputs
-carry the real one.
+Ports: 8090 Connect (the Studio's address), 8091 the switchboard, an OS
+port for the vetra local API (named in `studio.config.json`, see "vetra
+local API"). Neither runner sets `strictPort`, so a taken port moves to the
+next free one and the outputs carry the real one: a second Studio on the
+same machine gets its own.
 
 Stores: `${userData}/.ph/vetra/reactor-storage` and
 `${userData}/.ph/vetra/read-storage` (PGlite), the switchboard's identity in
@@ -170,8 +171,8 @@ is needed: a switchboard without a keypair generates one at
 `studio` stack (same ports, and the members' run records
 `.ph/run/{switchboard,connect}.json` share names).
 
-1. Build once: `pnpm build`, then `pnpm build:connect`. Ports 8090, 8091
-   and 5180 free.
+1. Build once: `pnpm build`, then `pnpm build:connect`. Ports 8090 and 8091
+   free.
 2. Start it from this package's root (Git Bash); keep the data dir apart
    from the workdir, so the switchboard's keypair and the agent's
    (`<workdir>/.ph/vetra/agent/.keypair.json`) stay two identities:
@@ -192,16 +193,20 @@ is needed: a switchboard without a keypair generates one at
    and no `[signing]` error from the Cli. With an environment id the cloud
    triggers (product requests, live health) also run and log their failures
    against the made-up id.
-3. Authorize the agent before the first message. The tab's "Authorize
-   agent" gets 401: with an environment id the local API takes no loopback
-   pass, and the tab sends no bearer, because nothing writes
-   `studio.config.json`. The operator secret passes the gate instead:
+3. Authorize the agent before the first message. With an environment id
+   the local API takes no loopback pass: the tab's "Authorize agent" sends
+   the signed-in wallet's bearer bound to the Studio's origin
+   (`studioOrigin` in `studio.config.json`), which passes only for an
+   `ADMINS` wallet (not run yet). The operator secret passes the gate too;
+   the local API's address is `previewServerUrl` in
+   `http://127.0.0.1:8090/studio.config.json`:
 
    ```sh
    S=$VETRA_SESSION_EXPORT_SECRET
-   curl -s -X POST -H "Authorization: Bearer $S" http://127.0.0.1:5180/auth/start
+   API=<previewServerUrl from http://127.0.0.1:8090/studio.config.json>
+   curl -s -X POST -H "Authorization: Bearer $S" $API/auth/start
    # open pending.loginUrl from the answer, approve with the ADMINS wallet
-   curl -s -X POST -H "Authorization: Bearer $S" "http://127.0.0.1:5180/auth/confirm?wait=60000"
+   curl -s -X POST -H "Authorization: Bearer $S" "$API/auth/confirm?wait=60000"
    # {"authenticated":true,"address":"0x…"}; "not-owner": that wallet is not in ADMINS
    ```
 
@@ -305,9 +310,9 @@ baked `powerhouse.config.json` per request (`serve`): the Studio drive
 and the remote backend come from the switchboard's outputs, written as
 `${origin}/d/studio` because Connect proxies the switchboard. Nothing is
 stamped into `dist/connect` for it. Connect serves `/studio.config.json`
-from `${userData}/.ph/vetra/studio.config.json` (`runner.serveFiles`); while
-nothing writes that file it is a 404 and the SPA falls back to
-`127.0.0.1:5180` for the local API.
+from `${userData}/.ph/vetra/studio.config.json` (`runner.serveFiles`), which
+the Cli writes once its local API listens (see "vetra local API"); while it
+is missing it is a 404 and the SPA sends nothing to the local API.
 
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
@@ -323,10 +328,19 @@ via the vetra drive's `preferredEditor` field. The editor renders:
 
 ### vetra local API
 
-HTTP + SSE service hosted inside the vetra node process on a fixed
-loopback port. Default `127.0.0.1:5180`; see
-`cli/src/preview-server/config.ts` for the constant. The Studio SPA calls
-it directly. The loopback bind is not relied on as the access control: a
+HTTP + SSE service hosted inside the vetra node process on `127.0.0.1` and
+an OS port, so two Studios on one machine never share one. Once it
+listens the Cli writes `studio.config.json` at
+`${userData}/.ph/vetra/studio.config.json` (`preview-server/studio-config.ts`;
+`PH_USER_DATA_DIR`, else the project root, as the host runners resolve it)
+and removes it at its end (only while it still names this Cli's address).
+It holds `previewServerUrl` (`http://127.0.0.1:<port>`), `studioOrigin`
+(the Connect member's origin), `studioDriveId`, and for a cloud Studio
+`environmentId`, `cloudSwitchboardUrl` and `packageRegistryUrl`. The
+Studio's Connect serves it (`runner.serveFiles`, read per request, 404 while
+missing); the SPA reads it and calls the local API directly, and sends
+nothing while it is missing (a guessed port could be another Studio's). The
+loopback bind is not relied on as the access control: a
 deployment may put a proxy in front, so every route that isn't needed to
 render a preview is owner-gated per request (see "Preview-server access
 gate" below). CORS is `*`: the gate is a bearer header, never an ambient
@@ -424,9 +438,9 @@ sign-in. It passes when the request carries:
 2. the signed-in user's Renown bearer, minted by the studio client **for this
    Studio only**: `aud` = the Studio's origin, read per request from the
    ready Connect member's `endpoints.connect` (`studioUrlOf`; the client
-   would take it from `previewServerUrl` in `studio.config.json`, which
-   nothing writes now, so the client sends no bearer and a cloud Studio's
-   owner routes are refused until per-project config, C1). The gate requires that exact `aud` — a token with
+   takes it from `studioOrigin` in `studio.config.json`, written from the
+   same member, so `localhost` and `127.0.0.1` never disagree, and sends it
+   to a direct base too). The gate requires that exact `aud` — a token with
    no `aud` (e.g. one minted for the switchboard, which refuses `aud`
    tokens) or another Studio's `aud` fails, so a token a malicious Studio
    captures can't be replayed here. The binding is to the **origin**
@@ -447,8 +461,9 @@ sign-in. It passes when the request carries:
    verified are capped at 3 lookups/min each and 30/min overall. A non-owner
    wallet never costs a lookup. Residual: a flood of fresh keys can delay an
    owner's *first* verification on a new device by up to a minute; or
-3. local mode only — no studio environment id (`VETRA_ENVIRONMENT_ID`), no
-   `ADMINS`, no secret: a request from a loopback socket whose every
+3. local mode only — no studio environment id (`VETRA_ENVIRONMENT_ID`;
+   `ADMINS` or the secret do not end it, since a project's `.env` may set
+   them): a request from a loopback socket whose every
    `x-forwarded-for` hop is loopback (a proxy in front appends the real
    client address, so its LAN clients are refused), whose `Host`
    and `x-forwarded-host` are loopback, and whose `Origin`, if any, is
@@ -458,9 +473,9 @@ A cloud Studio never takes path 3, and with `ADMINS` unset (or no known
 public origin) refuses every bearer (fail closed). Every refusal is the same
 `401 {error:"unauthorized"}` — no oracle for which wallet is the owner. The
 studio client (`editors/vetra-studio/.../hooks/preview-server-client.ts`) mints the
-bearer from the Connect Renown session (`window.ph.renown`, `aud` = Studio
-origin) on every owner-only call, and sends none while `studio.config.json`
-hasn't loaded (the `127.0.0.1` fallback).
+bearer from the Connect Renown session (`window.ph.renown`, `aud` =
+`studioOrigin`) on every owner-only call, and sends none while
+`studio.config.json` names no origin.
 
 `POST /auth/confirm` in a cloud Studio keeps a completed agent login only when
 its wallet is in `ADMINS`; any other wallet is logged straight back out
@@ -757,8 +772,9 @@ the Cli runner (`runCli`):
    Connect or reactor store starts. Without an address, `create` throws as
    soon as something asks for the reactor.
 2. **Routine** — trigger loop starts. `previewServerTrigger.setup()`
-   binds the local API HTTP + SSE server on `127.0.0.1:5180` and
-   subscribes to the framework event-bus for `service:*` events.
+   binds the local API HTTP + SSE server on `127.0.0.1` and an OS port,
+   writes `studio.config.json` naming it, and subscribes to the framework
+   event-bus for `service:*` events.
    The other triggers (`chatSessionWatchTrigger`,
    `specSyncTrigger`, `specFsSyncTrigger`) begin polling.
    `studioUrlTrigger` prints `Vetra Studio: <url>/d/<drive id>` (non-TTY)
@@ -845,8 +861,8 @@ The Cli runs no proxy. What the browser reaches, all on this machine:
 - **The Studio** — Connect on 8090, which proxies the Studio switchboard's
   paths (see "Hosts"). Connect does not redirect `/`; the Cli prints
   `<connect>/d/<drive id>`.
-- **The local API** — `http://127.0.0.1:5180` directly (the SPA's fallback
-  when no `studio.config.json` names another).
+- **The local API** — `http://127.0.0.1:<OS port>` directly, the address
+  `<connect>/studio.config.json` names.
 - **BUILD iframe** — the project's own Connect at the URL its run record
   gives (`/resolve` `url`, e.g. `http://localhost:3001/d/<preview drive>/<doc>?embed=1`);
   an app drive's `driveUrl` parameter is the project switchboard's
@@ -965,11 +981,8 @@ These are limitations of the current direction; not bugs.
 - **The remote path.** A cloud Studio's signing is checked by unit tests
   only: `hosts/studio-signed` runs a `v2-required` switchboard, but its
   check needs a wallet and has not been run (see "The signed check"). Its
-  tab cannot authorize the agent: with an environment id the local API
-  refuses the tab's owner calls (no loopback pass, no bearer without
-  `studio.config.json`, and a bearer's `aud` would have to be the Studio's
-  origin, not `127.0.0.1:5180`), until per-project config (C1) names the
-  Studio's origin to the tab. `ReactorContext.client` is typed as the full client, so a call
+  tab's owner calls carry a bearer bound to `studioOrigin`, which only unit
+  tests check so far. `ReactorContext.client` is typed as the full client, so a call
   `GraphQLReactorClient` lacks would fail at run time, not in the type
   check; the Cli, the spec sync and clint's folder operations use only
   calls both clients have. Studios from before the product page are not
