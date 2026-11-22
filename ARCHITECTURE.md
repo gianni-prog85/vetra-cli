@@ -276,7 +276,11 @@ two artifact families and they are built separately:
   bundle Connect serves into `dist/connect` (`runner.outDir`), with the
   host's branding, favicon and Renown namespace. The bundle freezes a
   snapshot of `powerhouse.manifest.json` and the local editor modules at
-  build time.
+  build time. Its last step, `cli/scripts/pin-connect-layer.ts`, declares
+  the `external-packages` cascade layer first in `dist/connect/index.html`
+  (`lifecycle/connect-layer-order.ts`), so a registry-served package
+  stylesheet never outranks the Studio's own. Nothing patches the bundle at
+  run time: the Cli writes nothing into the installed package.
 
 `pnpm build` does **not** rebuild `dist/connect/`, and leaves it and
 `dist/skills` in place. Editing `editors/*`, `powerhouse.manifest.json`,

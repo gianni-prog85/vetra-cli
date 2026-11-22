@@ -80,7 +80,9 @@ Two non-obvious bundle facts:
   (`dist/connect`), **not** the node-side packages. `pnpm build:connect`
   is `ph connect build`, i.e. `ph run connect build` over
   `hosts/connect`: it builds the package again, then the SPA into
-  `dist/connect`. `pnpm build` leaves `dist/connect` and `dist/skills`
+  `dist/connect`, then `cli/scripts/pin-connect-layer.ts` pins the
+  `external-packages` cascade layer first in its `index.html` (the Cli
+  never writes into the package). `pnpm build` leaves `dist/connect` and `dist/skills`
   in place (it cleans `dist/browser` and `dist/node` only).
 - The node-side routine poll and the browser poll are **separate code
   paths**. Verifying one does not verify the other — exercise the

@@ -58,7 +58,7 @@
   },
   "scripts": {
     "build": "tsx cli/scripts/build-assets.ts && ph-cli build && ph-cli run cli build",
-    "build:connect": "ph-cli connect build",
+    "build:connect": "ph-cli connect build && tsx cli/scripts/pin-connect-layer.ts",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p hosts",
     "tsc": "tsc",
     "tsc:watch": "tsc --watch",

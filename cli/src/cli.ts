@@ -25,7 +25,6 @@ import { reactorProject } from './services/reactor-project.js';
 import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
-import { connectExternalPackagesLayerOrder } from './lifecycle/connect-layer-order.js';
 import { genGuard } from './lifecycle/gen-guard.js';
 import { shellGuard } from './lifecycle/shell-guard.js';
 import { tsCheck } from './lifecycle/ts-check.js';
@@ -40,9 +39,6 @@ import { liveHealthTrigger } from './triggers/live-health.js';
 import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
 import { studioIdentity } from './auth/studio-identity.js';
-
-// The package root: the layer-order hook patches its dist/connect.
-const CONNECT_ASSETS_ROOT = CLI_ROOT;
 
 // Every model the reactor client reduces and signs with.
 const studioDocumentModels = [
@@ -234,9 +230,6 @@ export const cli = defineCli({
     tsCheck(),
     // The agent's tool schemas mark the spec inputs it can't leave out.
     agentRequiredInputs(),
-    connectExternalPackagesLayerOrder({
-      vetraAppDir: CONNECT_ASSETS_ROOT,
-    }),
     // Records spec-generate / reactor-project-check outcomes as check runs on
     // the product's active change. Inside tool-errors so its rethrows keep
     // their serializable message.
