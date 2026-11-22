@@ -1,13 +1,14 @@
-// The package's document models via the narrow `document-models` entry, so
+// The product spec models: the package's own and @powerhousedao/vetra's
+// ideate and build documents, each via a narrow `document-models` entry, so
 // the editor graph (katex/mermaid) stays out of the bundle.
+import { StudioProductV1 } from 'document-models';
 import {
   AudienceSheetV1,
   BrandSheetV1,
   FeatureV1,
   ProblemSheetV1,
-  StudioProductV1,
   WorkBreakdownStructureV1,
-} from 'document-models';
+} from '@powerhousedao/vetra/document-models';
 
 export const documentModels = [
   AudienceSheetV1,

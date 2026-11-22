@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { listSpecDocumentTypes } from "@powerhousedao/vetra/codegen/spec";
 import { describe, expect, it } from "vitest";
+import { documentModels as productSpecModels } from "./cli/src/vetra-app-models.js";
 import { documentModels as vetraAppModels } from "./document-models/document-models.js";
 
 type ModelModule = { documentModel: { global: { id: string } } };
@@ -46,9 +47,17 @@ describe("Studio Connect document models", () => {
     const available = await studioConnectTypes();
     const missing = [
       ...listSpecDocumentTypes(),
-      ...ids(vetraAppModels as readonly ModelModule[]),
+      ...ids(productSpecModels as readonly ModelModule[]),
     ].filter((type) => !available.has(type));
     expect(listSpecDocumentTypes()).toContain("powerhouse/document-editor");
     expect(missing).toEqual([]);
+  });
+
+  // The spec documents come from @powerhousedao/vetra only, so no type is
+  // registered twice.
+  it("the package registers no type @powerhousedao/vetra has", async () => {
+    const vetra = new Set(ids(await packageModels("@powerhousedao/vetra")));
+    expect(vetra.has("powerhouse/brand-sheet")).toBe(true);
+    expect(ids(vetraAppModels).filter((id) => vetra.has(id))).toEqual([]);
   });
 });

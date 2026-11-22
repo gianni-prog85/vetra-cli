@@ -3,7 +3,7 @@ import type {
   FileNode,
 } from "@powerhousedao/shared/document-drive";
 import { FileText } from "lucide-react";
-import { useFeatureDocumentById } from "document-models/feature";
+import { useFeatureDocumentById } from "@powerhousedao/vetra/document-models/feature";
 import type { OpenTarget } from "./types.js";
 
 const FEATURE_TYPE = "powerhouse/feature";

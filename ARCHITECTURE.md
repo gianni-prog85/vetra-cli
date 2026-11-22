@@ -58,6 +58,13 @@ of the open work.
 The package is one Powerhouse package, `@powerhousedao/vetra-cli`: document
 models and editors in the standard folders, the Cli in `cli/`, exported as
 `./cli` (`cli/index.ts`, built by `ph build` to `dist/node/cli/index.mjs`).
+Its own models and editors are `vetra/studio-product` and the `vetra-studio`
+drive app. The spec documents (`powerhouse/brand-sheet`, `problem-sheet`,
+`audience-sheet`, `feature`, `work-breakdown-structure`) and their editors are
+`@powerhousedao/vetra`'s. The switchboard (`packages.list`) and the Studio
+Connect (`powerhouse.config.json` `packages`, `provider: "local"`) load that
+package beside this one; the spec registry (`cli/src/vetra-app-models.ts`)
+and `vetra-studio` import them from it. No type is registered twice.
 The Cli runs three ways, all through clint's Cli runner (`runCli`):
 
 - a host: `ph run studio` (the compound in `hosts/studio`, see "Hosts")
@@ -237,7 +244,8 @@ is needed: a switchboard without a keypair generates one at
 
 `cli.configureReactor` in `cli/src/cli.ts` declares `remote` as a function
 clint's runner calls with the setup context at attach: the document models
-(this package's six, `@powerhousedao/vetra`'s and clint-common's), the drive
+(this package's `vetra/studio-product`, `@powerhousedao/vetra`'s with the spec
+documents, and clint-common's), the drive
 `Home` (`preferredEditor: vetra-studio`, found by name; the switchboard host
 declares it) and the subscriptions, plus, in a cloud Studio, the agent's
 identity. The runner attaches with clint's `attachDefaultReactor`: a
@@ -911,7 +919,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 ├── pnpm-workspace.yaml        ← catalog (the Powerhouse line), overrides
 ├── powerhouse.manifest.json
 ├── index.ts                   ← package export: models, editors, processors
-├── document-models/
+├── document-models/           ← studio-product (spec documents: @powerhousedao/vetra)
 ├── editors/
 │   └── vetra-studio/          ← drive editor (Vetra Studio)
 ├── processors/

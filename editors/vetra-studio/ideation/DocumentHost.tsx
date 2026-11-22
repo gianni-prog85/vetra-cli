@@ -1,13 +1,13 @@
-import { isAudienceSheetDocument } from "document-models/audience-sheet";
-import { isBrandSheetDocument } from "document-models/brand-sheet";
-import { isFeatureDocument } from "document-models/feature";
-import { isProblemSheetDocument } from "document-models/problem-sheet";
-import { isWorkBreakdownStructureDocument } from "document-models/work-breakdown-structure";
-import { AudienceSheetEditor } from "../../audience-sheet-editor/AudienceSheetEditor.js";
-import { BrandSheetEditor } from "../../brand-sheet-editor/BrandSheetEditor.js";
-import { FeatureEditor } from "../../feature-editor/FeatureEditor.js";
-import { ProblemSheetEditor } from "../../problem-sheet-editor/ProblemSheetEditor.js";
-import { WorkBreakdownStructureEditor } from "../../work-breakdown-structure-editor/WorkBreakdownStructureEditor.js";
+import { isAudienceSheetDocument } from "@powerhousedao/vetra/document-models/audience-sheet";
+import { isBrandSheetDocument } from "@powerhousedao/vetra/document-models/brand-sheet";
+import { isFeatureDocument } from "@powerhousedao/vetra/document-models/feature";
+import { isProblemSheetDocument } from "@powerhousedao/vetra/document-models/problem-sheet";
+import { isWorkBreakdownStructureDocument } from "@powerhousedao/vetra/document-models/work-breakdown-structure";
+import { AudienceSheetEditor } from "@powerhousedao/vetra/editors/audience-sheet-editor";
+import { BrandSheetEditor } from "@powerhousedao/vetra/editors/brand-sheet-editor";
+import { FeatureEditor } from "@powerhousedao/vetra/editors/feature-editor";
+import { ProblemSheetEditor } from "@powerhousedao/vetra/editors/problem-sheet-editor";
+import { WorkBreakdownStructureEditor } from "@powerhousedao/vetra/editors/work-breakdown-structure-editor";
 import { SafeDocument } from "../SafeDocument.js";
 
 /** Renders the inline editor for a selected document, picked by its type. The

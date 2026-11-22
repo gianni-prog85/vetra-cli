@@ -1,7 +1,7 @@
 import type * as ReactorBrowser from "@powerhousedao/reactor-browser";
 import { signaturePolicyOf, type PHDocument } from "document-model";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BrandSheet } from "../../document-models/brand-sheet/v1/module.js";
+import { BrandSheet } from "@powerhousedao/vetra/document-models/brand-sheet";
 import { addAgentWritableDocument } from "./addAgentWritableDocument.js";
 import { SignInRequiredError } from "./studioWrite.js";
 

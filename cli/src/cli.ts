@@ -8,7 +8,7 @@ import { z } from 'zod';
 import path from 'node:path';
 import { CLI_NAME, CLI_VERSION, CLI_ROOT } from './config.js';
 import { configSchema, secretsSchema } from './framework.js';
-import { documentModels } from './vetra-app-models.js';
+import { StudioProductV1 } from 'document-models';
 import { documentModels as vetraModels } from '@powerhousedao/vetra';
 import { documentModels as extModels } from '@powerhousedao/clint-common';
 import { createAgent } from './agents/agent.js';
@@ -40,9 +40,10 @@ import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
 import { studioIdentity } from './auth/studio-identity.js';
 
-// Every model the reactor client reduces and signs with.
+// Every model the reactor client reduces and signs with, each once: the
+// package's own, @powerhousedao/vetra's spec documents, clint-common's.
 const studioDocumentModels = [
-  ...documentModels,
+  StudioProductV1,
   ...vetraModels,
   ...extModels,
 ];
