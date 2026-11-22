@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -302,7 +303,16 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
     }
   }
 
-  it("a restart keeps the owner's verified key (mode 600, no tokens stored)", async () => {
+  /** The store's own ACL entries (`icacls`), those not inherited from its folder. */
+  function explicitAces(file: string): string[] {
+    const out = execFileSync("icacls", [file], { encoding: "utf8", windowsHide: true });
+    return out
+      .split(/\r?\n/)
+      .map((line, i) => (i === 0 ? line.slice(file.length) : line).trim())
+      .filter((ace) => ace.includes(":(") && !ace.includes("(I)"));
+  }
+
+  it("a restart keeps the owner's verified key (no tokens stored; mode 600 on POSIX, the folder's ACL on Windows)", async () => {
     let t = 1_000_000;
     const owner = await keyFor(OWNER);
     const ownerTokens = new Set<string>();
@@ -312,7 +322,14 @@ describe("trusted keys: kept across restarts, per-client lookup shares, evicted 
     const before = authorizer(delegation, { now: () => t, trustedStorePath: store });
     expect((await before(from("198.51.100.7", first), null)).ok).toBe(true);
 
-    expect(statSync(store).mode & 0o777).toBe(0o600);
+    if (process.platform === "win32") {
+      // Windows has no mode bits (Node reports 0o666 for a writable file). The
+      // store adds no ACL entry: it is guarded exactly as its `.ph` folder is.
+      expect(statSync(store).mode & 0o777).toBe(0o666);
+      expect(explicitAces(store)).toEqual([]);
+    } else {
+      expect(statSync(store).mode & 0o777).toBe(0o600);
+    }
     const saved = readFileSync(store, "utf-8");
     expect(saved).toContain(owner.did);
     expect(saved).toContain(OWNER.toLowerCase());

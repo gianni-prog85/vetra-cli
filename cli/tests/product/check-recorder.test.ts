@@ -277,13 +277,16 @@ describe("check-recorder", () => {
   it("stores reasons as one plain line without local paths or forbidden words", async () => {
     h = await productHarness();
     const home = os.homedir();
+    // A project outside the home (Windows' temp dir is inside it, which
+    // makes a temp project a home path).
+    const elsewhere = path.join(path.parse(home).root, "srv", "todo");
     const tool = wrapWith(h, "reactor-project-check", {
       execute: async () =>
         attachCheckResults({ text: "x" }, [
           {
             kind: "SMOKE",
             passed: false,
-            reason: `Failed in ${home}/projects/todo/editors/a.tsx\nthe package ${project}/editors/b.tsx\n  broke`,
+            reason: `Failed in ${home}/projects/todo/editors/a.tsx\nthe package ${elsewhere}/editors/b.tsx\n  broke`,
           },
         ]),
     });

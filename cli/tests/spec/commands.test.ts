@@ -520,12 +520,30 @@ describe("spec-generate", () => {
       makeCtx(workdir),
     );
 
+    // Codegen runs in `ph generate`; this is what it prints for such a schema
+    // (@graphql-tools/load inlines the SDL around the parse error).
+    const sdl =
+      "type TodoItem = {\n  id: string;\n  text: string;\n};\n\ntype TargetState = {\n  items: TodoItem[];\n};";
+    const codegenOutput =
+      `✖ Failed to load schema from ${sdl}:\n` +
+      `Failed to parse the GraphQL document. Syntax Error: Unexpected "=".\n${sdl}\n` +
+      "    at ensure (file:///x/node_modules/@graphql-codegen/cli/esm/codegen.js:45:23)\n";
+    const commands: string[] = [];
     const promise = specGenerate.execute(
       { project: undefined, name: "Target", skipChecks: true },
-      makeCtx(workdir),
+      makeCtx(workdir, {
+        runProcess: async (command) => {
+          commands.push(command);
+          return { success: false, output: codegenOutput };
+        },
+      }),
     );
     await expect(promise).rejects.toThrow(
       /Failed to parse the GraphQL document/,
+    );
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatch(
+      /^ph generate document-model --document ".+[\\/]specs[\\/]document-models[\\/]target\.phdm\.phd"$/,
     );
     // The thrown message must be trimmed, not the multi-kB schema dump.
     await expect(promise).rejects.toThrow(

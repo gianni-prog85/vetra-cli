@@ -69,7 +69,8 @@ export interface RequestAuthOptions {
    *  can't spend the whole overall cap. */
   lookupsPerClientPerMinute?: number;
   /** File that keeps the recently verified keys (`appDid|address` and when
-   *  each verified, never a token) across restarts; written mode 600.
+   *  each verified, never a token) across restarts; written mode 600 (on
+   *  Windows, which has no mode bits, it keeps its folder's ACL).
    *  Undefined = kept in memory only. */
   trustedStorePath?: string;
   now?: () => number;
@@ -350,7 +351,7 @@ function loadTrusted(file: string | undefined, t: number): Map<string, number> {
   return out;
 }
 
-/** Write `trusted` to `file` (mode 600, atomic rename). Best effort. */
+/** Write `trusted` to `file` (mode 600 on POSIX, atomic rename). Best effort. */
 function saveTrusted(file: string | undefined, trusted: Map<string, number>): void {
   if (!file) return;
   const tmp = `${file}.${process.pid}.tmp`;

@@ -671,16 +671,19 @@ describe("GitHub mirror", () => {
     await launchReady(m, "change-1");
     const theirs = pushOnGithub(m.gh.bare, "README.md", "# From GitHub\n");
     await bringInNow(m);
-    // The unsaved ref can't be written: the discard stops before resetting anything.
-    const refsDir = path.join(m.h.workdir, ".git", "refs", "vetra", "unsaved");
-    fs.mkdirSync(refsDir, { recursive: true });
-    fs.chmodSync(refsDir, 0o555);
+    // The unsaved ref can't be written: the discard stops before resetting
+    // anything. Another git holds the ref's lock, which git refuses on every
+    // platform (a read-only folder stops nobody on Windows, nor root).
+    const at = 1_795_000_000_000;
+    const lock = path.join(m.h.workdir, ".git", "refs", "vetra", "unsaved", `bring-1-${at}.lock`);
+    fs.mkdirSync(path.dirname(lock), { recursive: true });
+    fs.writeFileSync(lock, "");
     try {
-      await expect(discardDraft(m.h.workdir, "v1", { label: "bring-1" })).rejects.toMatchObject({
-        code: "GIT_FAILED",
-      });
+      await expect(
+        discardDraft(m.h.workdir, "v1", { label: "bring-1", now: () => at }),
+      ).rejects.toMatchObject({ code: "GIT_FAILED" });
     } finally {
-      fs.chmodSync(refsDir, 0o755);
+      fs.rmSync(lock, { force: true });
     }
     expect(mergeHead(m.h.workdir)).toBe(theirs);
 
