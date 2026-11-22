@@ -73,7 +73,7 @@
     "check-circular-imports": "npx dpdm -T ./index.ts",
     "generate": "ph-cli generate",
     "dev": "tsx cli/src/main.ts --workdir ../vetra-test",
-    "dev:reset": "bash cli/scripts/dev-reset.sh"
+    "dev:reset": "tsx cli/scripts/dev-reset.ts"
   },
   "peerDependencies": {
     "@powerhousedao/clint": "catalog:",
