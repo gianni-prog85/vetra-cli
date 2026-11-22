@@ -3,6 +3,10 @@
 // vetra-cli with HOME unset or empty makes chokidar throw a spurious ENOSPC on
 // the first watched file, since os.homedir() resolves to "". Resolve a usable
 // home from the OS user table and export it back into the environment.
+//
+// POSIX only: on Windows os.homedir() reads USERPROFILE and HOME is normally
+// unset; one set here would also move where the children's Git for Windows
+// reads its config (it prefers HOME over HOMEDRIVE/HOMEPATH).
 import { userInfo } from 'node:os';
 
 function resolveHome(): string | undefined {
@@ -15,10 +19,15 @@ function resolveHome(): string | undefined {
   return undefined;
 }
 
-if (!process.env.HOME) {
-  const home = resolveHome();
+export function ensureHome(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  resolve: () => string | undefined = resolveHome,
+): void {
+  if (platform === 'win32' || env.HOME) return;
+  const home = resolve();
   if (home) {
-    process.env.HOME = home;
+    env.HOME = home;
     console.log(`vetra: HOME was unset; defaulted to ${home}`);
   } else {
     console.warn(
@@ -27,3 +36,5 @@ if (!process.env.HOME) {
     );
   }
 }
+
+ensureHome();
