@@ -1,46 +1,47 @@
 name: release
 
-# Publish vetra-app + the CLI (published as `vetra`, directory `vetra-cli`)
-# to the Vetra npm registries.
-# Version bumps / dep updates happen in a prior manual commit — this workflow
-# builds and publishes whatever version is committed on the branch it runs from.
+# Publish @powerhousedao/vetra-cli to npm with trusted publishing: npm trusts
+# this workflow for the package and takes the run's OIDC token, so no registry
+# secret is stored, and the publish carries provenance. Version bumps and
+# dependency updates happen in a prior manual commit; this workflow builds and
+# publishes whatever version is committed on the branch it runs from.
 #
-#   branch      dist-tag   registries
-#   main        dev        registry.vetra.io
-#   production  latest     registry.vetra.io
+#   branch     dist-tag   registry
+#   next/6.4   dev        registry.npmjs.org
+#
+# npm can only trust a workflow for a package that exists: the first publish
+# is manual, the trust is configured on npmjs.com after it, and only then does
+# this workflow publish. A trusted workflow can publish but not move dist-tags,
+# so a tag beyond the branch's is set by hand (`npm dist-tag add`).
 
 on:
   workflow_dispatch:
-    inputs:
-      also-tag:
-        description: "Also point this dist-tag at the version (e.g. latest); empty = only the branch tag"
-        required: false
-        default: ""
 
 permissions:
   contents: read
+  # The OIDC token npm exchanges for the publish.
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  REGISTRIES: https://registry.vetra.io
+  REGISTRY: https://registry.npmjs.org
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
       - name: Resolve dist-tag from branch
         id: meta
         run: |
-          case "${{ github.ref_name }}" in
-            main)       echo "tag=dev"    >> "$GITHUB_OUTPUT" ;;
-            production) echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::error::release runs from main or production only (got ${{ github.ref_name }})"; exit 1 ;;
+          case "$GITHUB_REF" in
+            refs/heads/next/6.4) echo "tag=dev" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::release runs from next/6.4 only (got $GITHUB_REF)"; exit 1 ;;
           esac
 
       - uses: pnpm/action-setup@v4
@@ -49,117 +50,67 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+          registry-url: ${{ env.REGISTRY }}
 
-      - name: Install workspace
+      - name: Check npm can publish with trusted publishing (11.5.1+)
+        run: |
+          v=$(npm --version)
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number);
+            process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$v" \
+            || { echo "::error::npm $v predates trusted publishing (needs 11.5.1+)"; exit 1; }
+
+      - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build (vetra-app + connect bundle + vetra-cli)
-        run: pnpm build
+      # The package (dist/node, dist/browser, dist/skills), then the Studio SPA
+      # (dist/connect). Both need more than the default heap.
+      - name: Build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm build && pnpm build:connect
 
-      # npm applies the tarball's publishConfig.registry OVER the --registry
-      # flag, which would pin every publish to one registry. Drop the field in
-      # the CI checkout (never committed) so --registry decides per publish.
-      - name: Drop publishConfig.registry
-        run: |
-          (cd vetra-app && npm pkg delete publishConfig.registry)
-          (cd vetra-cli && npm pkg delete publishConfig.registry)
-
-      # pnpm pack resolves catalog:/workspace: specifiers into real versions;
-      # publishing the source dir with npm would ship broken specs.
-      - name: Pack tarballs
+      # pnpm pack resolves catalog: specifiers into real versions; publishing
+      # the directory with npm would ship them unresolved.
+      - name: Pack and check the tarball
         run: |
           set -euo pipefail
-          for pkg in vetra-app vetra-cli; do
-            tgz="$(cd "$pkg" && pnpm pack | tail -1)"
-            abs="$GITHUB_WORKSPACE/$pkg/$tgz"
-            [ -f "$abs" ] || { echo "::error::pnpm pack produced no tarball for $pkg"; exit 1; }
-            if tar -xzO -f "$abs" package/package.json | grep -E 'catalog:|workspace:'; then
-              echo "::error::$pkg tarball has unresolved catalog:/workspace: specs"; exit 1
-            fi
-            var="$(echo "$pkg" | tr 'a-z-' 'A-Z_')_TGZ"
-            echo "$var=$abs" >> "$GITHUB_ENV"
+          dest="$RUNNER_TEMP/pack"
+          mkdir -p "$dest"
+          pnpm pack --pack-destination "$dest"
+          shopt -s nullglob
+          tarballs=("$dest"/*.tgz)
+          [ "${#tarballs[@]}" -eq 1 ] || { echo "::error::expected one tarball in $dest, got ${#tarballs[@]}"; exit 1; }
+          tgz="${tarballs[0]}"
+          if tar -xzO -f "$tgz" package/package.json | grep -E 'catalog:|workspace:|link:'; then
+            echo "::error::the tarball has unresolved catalog:/workspace:/link: specs"; exit 1
+          fi
+          listing=$(tar -tzf "$tgz")
+          for f in \
+            package/hosts/studio/host.js \
+            package/dist/connect/index.html \
+            package/dist/skills/agent-profiles/vetra-agent.md \
+            package/dist/node/cli/index.mjs; do
+            grep -qxF "$f" <<<"$listing" || { echo "::error::the tarball has no $f"; exit 1; }
           done
-
-      - name: Guard registry credentials
-        env:
-          RENOWN_KEY: ${{ secrets.VETRA_REGISTRY_RENOWN_KEY }}
-          RENOWN_ADDRESS: ${{ secrets.VETRA_REGISTRY_RENOWN_ADDRESS }}
-        run: |
-          for s in RENOWN_KEY RENOWN_ADDRESS; do
-            [ -n "${!s}" ] || { echo "::error::secret VETRA_REGISTRY_$s is not set"; exit 1; }
-          done
+          echo "TGZ=$tgz" >> "$GITHUB_ENV"
 
       - name: Publish
         env:
           TAG: ${{ steps.meta.outputs.tag }}
-          ALSO_TAG: ${{ inputs.also-tag }}
-          RENOWN_ADDRESS: ${{ secrets.VETRA_REGISTRY_RENOWN_ADDRESS }}
-          PH_RENOWN_PRIVATE_KEY: ${{ secrets.VETRA_REGISTRY_RENOWN_KEY }}
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./vetra-cli/package.json').version")
-          # Package NAMES, read from the manifests rather than hardcoded. The
-          # directory is still `vetra-cli`, but the package it publishes was
-          # renamed to `vetra`, and a literal here silently published nothing:
-          # the skip-if-exists probe asked the registry for the OLD name, found
-          # the old package's version, and reported "already on ... — ensuring
-          # dist-tag" for a package this build never produced.
-          APP_NAME=$(node -p "require('./vetra-app/package.json').name")
-          CLI_NAME=$(node -p "require('./vetra-cli/package.json').name")
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          # A rerun of a published version has nothing to do (npm refuses a
+          # republish).
+          if [ -n "$(npm view "$NAME@$VERSION" version --registry "$REGISTRY" 2>/dev/null || true)" ]; then
+            echo "::notice::$NAME@$VERSION is already on $REGISTRY; nothing published"
+            exit 0
+          fi
+          npm publish "$TGZ" --provenance --access public --tag "$TAG" --registry "$REGISTRY"
 
-          # Mint a fresh Renown bearer token per registry (aud = the registry
-          # URL) via the SDK, using the provisioned app did:key + address. The
-          # registry verifies the JWT and fetches the matching delegation
-          # credential; ownership is then keyed on the publisher's pkh DID.
-          mint_token() { # <registry>
-            local reg="$1" token who
-            token=$(cd vetra-cli && node scripts/publish/mint-renown-token.mjs "$reg")
-            echo "::add-mask::$token"
-            echo "//${reg#https://}/:_authToken=$token" >> ~/.npmrc
-            # Pre-flight: the token must resolve to an owner DID. Fail loud here
-            # rather than as an opaque 403 mid-publish if the credential is
-            # missing/expired/revoked.
-            who=$(curl -sf -H "Authorization: Bearer $token" "$reg/-/whoami" || true)
-            case "$who" in
-              *did:pkh:*) echo "authenticated to $reg as $who" ;;
-              *) echo "::error::Renown auth failed on $reg — no valid delegation credential for $RENOWN_ADDRESS. Run the provision-credential workflow."; exit 1 ;;
-            esac
-          }
-
-          publish_one() { # <tarball> <name> <registry>
-            local tgz="$1" name="$2" reg="$3"
-            # Skip-if-exists keeps reruns idempotent (a republish would 409);
-            # still point the dist-tag at the version.
-            if curl -sfo /dev/null "$reg/$name/$VERSION?cb=$RANDOM"; then
-              echo "$name@$VERSION already on $reg — ensuring dist-tag '$TAG'"
-              npm dist-tag add "$name@$VERSION" "$TAG" --registry "$reg" --fetch-timeout=1200000
-            else
-              npm publish "$tgz" --registry "$reg" --tag "$TAG" --fetch-timeout=1200000
-            fi
-          }
-
-          for reg in $REGISTRIES; do
-            mint_token "$reg"
-            # the app first so the CLI never references an unpublished dep.
-            publish_one "$VETRA_APP_TGZ" "$APP_NAME" "$reg"
-            publish_one "$VETRA_CLI_TGZ" "$CLI_NAME" "$reg"
-            if [ -n "$ALSO_TAG" ]; then
-              for name in "$APP_NAME" "$CLI_NAME"; do
-                echo "pointing $name@$VERSION at dist-tag '$ALSO_TAG' on $reg"
-                npm dist-tag add "$name@$VERSION" "$ALSO_TAG" --registry "$reg" --fetch-timeout=1200000
-              done
-            fi
-          done
-
-      # npm view serves stale data for minutes after a publish — use the
-      # cache-busted dist-tags endpoint.
-      - name: Verify dist-tags
+      # The registry's metadata can lag a publish by minutes.
+      - name: Show dist-tags
         run: |
-          APP_NAME=$(node -p "require('./vetra-app/package.json').name")
-          CLI_NAME=$(node -p "require('./vetra-cli/package.json').name")
-          for reg in $REGISTRIES; do
-            for pkg in "$APP_NAME" "$CLI_NAME"; do
-              echo "== $reg  $pkg"
-              curl -s "$reg/-/package/$pkg/dist-tags?cb=$RANDOM"; echo
-            done
-          done
+          NAME=$(node -p "require('./package.json').name")
+          npm view "$NAME" dist-tags --json --registry "$REGISTRY" || true

@@ -68,7 +68,7 @@ jobs:
           PH_RENOWN_PRIVATE_KEY: ${{ secrets.VETRA_REGISTRY_RENOWN_KEY }}
         run: |
           set -euo pipefail
-          token=$(cd vetra-cli && node scripts/publish/mint-renown-token.mjs "$TO")
+          token=$(node cli/scripts/publish/mint-renown-token.mjs "$TO")
           echo "::add-mask::$token"
           echo "//${TO#https://}/:_authToken=$token" >> ~/.npmrc
           who=$(curl -sf -H "Authorization: Bearer $token" "$TO/-/whoami" || true)
