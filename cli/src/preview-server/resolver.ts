@@ -11,12 +11,11 @@
  * sole mutator.
  */
 import type { ServiceManager } from "@powerhousedao/clint";
-import { REACTOR_PROJECT_CONNECT_PROXY_PATH } from "../constants.js";
 import { resolveReactorProjectPath } from "../helpers/project.js";
 import {
-  browserDriveRemoteUrl,
   buildPreviewDocPath,
   buildPreviewDriveRootPath,
+  driveRemoteUrl,
   previewDriveIdOf,
 } from "../helpers/reactor-project-preview.js";
 import type { ResolveResult } from "./config.js";
@@ -29,7 +28,6 @@ export async function resolvePreview(args: {
   drive?: string;
   /** No doc or drive: the preview drive's root (see the module comment). */
   home?: boolean;
-  proxyPublicUrl?: string;
 }): Promise<ResolveResult> {
   if (!args.project) return { kind: "no-target" };
   if (!args.drive && !args.doc && !args.home) return { kind: "no-target" };
@@ -74,16 +72,10 @@ export async function resolvePreview(args: {
   if (args.drive) {
     // Append the drive's remote URL so Connect registers the ad-hoc app drive
     // via addRemoteDrive on load; otherwise it bounces to the drive picker.
-    // Fetched by the BROWSER — route it through the proxy's switchboard mount,
-    // not the loopback switchboard origin.
     const switchboardUrl = instance.endpoints?.["vetra-switchboard"];
     const docPath = buildPreviewDriveRootPath(
       args.drive,
-      browserDriveRemoteUrl({
-        driveId: args.drive,
-        proxyUrl: args.proxyPublicUrl,
-        switchboardUrl,
-      }),
+      switchboardUrl ? driveRemoteUrl(switchboardUrl, args.drive) : undefined,
     );
     return {
       kind: "ready",
@@ -92,7 +84,6 @@ export async function resolvePreview(args: {
       driveId: args.drive,
       documentId: args.drive,
       url: `${base}${docPath}`,
-      proxiedUrl: `${REACTOR_PROJECT_CONNECT_PROXY_PATH}${docPath}`,
     };
   }
 
@@ -108,6 +99,5 @@ export async function resolvePreview(args: {
     driveId: defaultDriveId,
     documentId: args.doc || defaultDriveId,
     url: `${base}${docPath}`,
-    proxiedUrl: `${REACTOR_PROJECT_CONNECT_PROXY_PATH}${docPath}`,
   };
 }

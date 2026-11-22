@@ -181,12 +181,10 @@ against.
     backend as `${origin}/d/studio` in the `powerhouse.config.json` it
     merges per request. Nothing is stamped into `dist/connect` for the
     drive URL and no `studio.config.json` is written, so the SPA uses the
-    direct `127.0.0.1:5180` for the local API. The Cli's embedded proxy moved to
-    an OS port on `127.0.0.1` and carries only `/preview` and the
-    reactor-project routes (`/reactor-project/vetra-studio`, the project
-    switchboard) until B3 decides its place; the BUILD iframe's proxied
-    URLs are B3's. See ARCHITECTURE.md → "Hosts" and "Embedded reverse
-    proxy".
+    direct `127.0.0.1:5180` for the local API. The Cli runs no proxy (B3):
+    the BUILD iframe opens the project's own Connect directly, and the owner
+    gate's `aud` is the Connect member's origin. See ARCHITECTURE.md →
+    "Hosts" and "Browser addresses".
 
 15. **Signing follows the switchboard (B3).** The spec writes take the
     switchboard's create policy (`studioSignatureMode`); the Cli plans no
@@ -208,18 +206,9 @@ exercise them.
 - `/Users/acaldas/dev/powerhouse/vetra/vetra-cli/vetra-app/` — drive
   editor (Vetra Studio), default workflow scaffold component.
 
-The proxy round (June 2026) reopened both upstreams:
-
-- **ph-clint** (local checkout, `main`): `proxyRoutes` option,
-  `proxyRoot` capture flag + implicit single-website fallback,
-  `context.proxy`, proxied URLs on `powerhouse:switchboard:ready`,
-  duplicate-prefix warning. Linked into this workspace via a
-  `pnpm-workspace.yaml` override until published.
-- **monorepo**: PR #2676 (`connect-vite-base`) passes
-  `PH_CONNECT_BASE_PATH` to Vite `base` in builder-tools — required
-  for the iframe leg. Until it ships, local testing patches
-  kanban-board's installed builder-tools dist by hand (re-applied
-  after any `pnpm install` in vetra-test projects).
+The framework now lives in the Powerhouse monorepo (`packages/clint`,
+`packages/clint-common`); the Cli no longer uses clint's embedded proxy,
+`proxyRoutes` or `context.proxy`.
 
 ## Implementation plan
 
@@ -345,9 +334,9 @@ In order:
    direct/dev-fallback `127.0.0.1:5180` is hardcoded in both
    `vetra-cli/src/preview-server/config.ts` and the browser-side
    `vetra-app/editors/vetra-studio/hooks/preview-server-client.ts`. The
-   live (proxied) URL is no longer a concern here — the browser reads it
-   from `studio.config.json` at load (see decision 14) — so only the
-   dev-fallback port needs sharing when the port becomes configurable.
+   browser would read another one from `studio.config.json`, which
+   nothing writes (decision 14), so only this port needs sharing when it
+   becomes configurable.
 
 2. Tighten CORS once the embedded Connect's origin is known and
    stable — currently `*` for ease of dev.

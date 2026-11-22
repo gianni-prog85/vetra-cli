@@ -16,7 +16,6 @@ import path from "node:path";
 import type { ServiceInstanceStatus, ServiceManager } from "@powerhousedao/clint";
 import { getBearerToken } from "../auth/renown.js";
 import { resolveCloudConfig } from "../cloud/config.js";
-import { REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH } from "../constants.js";
 import type { Config } from "../framework.js";
 import { formatLines, unknownValueError } from "./cli-errors.js";
 
@@ -507,31 +506,12 @@ export function buildPreviewDriveRootPath(
 
 /**
  * Build the remote drive URL Connect's `addRemoteDrive` expects
- * (`<switchboard-origin>/d/<driveId>`) from a Switchboard GraphQL URL.
+ * (`<switchboard-origin>/d/<driveId>`) from a Switchboard GraphQL URL. The
+ * browser fetches it, so it reaches the project switchboard directly: the
+ * preview is local to this machine.
  */
 export function driveRemoteUrl(switchboardUrl: string, driveId: string): string {
   return `${switchboardUrl.replace(/\/graphql\/?$/, "")}/d/${driveId}`;
-}
-
-/**
- * Browser-facing remote-drive URL for Connect's `addRemoteDrive`. Routed
- * through the embedded proxy's switchboard mount when a proxy is configured
- * (`<proxy>/reactor-project/switchboard/d/<id>`): the captured switchboard
- * endpoint is loopback-only, which the browser can't reach on a deployed
- * Studio. Falls back to the direct switchboard origin when there is no proxy.
- */
-export function browserDriveRemoteUrl(args: {
-  driveId: string;
-  proxyUrl?: string;
-  switchboardUrl?: string;
-}): string | undefined {
-  if (args.proxyUrl) {
-    return `${args.proxyUrl.replace(/\/+$/, "")}${REACTOR_PROJECT_SWITCHBOARD_PROXY_PATH}/d/${args.driveId}`;
-  }
-  if (args.switchboardUrl) {
-    return driveRemoteUrl(args.switchboardUrl, args.driveId);
-  }
-  return undefined;
 }
 
 type PreviewDriveRow = {

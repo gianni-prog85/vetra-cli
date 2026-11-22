@@ -122,9 +122,9 @@ function isLoopbackHost(host: string | undefined): boolean {
 
 /**
  * The request comes from this machine: a loopback socket, every
- * `x-forwarded-for` hop loopback (the embedded proxy listens on 0.0.0.0 and
- * appends the real client address, so a LAN or ingress hop shows up here), a
- * loopback Host (the proxy rewrites Host, so through it the browser's Host is
+ * `x-forwarded-for` hop loopback (a proxy in front appends the real client
+ * address, so a LAN or ingress hop shows up here), a
+ * loopback Host (a proxy rewrites Host, so through it the browser's Host is
  * `x-forwarded-host`), and no cross-site browser origin. Host + Origin block
  * DNS rebinding (a same-origin GET carries no Origin, but its Host is the
  * attacker's name).

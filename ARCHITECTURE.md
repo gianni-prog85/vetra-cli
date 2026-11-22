@@ -186,8 +186,7 @@ switchboard, or a local one on a `v2-required` switchboard, logs one
 Not started by the Cli. The switchboard is its own host,
 `hosts/switchboard` (see "Hosts": the Studio drive, its slug and preferred
 editor are host data); the Cli reaches it over GraphQL at the drive address
-the runner hands over. `proxyEnabled` and `proxyRoutes` stay in `cli.ts`
-until B3.
+the runner hands over. The Cli runs no proxy of its own.
 
 ### Connect (Vetra Studio)
 
@@ -241,13 +240,12 @@ via the vetra drive's `preferredEditor` field. The editor renders:
 
 HTTP + SSE service hosted inside the vetra node process on a fixed
 loopback port. Default `127.0.0.1:5180`; see
-`cli/src/preview-server/config.ts` for the constant. The loopback
-bind does **not** restrict the audience on its own: the embedded proxy
-exposes it at `/preview`, on loopback by default (`configDefaults`) but on
-whatever `proxyHost` a deployment sets, so every route that isn't
-needed to render a preview is owner-gated per request (see "Preview-server
-access gate" below). CORS is `*`: the gate is a bearer header, never an
-ambient cookie.
+`cli/src/preview-server/config.ts` for the constant. The Studio SPA calls
+it directly. The loopback bind is not relied on as the access control: a
+deployment may put a proxy in front, so every route that isn't needed to
+render a preview is owner-gated per request (see "Preview-server access
+gate" below). CORS is `*`: the gate is a bearer header, never an ambient
+cookie.
 
 Implemented as a trigger (`cli/src/triggers/preview-server.ts`)
 so it gets the framework's `ServiceManager` + event-bus access via
@@ -336,11 +334,13 @@ sign-in. It passes when the request carries:
 
 1. the operator secret `VETRA_SESSION_EXPORT_SECRET` as
    `Authorization: Bearer <secret>` or `?token=` (sha256 + timingSafeEqual) —
-   the support path, works through the proxy; or
+   the support path; or
 2. the signed-in user's Renown bearer, minted by the studio client **for this
-   Studio only**: `aud` = the Studio's public origin (origin of the proxy's
-   public URL; the client takes it from `previewServerUrl` in
-   `studio.config.json`). The gate requires that exact `aud` — a token with
+   Studio only**: `aud` = the Studio's origin, read per request from the
+   ready Connect member's `endpoints.connect` (`studioUrlOf`; the client
+   would take it from `previewServerUrl` in `studio.config.json`, which
+   nothing writes now, so the client sends no bearer and a cloud Studio's
+   owner routes are refused until per-project config, C1). The gate requires that exact `aud` — a token with
    no `aud` (e.g. one minted for the switchboard, which refuses `aud`
    tokens) or another Studio's `aud` fails, so a token a malicious Studio
    captures can't be replayed here. The binding is to the **origin**
@@ -363,8 +363,8 @@ sign-in. It passes when the request carries:
    owner's *first* verification on a new device by up to a minute; or
 3. local mode only — no studio environment id (`VETRA_ENVIRONMENT_ID`), no
    `ADMINS`, no secret: a request from a loopback socket whose every
-   `x-forwarded-for` hop is loopback (the proxy appends the real client
-   address, so LAN clients of a `0.0.0.0` proxy are refused), whose `Host`
+   `x-forwarded-for` hop is loopback (a proxy in front appends the real
+   client address, so its LAN clients are refused), whose `Host`
    and `x-forwarded-host` are loopback, and whose `Origin`, if any, is
    loopback (blocks cross-site pages / DNS rebinding).
 
@@ -389,12 +389,10 @@ the owner signs into Renown on an attacker's page (a malicious Studio or
 app), that page gets its own delegated app key for the owner's wallet and can
 mint `aud`-bound tokens for any Studio — `aud` binding stops replay of
 captured tokens, not a delegation the owner granted. Revoking the delegation
-on Renown is the remedy. (b) Local mode through the proxy relies on `x-forwarded-host` for the
-browser's real `Host` (the proxy rewrites `Host`). http-proxy keeps a
-client-sent `x-forwarded-host`, so a DNS-rebinding page could set
-`X-Forwarded-Host: localhost` itself; ph-clint's proxy drops client-sent
-values (branch `fix/proxy-forwarded-host`), which closes this once vetra-cli
-is on a ph-clint release with that fix. Sub-agent threads (resource `cli-user-<agentName>`) are not bundled in
+on Renown is the remedy. (b) Local mode behind a proxy relies on
+`x-forwarded-host` for the browser's real `Host`; a proxy that keeps a
+client-sent `x-forwarded-host` lets a DNS-rebinding page set
+`X-Forwarded-Host: localhost` itself. Sub-agent threads (resource `cli-user-<agentName>`) are not bundled in
 session exports — their per-delegation threadIds don't link back to a
 session.
 
@@ -652,8 +650,6 @@ drive URL
 stack's record is `.ph/run/studio.json`. Then clint's start sequence, run by
 the Cli runner (`runCli`):
 
-0. **Embedded proxy** — on an OS port on `127.0.0.1` (see "Embedded
-   reverse proxy").
 1. **Reactor** — with a drive address, the runner's `RunOptions.reactor`
    attaches to the switchboard (`attachDefaultReactor` with
    `configureReactor.remote`): the GraphQL client, the `Home` drive found
@@ -667,7 +663,8 @@ the Cli runner (`runCli`):
    `specSyncTrigger`, `specFsSyncTrigger`) begin polling.
    `studioUrlTrigger` prints `Vetra Studio: <url>/d/<drive id>` (non-TTY)
    or opens it in the browser: `<url>` is the ready Connect member's
-   `endpoints.connect` (`http://127.0.0.1:8090/`), else the proxy's URL.
+   `endpoints.connect` (`http://127.0.0.1:8090/`). Connect does not
+   redirect `/` to the drive: open the printed `/d/<id>` URL.
 
 The stack ends when the Cli ends, on Ctrl-C, or on
 `ph run studio --stop`, which stops the members in reverse order.
@@ -739,42 +736,22 @@ the document model from the project's own code, the dev-mode Connect
 imports the editor via Vite. No `npm publish`, no local registry, no
 dynamic bundle swap.
 
-## Embedded reverse proxy
+## Browser addresses
 
-clint's embedded proxy (`proxyEnabled: true`) listens on an OS-assigned
-port on `127.0.0.1` (`configDefaults: { proxyPort: 0, proxyHost:
-'127.0.0.1' }`): 8090 is the Studio's Connect now (see "Hosts"), and the
-Studio is not behind this proxy. It still carries `/preview` and the
-reactor-project routes until B3 decides its place (a proxy member of the
-stack, or none). The Studio SPA reaches the local API directly at
-`127.0.0.1:5180`, as nothing stamps the proxy's address into it (see "The
-drive URL" under Connect). The sections below describe the proxy as the
-single public port of a deployed agent, which is the shape B3 revisits.
+The Cli runs no proxy. What the browser reaches, all on this machine:
 
-Route sources:
+- **The Studio** — Connect on 8090, which proxies the Studio switchboard's
+  paths (see "Hosts"). Connect does not redirect `/`; the Cli prints
+  `<connect>/d/<drive id>`.
+- **The local API** — `http://127.0.0.1:5180` directly (the SPA's fallback
+  when no `studio.config.json` names another).
+- **BUILD iframe** — the project's own Connect at the URL its run record
+  gives (`/resolve` `url`, e.g. `http://localhost:3001/d/<preview drive>/<doc>?embed=1`);
+  an app drive's `driveUrl` parameter is the project switchboard's
+  `/d/<id>` directly.
 
-- **Switchboard built-ins** — `/switchboard/graphql`, `/switchboard/d/`,
-  `/switchboard/mcp`, registered before `powerhouse:switchboard:ready`
-  fires so event consumers can hand out proxied URLs immediately. Only an
-  embedded switchboard registers them; on the remote path there are none
-  until B3 decides the proxy's place.
-- **Service readiness captures** — every typed capture routes at
-  `/{serviceId}/{captureName}` (e.g. `/reactor-project/vetra-switchboard`).
-  `website` captures route there too unless they claim the `/` catch-all
-  via `proxyRoot: true` (the embedded Connect does; single-website CLIs
-  fall back to root implicitly).
-- **Static `proxyRoutes`** — in-process servers the ServiceManager doesn't
-  know about; vetra registers `/preview` → preview-server (`:5180`).
-
-Browser-facing URL policy, per consumer. Nothing stamps the proxy's
-address into the Studio bundle, so the Studio SPA and the preview server
-are reached directly:
-
-- **BUILD iframe (reactor-project Connect)** — the project's own Connect,
-  at the URL its run record gives (`/resolve` `url`). It serves at its
-  root; the `proxiedUrl` `/resolve` still returns names a prefix nothing
-  serves, and the client resolves it only against a stamped proxy
-  origin, which nothing writes.
+One public origin (a cloud Studio, or a remote browser) needs a proxy in
+front of these: C2/C4 (a Preview host with fixed ports) or Labs.
 
 ## Workflow scaffolds
 
@@ -824,7 +801,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │   ├── main.ts            ← `pnpm dev` entry (runCli)
 │   │   ├── cli.ts             ← defineCli + configureReactor (remote)
 │   │   ├── framework.ts       ← config + secrets schemas, document registry
-│   │   ├── constants.ts       ← API port, proxy paths, default PH version
+│   │   ├── constants.ts       ← default PH version
 │   │   ├── agents/agent.ts    ← Mastra agent factory
 │   │   ├── preview-server/    ← vetra local API (resolve/start/events)
 │   │   ├── commands/          ← spec-*, reactor-project-*, spec-preview-*
@@ -890,9 +867,8 @@ These are limitations of the current direction; not bugs.
 - **Hosts (B2).** The package's form (`ph run
   @powerhousedao/vetra-cli/studio` from another project) is not supported
   yet: Connect's `outDir` and the switchboard's packages are read against
-  the project (see "Hosts"). On the remote path `studioRedirectTrigger`
-  finds no Connect `/` upstream on the proxy and skips (B3, with the
-  proxy).
+  the project (see "Hosts"). Connect's `/` shows its own start page,
+  not the Studio drive: the printed `/d/<id>` URL is the Studio.
 
 The live publish path — `commands/reactor-project/publish.ts` and
 `publish-status.ts` — is unaffected: those are the deploy-flow tools that

@@ -10,19 +10,18 @@ const CONNECT_ENDPOINT = "endpoints.connect";
 
 /**
  * The Studio's address: the ready Connect member of the stack the Cli runs in
- * (`ph run studio`), else the embedded proxy's URL. Undefined when neither is
- * there (a Cli attached by `VETRA_SWITCHBOARD_URL` with its proxy off).
+ * (`ph run studio`). Undefined without one (a Cli attached by
+ * `VETRA_SWITCHBOARD_URL`).
  */
 export function studioUrlOf(
   instances: readonly ServiceInstanceStatus[],
-  proxyUrl: string | undefined,
 ): string | undefined {
   const connect = instances.find(
     (instance) =>
       instance.status === "ready" &&
       typeof instance.endpoints?.[CONNECT_ENDPOINT] === "string",
   );
-  return connect?.endpoints?.[CONNECT_ENDPOINT] ?? proxyUrl;
+  return connect?.endpoints?.[CONNECT_ENDPOINT];
 }
 
 // Launch the OS default browser, detached and best-effort. A missing opener
@@ -56,10 +55,7 @@ export const studioUrlTrigger = defineTrigger({
     const driveId = reactor?.personalDriveId ?? reactor?.driveId;
     if (!driveId) return;
 
-    const studioUrl = studioUrlOf(
-      ctx.commandContext.services?.list() ?? [],
-      ctx.commandContext.proxy?.url,
-    );
+    const studioUrl = studioUrlOf(ctx.commandContext.services?.list() ?? []);
     if (!studioUrl) return;
 
     const url = `${studioUrl.replace(/\/+$/, "")}/d/${driveId}`;

@@ -19,9 +19,10 @@
  *   GET  /auth/status             owner: the agent's Renown identity.
  *   POST /auth/start|confirm|logout  owner: change the agent's Renown identity.
  *
- * Listens on 127.0.0.1, but the embedded proxy exposes it publicly at
- * `/preview` — so every owner route checks the *request's* credential.
- * CORS is `*`: the gate is a bearer header, never an ambient cookie.
+ * Listens on 127.0.0.1; the Studio SPA calls it directly. A deployment may
+ * still put a proxy in front, so every owner route checks the *request's*
+ * credential. CORS is `*`: the gate is a bearer header, never an ambient
+ * cookie.
  */
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import path from "node:path";
@@ -55,8 +56,6 @@ interface PreviewServerDeps {
    * applies the rest of the precedence (env > project config > built-in). */
   registryUrl?: string;
   port: number;
-  /** Live public proxy origin: the base of the browser's drive URLs. */
-  proxyPublicUrl?: string;
   /** Running versions surfaced to the studio UI via `GET /version`. */
   versions: { vetraCli: string; ph: string };
   /** Embedded-drive accessor for the /sessions endpoints; undefined = no reactor. */
@@ -68,9 +67,9 @@ interface PreviewServerDeps {
   /** Renown the owner gate verifies bearers on (the Studio Connect's);
    *  undefined = the SDK default. */
   gateRenownUrl?: string;
-  /** Live public proxy URL; its origin is the `aud` owner bearers must carry.
-   *  Falls back to `proxyPublicUrl`. */
-  getProxyPublicUrl?: () => string | undefined;
+  /** The Studio's URL (its Connect's), read per request: its origin is the
+   *  `aud` owner bearers must carry. */
+  getStudioUrl?: () => string | undefined;
   /** Owner gate override (tests); default `createRequestAuthorizer`. */
   authorizeRequest?: RequestAuthorizer;
   log?: {
@@ -138,7 +137,6 @@ export async function startPreviewServer(
     renownUrl,
     registryUrl,
     port,
-    proxyPublicUrl,
     versions,
     getReactor,
     agentLogging,
@@ -154,7 +152,7 @@ export async function startPreviewServer(
     createRequestAuthorizer({
       renownUrl: deps.gateRenownUrl,
       cloud,
-      audience: () => deps.getProxyPublicUrl?.() ?? proxyPublicUrl,
+      audience: () => deps.getStudioUrl?.(),
       // The agent's data dir (outside exports and git): verified owner keys
       // survive a restart.
       trustedStorePath: path.join(workdir, ".ph", TRUSTED_KEYS_FILE),
@@ -208,7 +206,6 @@ export async function startPreviewServer(
           doc: q.get("doc") ?? "",
           drive: q.get("drive") ?? undefined,
           home: q.get("home") === "1",
-          proxyPublicUrl,
         });
         writeJson(res, 200, publicResolveResult(result));
         return;

@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolvePreview } from "../../src/preview-server/resolver.js";
-import { REACTOR_PROJECT_CONNECT_PROXY_PATH } from "../../src/constants.js";
 import { makeWorkdir } from "../spec/_fixtures.js";
 import { recordedEndpoints } from "../services/run-record.js";
 
@@ -142,7 +141,6 @@ describe("preview-server resolver", () => {
       driveId,
       documentId: "doc-1",
       url: `http://localhost:3001/d/${driveId}/doc-1?embed=1`,
-      proxiedUrl: `${REACTOR_PROJECT_CONNECT_PROXY_PATH}/d/${driveId}/doc-1?embed=1`,
     });
   });
 
@@ -164,7 +162,6 @@ describe("preview-server resolver", () => {
       driveId,
       documentId: driveId,
       url: `http://localhost:3001/d/${driveId}?embed=1`,
-      proxiedUrl: `${REACTOR_PROJECT_CONNECT_PROXY_PATH}/d/${driveId}?embed=1`,
     });
   });
 
@@ -232,40 +229,10 @@ describe("preview-server resolver", () => {
       driveId: appDriveId,
       documentId: appDriveId,
       url: `http://localhost:3001/d/${appDriveId}?embed=1`,
-      proxiedUrl: `${REACTOR_PROJECT_CONNECT_PROXY_PATH}/d/${appDriveId}?embed=1`,
     });
   });
 
-  it("appends a proxy-routed driveUrl param when proxyPublicUrl is set", async () => {
-    const services = makeServices([
-      {
-        workdir: projectPath,
-        status: "ready",
-        endpoints: {
-          "vetra-studio": "http://localhost:3001",
-          "vetra-switchboard": "http://localhost:4001/graphql",
-        },
-      },
-    ]);
-    const result = await resolvePreview({
-      services,
-      workdir,
-      project: PROJECT,
-      doc: "",
-      drive: "app-drive-123",
-      proxyPublicUrl: "https://wise-hare.vetra.io",
-    });
-    expect(result.kind).toBe("ready");
-    const ready = result as Extract<typeof result, { kind: "ready" }>;
-    const driveUrl = encodeURIComponent(
-      "https://wise-hare.vetra.io/reactor-project/switchboard/d/app-drive-123",
-    );
-    expect(ready.proxiedUrl).toBe(
-      `${REACTOR_PROJECT_CONNECT_PROXY_PATH}/d/app-drive-123?embed=1&driveUrl=${driveUrl}`,
-    );
-  });
-
-  it("falls back to the switchboard origin for driveUrl without a proxy", async () => {
+  it("appends the project switchboard's drive URL for an app drive", async () => {
     const services = makeServices([
       {
         workdir: projectPath,

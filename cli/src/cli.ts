@@ -25,7 +25,6 @@ import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
 import { connectExternalPackagesLayerOrder } from './lifecycle/connect-layer-order.js';
-import { DEFAULT_PREVIEW_SERVER_PORT } from './preview-server/index.js';
 import { genGuard } from './lifecycle/gen-guard.js';
 import { shellGuard } from './lifecycle/shell-guard.js';
 import { tsCheck } from './lifecycle/ts-check.js';
@@ -33,7 +32,6 @@ import { serializableToolErrors } from './lifecycle/tool-errors.js';
 import { agentRequiredInputs } from './lifecycle/agent-required-inputs.js';
 import { checkRecorder } from './lifecycle/check-recorder.js';
 import { studioUrlTrigger } from './triggers/studio-url.js';
-import { studioRedirectTrigger } from './triggers/studio-redirect.js';
 import { productSupervisorTrigger } from './product/supervisor.js';
 import { productRequestsTrigger } from './triggers/product-requests.js';
 import { liveHealthTrigger } from './triggers/live-health.js';
@@ -87,7 +85,6 @@ export const cli = defineCli({
     specFsSyncTrigger,
     previewServerTrigger,
     studioUrlTrigger,
-    studioRedirectTrigger,
     productSupervisorTrigger,
     productRequestsTrigger,
     liveHealthTrigger,
@@ -230,18 +227,6 @@ export const cli = defineCli({
   },
   // @clint:end events
 
-  // @clint:begin proxy
-  proxyEnabled: true,
-  // @clint:end proxy
-  proxyRoutes: [
-    // Browser-facing preview-server route — vetra-studio (served at the proxy
-    // root) reaches /resolve, /start, and the SSE /events stream same-origin.
-    {
-      prefix: '/preview',
-      upstream: `http://127.0.0.1:${DEFAULT_PREVIEW_SERVER_PORT}`,
-    },
-  ],
-
   // @clint:begin lifecycle
   lifecycle: [
     genGuard(),
@@ -262,13 +247,6 @@ export const cli = defineCli({
     serializableToolErrors(),
   ],
   // @clint:end lifecycle
-
-  configDefaults: {
-    // An OS port on loopback: 8090 is the Studio's Connect (hosts/connect).
-    // The proxy carries only `/preview` and the reactor-project routes.
-    proxyPort: 0,
-    proxyHost: '127.0.0.1',
-  },
 
   // @clint:begin interactive
   interactive: {

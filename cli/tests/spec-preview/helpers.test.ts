@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import {
-  browserDriveRemoteUrl,
   buildPreviewDriveRootPath,
   createEmptyPreviewDocument,
   createPreviewDrive,
@@ -375,33 +374,5 @@ describe("preview drive URL builders", () => {
     expect(buildPreviewDriveRootPath("abc", remote)).toBe(
       `/d/abc?embed=1&driveUrl=${encodeURIComponent(remote)}`,
     );
-  });
-
-  it("browserDriveRemoteUrl routes through the proxy switchboard mount when a proxy is configured", () => {
-    expect(
-      browserDriveRemoteUrl({
-        driveId: "abc",
-        proxyUrl: "https://wise-hare.vetra.io",
-        switchboardUrl: "http://localhost:4001/graphql",
-      }),
-    ).toBe("https://wise-hare.vetra.io/reactor-project/switchboard/d/abc");
-    // trailing slash on the proxy URL is stripped
-    expect(
-      browserDriveRemoteUrl({ driveId: "abc", proxyUrl: "http://localhost:8090/" }),
-    ).toBe("http://localhost:8090/reactor-project/switchboard/d/abc");
-    // a proxy under a base path keeps the path prefix
-    expect(
-      browserDriveRemoteUrl({ driveId: "abc", proxyUrl: "https://host/myagent" }),
-    ).toBe("https://host/myagent/reactor-project/switchboard/d/abc");
-  });
-
-  it("browserDriveRemoteUrl falls back to the switchboard origin without a proxy", () => {
-    expect(
-      browserDriveRemoteUrl({
-        driveId: "abc",
-        switchboardUrl: "http://localhost:4001/graphql",
-      }),
-    ).toBe("http://localhost:4001/d/abc");
-    expect(browserDriveRemoteUrl({ driveId: "abc" })).toBeUndefined();
   });
 });

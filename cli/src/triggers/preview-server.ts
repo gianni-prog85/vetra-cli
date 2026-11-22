@@ -24,6 +24,7 @@ import { setRequireAdminIdentity } from "../auth/renown.js";
 import { isCloudStudio, studioSignatureMode } from "../auth/studio-mode.js";
 import { resolveCloudConfig, resolveStudioRenownUrl } from "../cloud/config.js";
 import { getEmbeddedDrive } from "../helpers/embedded-drive.js";
+import { studioUrlOf } from "./studio-url.js";
 import { DEFAULT_PH_VERSION } from "../ph-version.gen.js";
 import { VETRA_CLI_VERSION } from "../version-banner.js";
 
@@ -78,7 +79,6 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
         renownUrl,
         registryUrl: ctx.context.config.registryUrl,
         port: DEFAULT_PREVIEW_SERVER_PORT,
-        proxyPublicUrl: ctx.commandContext.proxy?.url,
         versions: { vetraCli: VETRA_CLI_VERSION, ph: DEFAULT_PH_VERSION },
         getReactor: () => getEmbeddedDrive(ctx.commandContext),
         agentLogging: ctx.context.config.agentLogging,
@@ -89,8 +89,8 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
           ctx.context.config.cloudRenownUrl,
           { warn: (m) => ctx.context.log?.warn?.(m) },
         ),
-        // Read per request: the proxy's public URL can land after startup.
-        getProxyPublicUrl: () => ctx.commandContext.proxy?.url,
+        // Read per request: the Connect member reports its URL once ready.
+        getStudioUrl: () => studioUrlOf(services.list()),
         log: {
           info: (m) => ctx.context.log?.info?.(m),
           error: (m) => ctx.context.log?.error?.(m),

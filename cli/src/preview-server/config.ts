@@ -23,10 +23,8 @@ export type ResolveResult =
       projectPath: string;
       driveId: string;
       documentId: string;
-      /** Direct Connect URL (includes the --base path). */
+      /** The project's Connect, at the URL its run record gives. */
       url: string;
-      /** Same document as a proxy-relative path — valid from any origin that the proxy serves. */
-      proxiedUrl: string;
     };
 
 /** `driveId`: the preview drive, absent until the run record names it. */
