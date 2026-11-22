@@ -19,6 +19,8 @@ async function run(
 ): Promise<{ success: boolean; output: string }> {
   try {
     const { stdout, stderr } = await execFileAsync(command, args, {
+      // ph, pnpm and npm are .cmd shims on Windows, which only a shell runs.
+      shell: process.platform === "win32",
       timeout,
       maxBuffer: 16 * 1024 * 1024,
     });

@@ -33,4 +33,5 @@ const pkg = readOwnPackage();
 
 export const VETRA_CLI_VERSION = pkg.version;
 
-console.log(`${pkg.name} v${pkg.version} (ph ${DEFAULT_PH_VERSION})`);
+// On stderr: stdout is a command's output (`spec-get --query`, `--format json`).
+console.error(`${pkg.name} v${pkg.version} (ph ${DEFAULT_PH_VERSION})`);
