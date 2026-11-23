@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatStatus } from "@powerhousedao/clint";
+import { formatStatus, ServiceStartRefused } from "@powerhousedao/clint";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 
@@ -48,6 +48,8 @@ export const reactorProjectStart = defineCommand({
         .find((s) => s.instanceId === instanceId);
       return { text: status ? formatStatus(status) : "", data };
     } catch (err) {
+      // No running Cli to start it in: the command fails, with where to run.
+      if (err instanceof ServiceStartRefused) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       return { text: `✗ reactor-project: ${msg}` };
     }

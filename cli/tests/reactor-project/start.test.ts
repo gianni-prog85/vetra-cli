@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ServiceStartRefused } from "@powerhousedao/clint";
 import { reactorProjectStart } from "../../src/commands/reactor-project/start.js";
 
 type Instance = { instanceId: string; workdir: string; status: string; serviceId: string };
@@ -52,6 +53,18 @@ describe("reactor-project-start", () => {
     const result = await run(workdir, fakeServices(instances));
     expect(instances).toHaveLength(1);
     expect(result.data).toEqual({ projectPath: workdir });
+  });
+
+  it("fails when no running Cli can hold the run, and passes a failed start on as text", async () => {
+    const refusing = {
+      list: () => [],
+      start: () => Promise.reject(new ServiceStartRefused("reactor-project", "ph run studio")),
+    };
+    await expect(run(workdir, refusing as never)).rejects.toThrow(/`ph run studio`/);
+    const failing = { list: () => [], start: () => Promise.reject(new Error("port taken")) };
+    await expect(run(workdir, failing as never)).resolves.toEqual({
+      text: "✗ reactor-project: port taken",
+    });
   });
 
   it("refuses a workdir that is no project (a project in a subfolder is not picked)", async () => {
