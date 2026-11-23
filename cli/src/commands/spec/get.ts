@@ -2,7 +2,8 @@ import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
-import { formatSchema, loadByName, renderProjected } from "./_helpers.js";
+import { formatSchema, renderProjected } from "./_helpers.js";
+import { contentOperationCount, findSpec } from "./drive-specs.js";
 
 /* Narrow a doc's state down to its latest specification entry. Only doc-model
  * specs have a versioned `specifications` array on state.global; for other doc
@@ -84,16 +85,13 @@ export const specGet = defineCommand({
       ),
     format: formatSchema.optional(),
   }),
-  execute: async (input, { workdir }) => {
-    const base = await projectRoot(workdir);
-    const doc = await loadByName(base, input.name);
+  execute: async (input, context) => {
+    await projectRoot(context.workdir);
+    const { drive, doc } = await findSpec(context, input.name);
 
     if (!input.full && !input.filter && !input.latest) {
-      // Docs loaded from disk may omit empty operation scopes entirely.
-      const ops = doc.operations as Partial<
-        Record<"global" | "local", unknown[]>
-      >;
-      const opsTotal = (ops.global?.length ?? 0) + (ops.local?.length ?? 0);
+      // The client returns a document without its operations.
+      const opsTotal = await contentOperationCount(drive, doc.header.id);
       const summary = `${doc.header.documentType} "${doc.header.name}" — ${opsTotal} operation(s).`;
       return { text: `${summary}\n\n${buildHelp(doc.header.documentType, input.name)}` };
     }

@@ -298,6 +298,15 @@ export function formatDuplicateTypeError(
  * a type/enum name defined in more than one place (Sentry #917) before it can
  * be saved. */
 export function applyActions(doc: PHDocument, actions: ActionInput[]): PHDocument {
+  return applySpecActions(doc, actions).doc;
+}
+
+/** {@link applyActions}, also returning the built actions, for a caller that
+ * executes them on the drive once they applied cleanly here. */
+export function applySpecActions(
+  doc: PHDocument,
+  actions: ActionInput[],
+): { doc: PHDocument; built: Record<string, unknown>[] } {
   const entry = resolveSpecEntry(doc.header.documentType);
   const built = validateAndBuildActions(entry, actions);
   let current = doc;
@@ -323,7 +332,7 @@ export function applyActions(doc: PHDocument, actions: ActionInput[]): PHDocumen
     if (error) throw error;
   }
 
-  return current;
+  return { doc: current, built };
 }
 
 /** Document-model definition for a type — schema, operations, errors. */

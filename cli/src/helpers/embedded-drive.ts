@@ -1,17 +1,14 @@
 /**
- * Running-reactor accessor for the commands that write the Studio drive.
+ * Reactor accessors for the commands that read and write the Studio drive.
  *
- * The `spec-*` commands write the filesystem `specs/` unconditionally
- * (codegen's source of truth) and, when the Cli serves, ALSO push the change
- * into the Studio drive on the switchboard so Vetra Studio reflects it
- * directly — without waiting on the `spec-fs-sync` watcher round-trip.
+ * `getEmbeddedDrive` is for a write that is optional: it resolves the reactor
+ * only where the Cli serves. `context.folders` marks that (startup wires it
+ * when a personal drive exists, a one-shot run never has it), so a one-shot
+ * run does not attach for it. `requireSpecDrive` is for the `spec-*`
+ * commands, which have no other store: it always resolves the reactor.
  *
- * `context.folders` is the "reactor attached" signal: the Cli's startup wires
- * it only when a personal drive exists, and a one-shot run never does. Calling
- * `ctx.reactor()` blindly would attach just to write a spec — so we gate on
- * `folders` first and only then resolve the already-attached reactor. The
- * Studio drive has role 'personal', so `personalDriveId` is set; fall back to
- * `driveId` for safety.
+ * The Studio drive has role 'personal', so `personalDriveId` is set;
+ * `driveId` is the fallback.
  */
 import type { ReactorContext } from "@powerhousedao/clint";
 
@@ -23,8 +20,7 @@ export interface EmbeddedDrive {
 /**
  * Structural view of the command context this accessor reads. Typed loosely
  * (client as `unknown`) so it accepts a `CommandContext<Config, R>` for any
- * registry `R` without tripping `ReactorContext` generic variance — the caller
- * passes its concrete client straight through to `applyFsChangesToReactor`.
+ * registry `R` without tripping `ReactorContext` generic variance.
  */
 interface RunningReactorCtx {
   folders?: unknown;
@@ -37,10 +33,39 @@ interface RunningReactorCtx {
 export async function getEmbeddedDrive(
   ctx: RunningReactorCtx,
 ): Promise<EmbeddedDrive | undefined> {
-  if (!ctx.folders) return undefined; // one-shot → no attach, FS only
+  if (!ctx.folders) return undefined; // one-shot → no attach
   const reactor = await ctx.reactor?.(); // attached at start, no new attach
   const driveId = reactor?.personalDriveId ?? reactor?.driveId;
   if (!reactor || !driveId) return undefined;
+  return { reactor: reactor as Pick<ReactorContext, "client">, driveId };
+}
+
+/**
+ * The Studio drive the `spec-*` commands read and write. Specifications live
+ * in the drive only, so a one-shot run attaches too (`VETRA_SWITCHBOARD_URL`)
+ * and a run with no drive to reach is refused.
+ */
+export async function requireSpecDrive(
+  ctx: Pick<RunningReactorCtx, "reactor">,
+): Promise<EmbeddedDrive> {
+  const lead = "Specifications are kept in the Studio drive, and none can be reached";
+  const hint =
+    "Run this from Studio (ph run studio), or set VETRA_SWITCHBOARD_URL to " +
+    "the drive address (<switchboard>/d/<slug>).";
+  let reactor: Awaited<ReturnType<NonNullable<RunningReactorCtx["reactor"]>>>;
+  try {
+    reactor = await ctx.reactor?.();
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    // The Cli's own refusal already names the two ways in.
+    throw new Error(
+      cause.includes("VETRA_SWITCHBOARD_URL")
+        ? `${lead}: ${cause}`
+        : `${lead}: ${cause}. ${hint}`,
+    );
+  }
+  const driveId = reactor?.personalDriveId ?? reactor?.driveId;
+  if (!reactor || !driveId) throw new Error(`${lead}. ${hint}`);
   return { reactor: reactor as Pick<ReactorContext, "client">, driveId };
 }
 

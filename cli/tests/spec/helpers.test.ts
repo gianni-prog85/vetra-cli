@@ -3,8 +3,8 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { specCreate } from "../../src/commands/spec/create.js";
+import { findSpecInDrive } from "../../src/commands/spec/drive-specs.js";
 import {
-  findByName,
   formatColumns,
   normalizeSpecActions,
   resolveActionsInput,
@@ -12,7 +12,7 @@ import {
   suggestNames,
 } from "../../src/commands/spec/_helpers.js";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
-import { makeCtx, makeWorkdir } from "./_fixtures.js";
+import { makeWorkdir, useSpecDrive } from "./_fixtures.js";
 
 /** Minimal document-model doc carrying just the fields the normalizer reads. */
 function fakeDoc(
@@ -335,7 +335,14 @@ describe("suggestNames", () => {
   });
 });
 
-describe("findByName", () => {
+describe("findSpecInDrive", () => {
+  const { ctx, drive } = useSpecDrive();
+  const find = async (name: string) => ({
+    doc: await findSpecInDrive(
+      { client: drive().module.client, driveId: drive().driveId },
+      name,
+    ),
+  });
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
@@ -344,15 +351,14 @@ describe("findByName", () => {
   it("resolves a created spec by name", async () => {
     await specCreate.execute(
       { type: "powerhouse/document-model", name: "Findable", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
-    const { doc, path } = await findByName(workdir, "Findable");
+    const { doc } = await find("Findable");
     expect(doc.header.name).toBe("Findable");
-    expect(path).toContain(workdir);
   });
 
   it("throws when the name is not found", async () => {
-    await expect(findByName(workdir, "Nope")).rejects.toThrow(
+    await expect(find("Nope")).rejects.toThrow(
       /Unknown spec "Nope"/,
     );
   });
@@ -360,39 +366,39 @@ describe("findByName", () => {
   it("resolves by slug", async () => {
     const created = await specCreate.execute(
       { type: "powerhouse/document-model", name: "Slug Match", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     const id = created.text.match(/id: (\S+)/)?.[1];
-    const { doc } = await findByName(workdir, "slug-match");
+    const { doc } = await find("slug-match");
     expect(doc.header.id).toBe(id);
   });
 
   it("resolves by id", async () => {
     const created = await specCreate.execute(
       { type: "powerhouse/document-model", name: "ById", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     const id = created.text.match(/id: (\S+)/)?.[1] ?? "";
-    const { doc } = await findByName(workdir, id);
+    const { doc } = await find(id);
     expect(doc.header.name).toBe("ById");
   });
 
   it("lists available specs when --name is omitted", async () => {
     await specCreate.execute(
       { type: "powerhouse/document-model", name: "Alpha", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await specCreate.execute(
       { type: "powerhouse/document-model", name: "Beta", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
-    await expect(findByName(workdir, "")).rejects.toThrow(
+    await expect(find("")).rejects.toThrow(
       /Missing required option --name\.\nAvailable specs: Alpha, Beta/,
     );
   });
 
   it("falls back to a no-specs message when there are none", async () => {
-    await expect(findByName(workdir, "")).rejects.toThrow(
+    await expect(find("")).rejects.toThrow(
       /Missing required option --name\.\nNo specs found in this project\./,
     );
   });
@@ -400,26 +406,33 @@ describe("findByName", () => {
   it("suggests the closest name on a typo", async () => {
     await specCreate.execute(
       { type: "powerhouse/document-model", name: "Workout", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
-    await expect(findByName(workdir, "Wrkout")).rejects.toThrow(
+    await expect(find("Wrkout")).rejects.toThrow(
       /Did you mean: Workout(, |\?)/,
     );
   });
 });
 
 describe("slugify", () => {
+  const { ctx, drive } = useSpecDrive();
+  const find = async (name: string) => ({
+    doc: await findSpecInDrive(
+      { client: drive().module.client, driveId: drive().driveId },
+      name,
+    ),
+  });
   /* `slugify` is not exported by name, but `spec-create` sets `header.slug =
-   * slugify(input.name)`. Exercise it by loading the saved spec back and
+   * slugify(input.name)`. Exercise it by reading the created spec back and
    * reading its slug. */
   it("kebab-cases the name into header.slug on create", async () => {
     const { workdir, cleanup } = makeWorkdir();
     try {
       await specCreate.execute(
         { type: "powerhouse/document-model", name: "Hello World 42", dryRun: false },
-        makeCtx(workdir),
+        ctx(workdir),
       );
-      const { doc } = await findByName(workdir, "Hello World 42");
+      const { doc } = await find("Hello World 42");
       expect(doc.header.slug).toBe("hello-world-42");
     } finally {
       cleanup();
@@ -431,9 +444,9 @@ describe("slugify", () => {
     try {
       await specCreate.execute(
         { type: "powerhouse/document-model", name: "Café — Très Bien!", dryRun: false },
-        makeCtx(workdir),
+        ctx(workdir),
       );
-      const { doc } = await findByName(workdir, "Café — Très Bien!");
+      const { doc } = await find("Café — Très Bien!");
       expect(doc.header.slug).toBe("cafe-tres-bien");
     } finally {
       cleanup();

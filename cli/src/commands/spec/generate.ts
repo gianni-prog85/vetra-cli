@@ -10,10 +10,15 @@ import {
 import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
 import { withProjectCodegenLock } from "../../helpers/project-lock.js";
 import {
-  generateFromSpecFile,
+  generateFromSpec,
   type GenerationKind,
 } from "../../generation/run.js";
-import { findByName, getDocumentsWithPaths } from "./_helpers.js";
+import { requireSpecDrive } from "../../helpers/embedded-drive.js";
+import {
+  findSpecInDrive,
+  listDriveSpecs,
+  specDriveOf,
+} from "./drive-specs.js";
 import {
   attachCheckResults,
   capReason,
@@ -60,7 +65,6 @@ function trimGenerateError(message: string): string {
 // `cli/src/generation`, in this process.
 async function generateOne(
   doc: PHDocument,
-  specFilePath: string,
   base: string,
   log: Log | undefined,
 ): Promise<void> {
@@ -70,7 +74,7 @@ async function generateOne(
       `Unsupported document type for code generation: ${doc.header.documentType}`,
     );
   }
-  await generateFromSpecFile(kind, specFilePath, base, {
+  await generateFromSpec(kind, doc, base, {
     installStdio: "ignore",
     quiet: true,
     log: (message) => log?.info(message),
@@ -97,7 +101,7 @@ export const specGenerate = defineCommand({
       .string()
       .optional()
       .describe(
-        "Spec to generate — accepts display name, slug, or id (see spec-list). When omitted, generate code for every spec under specs/.",
+        "Spec to generate — accepts display name, slug, or id (see spec-list). When omitted, generate code for every spec in the Studio drive.",
       ),
     skipChecks: z
       .boolean()
@@ -106,19 +110,18 @@ export const specGenerate = defineCommand({
         "Skip the post-generation typecheck and lint over generated files. Defaults to false.",
       ),
   }),
-  execute: async (input, { workdir, runProcess, log }) => {
+  execute: async (input, context) => {
+    const { workdir, runProcess, log } = context;
     const base = await projectRoot(workdir);
     await assertProjectInstalled(base);
+    const drive = specDriveOf(await requireSpecDrive(context));
     // codegen rewrites shared barrels/manifest from the project's view, so
     // concurrent runs clobber each other; serialize per project.
     return withProjectCodegenLock(base, async () => {
-      // Each target carries the doc plus its on-disk spec file, which the
-      // engine reads.
-      // Real on-disk path only (never a recomputed specPath): the saved filename
-      // uses a different kebab than specPath derives, so a recompute can miss.
-      const targets: { doc: PHDocument; path: string }[] = input.name
-        ? [await findByName(base, input.name)]
-        : await getDocumentsWithPaths(base);
+      // The documents are read from the drive when the lock is held.
+      const targets: PHDocument[] = input.name
+        ? [await findSpecInDrive(drive, input.name)]
+        : await listDriveSpecs(drive);
 
       if (targets.length === 0) {
         return { text: "(no specs to generate)" };
@@ -129,7 +132,7 @@ export const specGenerate = defineCommand({
       /* Specs whose codegen ran and failed (not those without codegen). */
       const failed: string[] = [];
 
-      for (const { doc, path } of targets) {
+      for (const doc of targets) {
         const type = doc.header.documentType;
         if (!GENERATE_SUBCOMMAND[type]) {
           if (input.name) {
@@ -145,7 +148,7 @@ export const specGenerate = defineCommand({
           continue;
         }
         try {
-          await generateOne(doc, path, base, log);
+          await generateOne(doc, base, log);
           generated.push({ name: doc.header.name, type });
         } catch (err) {
           const reason = trimGenerateError(

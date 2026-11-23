@@ -99,43 +99,57 @@ export async function generateFromSpecFile(
   projectDir: string,
   options: GenerationOptions = {},
 ): Promise<void> {
+  if (kind === "document-model" && !documentPath.endsWith(".phd")) {
+    const state = await loadDocumentModel(documentPath);
+    return generateFromSpec(
+      kind,
+      { state: { global: state } } as unknown as SpecSource,
+      projectDir,
+      options,
+    );
+  }
+  return generateFromSpec(kind, await getDocument(documentPath), projectDir, options);
+}
+
+/** The state of a specification document; all generation reads. */
+export type SpecSource = Pick<PHDocument, "state">;
+
+/** Generate the code of one specification document in `projectDir`. */
+export async function generateFromSpec(
+  kind: GenerationKind,
+  spec: SpecSource,
+  projectDir: string,
+  options: GenerationOptions = {},
+): Promise<void> {
   const warn = options.warn ?? console.warn;
   setGraphqlCodegenSilent(options.quiet ?? false);
   const project = buildTsMorphProject(projectDir);
   switch (kind) {
     case "document-model": {
-      if (documentPath.endsWith(".phd")) {
-        const doc = (await getDocument(documentPath)) as DocumentModelDocument;
-        await modelGeneration.generateDocumentModel(doc.state.global, project);
-      } else {
-        const state = await loadDocumentModel(documentPath);
-        await modelGeneration.generateDocumentModel(state, project);
-      }
+      const doc = spec as DocumentModelDocument;
+      await modelGeneration.generateDocumentModel(doc.state.global, project);
       await project.save();
       await warnSubgraphTypeConflicts(projectDir, warn);
       return;
     }
     case "editor": {
-      const doc = (await getDocument(documentPath)) as DocumentEditorDocument;
-      await generateEditorFromDocument(doc, project);
+      await generateEditorFromDocument(spec as DocumentEditorDocument, project);
       await project.save();
       return;
     }
     case "app": {
-      const doc = (await getDocument(documentPath)) as AppModuleDocument;
-      await generateAppFromDocument(doc, project);
+      await generateAppFromDocument(spec as AppModuleDocument, project);
       await project.save();
       return;
     }
     case "processor": {
-      const doc = (await getDocument(documentPath)) as ProcessorModuleDocument;
-      await generateProcessorFromDocument(doc, project);
+      await generateProcessorFromDocument(spec as ProcessorModuleDocument, project);
       await project.save();
       await installFeatures(projectDir, options);
       return;
     }
     case "subgraph": {
-      const doc = (await getDocument(documentPath)) as SubgraphModuleDocument;
+      const doc = spec as SubgraphModuleDocument;
       const conflict = await findSubgraphNameConflict(
         projectDir,
         doc.state.global.name,

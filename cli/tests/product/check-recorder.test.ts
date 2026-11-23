@@ -12,12 +12,12 @@ import { productHarness, type ProductHarness } from "./helpers.js";
 import { runProgress } from "../../src/commands/product/progress.js";
 import { specCreate } from "../../src/commands/spec/create.js";
 import { specGenerate } from "../../src/commands/spec/generate.js";
-import { makeCtx } from "../spec/_fixtures.js";
+import { makeCtx, makeSpecDrive } from "../spec/_fixtures.js";
 
-const { generateFromSpecFile } = vi.hoisted(() => ({
-  generateFromSpecFile: vi.fn<() => Promise<void>>(),
+const { generateFromSpec } = vi.hoisted(() => ({
+  generateFromSpec: vi.fn<() => Promise<void>>(),
 }));
-vi.mock("../../src/generation/run.js", () => ({ generateFromSpecFile }));
+vi.mock("../../src/generation/run.js", () => ({ generateFromSpec }));
 
 type Tool = { execute: (...args: unknown[]) => Promise<unknown> };
 
@@ -151,15 +151,20 @@ describe("check-recorder", () => {
 
   it("records spec-generate outcomes as GENERATE runs", async () => {
     h = await productHarness();
-    await specCreate.execute({ type: "powerhouse/document-model", name: "Todo", dryRun: false }, makeCtx(project));
-    const ctx = makeCtx(project);
-    const tool = wrapWith(h, "spec-generate", {
-      execute: (input) => specGenerate.execute(input as never, ctx),
-    });
-    generateFromSpecFile.mockRejectedValueOnce(new Error('Unknown type "Foo"'));
-    await expect(tool.execute({ name: "Todo", skipChecks: true }, {})).rejects.toThrow(/Unknown type/);
-    generateFromSpecFile.mockResolvedValueOnce(undefined);
-    await tool.execute({ skipChecks: true }, {});
+    const specs = await makeSpecDrive();
+    try {
+      const ctx = makeCtx(project, { reactor: specs.reactor });
+      await specCreate.execute({ type: "powerhouse/document-model", name: "Todo", dryRun: false }, ctx);
+      const tool = wrapWith(h, "spec-generate", {
+        execute: (input) => specGenerate.execute(input as never, ctx),
+      });
+      generateFromSpec.mockRejectedValueOnce(new Error('Unknown type "Foo"'));
+      await expect(tool.execute({ name: "Todo", skipChecks: true }, {})).rejects.toThrow(/Unknown type/);
+      generateFromSpec.mockResolvedValueOnce(undefined);
+      await tool.execute({ skipChecks: true }, {});
+    } finally {
+      await specs.close();
+    }
     const runs = (await h.state()).changes[0].checkRuns;
     expect(runs.map((r) => r.results)).toEqual([
       [{ kind: "GENERATE", passed: false, reason: "Code couldn't be generated for Todo." }],

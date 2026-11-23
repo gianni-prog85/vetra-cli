@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createSpecDocument, saveSpec } from "../../src/commands/spec/registry.js";
+import { addFile } from "@powerhousedao/shared/document-drive";
+import { createSpecDocument } from "../../src/commands/spec/registry.js";
 import { specCreate } from "../../src/commands/spec/create.js";
 import { specDelete } from "../../src/commands/spec/delete.js";
 import { specGenerate } from "../../src/commands/spec/generate.js";
@@ -17,7 +18,7 @@ import {
 } from "../../src/commands/spec/schema.js";
 import { specSchemaList } from "../../src/commands/spec/schema-list.js";
 import { specUpdate } from "../../src/commands/spec/update.js";
-import { makeCtx, makeWorkdir } from "./_fixtures.js";
+import { makeCtx, makeWorkdir, useSpecDrive } from "./_fixtures.js";
 
 const DOC_TYPE = "powerhouse/document-model";
 const PRODUCT_TYPE = "powerhouse/feature";
@@ -35,6 +36,7 @@ describe("createSpecDocument", () => {
 });
 
 describe("spec-list", () => {
+  const { ctx, drive } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
@@ -46,20 +48,20 @@ describe("spec-list", () => {
   });
 
   it("reports (no specs) on an empty workdir", async () => {
-    const result = await specList.execute({}, makeCtx(workdir));
+    const result = await specList.execute({}, ctx(workdir));
     expect(result.text).toBe("(no specs)");
   });
 
   it("lists created specs with name/type/id columns", async () => {
     await specCreate.execute(
       { type: DOC_TYPE, name: "Alpha", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await specCreate.execute(
       { type: DOC_TYPE, name: "Beta", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
-    const result = await specList.execute({}, makeCtx(workdir));
+    const result = await specList.execute({}, ctx(workdir));
     expect(result.text).toMatch(/Alpha/);
     expect(result.text).toMatch(/Beta/);
     expect(result.text).toMatch(new RegExp(DOC_TYPE));
@@ -68,11 +70,11 @@ describe("spec-list", () => {
   it("filters by --type", async () => {
     await specCreate.execute(
       { type: DOC_TYPE, name: "Alpha", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     const result = await specList.execute(
       { type: "powerhouse/document-editor" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toBe("(no specs)");
   });
@@ -80,47 +82,69 @@ describe("spec-list", () => {
   it("filters by --category", async () => {
     await specCreate.execute(
       { type: DOC_TYPE, name: "BuilderSpec", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await specCreate.execute(
       { type: PRODUCT_TYPE, name: "ProductSpec", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
 
     const project = await specList.execute(
       { category: "project" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(project.text).toMatch(/BuilderSpec/);
     expect(project.text).not.toMatch(/ProductSpec/);
 
     const product = await specList.execute(
       { category: "product" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(product.text).toMatch(/ProductSpec/);
     expect(product.text).not.toMatch(/BuilderSpec/);
 
-    const all = await specList.execute({}, makeCtx(workdir));
+    const all = await specList.execute({}, ctx(workdir));
     expect(all.text).toMatch(/BuilderSpec/);
     expect(all.text).toMatch(/ProductSpec/);
   });
 
-  it("lists the product specs saved in the project", async () => {
-    await saveSpec(createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" }), workdir);
-    const result = await specList.execute({}, makeCtx(workdir));
+  it("lists a document filed in the drive without the child relationship", async () => {
+    // What the drive explorer makes: the document and its file node only.
+    const { module, driveId } = drive();
+    const doc = createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" });
+    await module.client.create(doc);
+    await module.client.execute(driveId, "main", [
+      addFile({
+        id: doc.header.id,
+        name: "RootProduct",
+        documentType: PRODUCT_TYPE,
+        parentFolder: null,
+      }),
+    ]);
+    const result = await specList.execute({}, ctx(workdir));
     expect(result.text).toMatch(/RootProduct/);
     expect(result.text).toMatch(new RegExp(PRODUCT_TYPE));
+  });
+
+  it("never reads a specs/ folder in the project", async () => {
+    mkdirSync(join(workdir, "specs", "feature"), { recursive: true });
+    writeFileSync(join(workdir, "specs", "feature", "on-disk.feature.phd"), "x");
+    const result = await specList.execute({}, ctx(workdir));
+    expect(result.text).toBe("(no specs)");
+  });
+
+  it("says where specifications live when no drive can be reached", async () => {
+    await expect(specList.execute({}, makeCtx(workdir))).rejects.toThrow(
+      /Specifications are kept in the Studio drive[\s\S]*VETRA_SWITCHBOARD_URL/,
+    );
   });
 
   it("requires the workdir to be a project, whatever the category", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vetra-noreactor-"));
     try {
-      // A product spec saved at a workspace root is not a project's.
-      await saveSpec(createSpecDocument(PRODUCT_TYPE, { name: "RootProduct" }), dir);
       for (const category of ["project", "product", undefined] as const) {
         await expect(
-          specList.execute(category ? { category } : {}, makeCtx(dir)),
+          specList.execute(category ? { category } : {}, ctx(dir)),
         ).rejects.toThrow(/The workdir is not a Reactor Package project/);
       }
     } finally {
@@ -130,26 +154,34 @@ describe("spec-list", () => {
 });
 
 describe("spec-create", () => {
+  const { ctx, drive } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
   afterEach(() => cleanup());
 
-  it("persists a new spec by default", async () => {
+  it("persists a new spec in the drive by default, and writes no specs/ folder", async () => {
     const result = await specCreate.execute(
       { type: DOC_TYPE, name: "Persisted", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Created/);
-    expect(result.text).toContain(workdir);
-    const list = await specList.execute({}, makeCtx(workdir));
+    const id = (result.data as { documentId: string }).documentId;
+    expect(result.text).toContain(`id: ${id}`);
+    expect((await drive().nodes()).find((n) => n.id === id)).toMatchObject({
+      kind: "file",
+      name: "Persisted",
+      documentType: DOC_TYPE,
+    });
+    expect(existsSync(join(workdir, "specs"))).toBe(false);
+    const list = await specList.execute({}, ctx(workdir));
     expect(list.text).toMatch(/Persisted/);
   });
 
   it("lists the type's action shapes so spec-update needs no spec-schema call", async () => {
     const result = await specCreate.execute(
       { type: "powerhouse/document-editor", name: "Board Editor", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toContain(
       "Actions of powerhouse/document-editor (spec-update input shapes",
@@ -158,20 +190,22 @@ describe("spec-create", () => {
       "  ADD_DOCUMENT_TYPE: input AddDocumentTypeInput { id: OID! documentType: String! }",
     );
     expect(result.text).toMatch(/Enum values:\n {2}StatusType: /);
-    // The created path stays on the second line.
-    expect(result.text.split("\n")[1]).toMatch(/board-editor\.editor\.phd$/);
+    // The created line stays first, the listing follows a blank line.
+    const [first, second] = result.text.split("\n");
+    expect(first).toMatch(/^Created powerhouse\/document-editor "Board Editor" {2}id: \S+$/);
+    expect(second).toBe("");
   });
 
   it("product specs come without the action listing (Plan's token budget)", async () => {
     const result = await specCreate.execute(
       { type: PRODUCT_TYPE, name: "Lean Feature", dryRun: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/^Created powerhouse\/feature "Lean Feature"/);
     expect(result.text).not.toContain("Actions of");
     const model = await specCreate.execute(
       { type: DOC_TYPE, name: "Model", dryRun: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(model.text).toContain("Actions of powerhouse/document-model");
     expect(model.text.length).toBeLessThan(ACTION_REFERENCE_MAX_CHARS + 600);
@@ -191,21 +225,38 @@ describe("spec-create", () => {
   it("does not persist when --dryRun is set", async () => {
     const result = await specCreate.execute(
       { type: DOC_TYPE, name: "Ephemeral", dryRun: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/in-memory, not saved/);
-    const list = await specList.execute({}, makeCtx(workdir));
+    const list = await specList.execute({}, ctx(workdir));
     expect(list.text).toBe("(no specs)");
   });
 
-  it("creates a product spec in the project's specs/, beside the project specs", async () => {
+  it("a dry run needs no drive", async () => {
     const result = await specCreate.execute(
-      { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
+      { type: DOC_TYPE, name: "Ephemeral", dryRun: true },
       makeCtx(workdir),
     );
+    expect(result.text).toMatch(/in-memory, not saved/);
+  });
+
+  it("refuses to create without a drive to reach", async () => {
+    await expect(
+      specCreate.execute(
+        { type: DOC_TYPE, name: "Nowhere", dryRun: false },
+        makeCtx(workdir),
+      ),
+    ).rejects.toThrow(/Specifications are kept in the Studio drive/);
+    expect(existsSync(join(workdir, "specs"))).toBe(false);
+  });
+
+  it("creates a product spec in the drive, beside the project specs", async () => {
+    const result = await specCreate.execute(
+      { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
+      ctx(workdir),
+    );
     expect(result.text).toMatch(/Created/);
-    expect(result.text).toContain(join(workdir, "specs"));
-    const list = await specList.execute({}, makeCtx(workdir));
+    const list = await specList.execute({}, ctx(workdir));
     expect(list.text).toMatch(/RootFeature/);
   });
 
@@ -214,10 +265,10 @@ describe("spec-create", () => {
     try {
       for (const type of [DOC_TYPE, PRODUCT_TYPE]) {
         await expect(
-          specCreate.execute({ type, name: "NeedsProject", dryRun: false }, makeCtx(dir)),
+          specCreate.execute({ type, name: "NeedsProject", dryRun: false }, ctx(dir)),
         ).rejects.toThrow(/The workdir is not a Reactor Package project/);
       }
-      await expect(specList.execute({}, makeCtx(dir))).rejects.toThrow(
+      await expect(specList.execute({}, ctx(dir))).rejects.toThrow(
         /The workdir is not a Reactor Package project/,
       );
     } finally {
@@ -227,13 +278,14 @@ describe("spec-create", () => {
 });
 
 describe("spec-get", () => {
+  const { ctx } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(async () => {
     ({ workdir, cleanup } = makeWorkdir());
     await specCreate.execute(
       { type: DOC_TYPE, name: "Target", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
   });
   afterEach(() => cleanup());
@@ -241,7 +293,7 @@ describe("spec-get", () => {
   it("returns a summary + help by default (no slicer, no --full)", async () => {
     const result = await specGet.execute(
       { name: "Target", full: false, latest: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/powerhouse\/document-model "Target"/);
     expect(result.text).toMatch(/Usage examples for "Target"/);
@@ -252,7 +304,7 @@ describe("spec-get", () => {
   it("returns the full state when --full is passed", async () => {
     const result = await specGet.execute(
       { name: "Target", full: true, latest: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/"specifications":/);
   });
@@ -260,26 +312,27 @@ describe("spec-get", () => {
   it("projects via --filter against the state", async () => {
     const result = await specGet.execute(
       { name: "Target", full: false, latest: false, filter: "$.global.specifications[0].version" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toBe("1");
   });
 
   it("throws when the spec is missing", async () => {
     await expect(
-      specGet.execute({ name: "DoesNotExist", full: false, latest: false }, makeCtx(workdir)),
+      specGet.execute({ name: "DoesNotExist", full: false, latest: false }, ctx(workdir)),
     ).rejects.toThrow(/Unknown spec "DoesNotExist"/);
   });
 });
 
 describe("spec-update", () => {
+  const { ctx } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(async () => {
     ({ workdir, cleanup } = makeWorkdir());
     await specCreate.execute(
       { type: DOC_TYPE, name: "Target", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
   });
   afterEach(() => cleanup());
@@ -292,12 +345,12 @@ describe("spec-update", () => {
     );
     const result = await specUpdate.execute(
       { name: "Target", from: actionsPath },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Applied 1 action/);
     const after = await specGet.execute(
       { name: "Target", full: false, latest: false, filter: "$.global.name" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(after.text).toBe("Renamed");
   });
@@ -308,7 +361,7 @@ describe("spec-update", () => {
     await expect(
       specUpdate.execute(
         { name: "Target", from: actionsPath },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/Invalid JSON/);
   });
@@ -319,7 +372,7 @@ describe("spec-update", () => {
     await expect(
       specUpdate.execute(
         { name: "Target", from: actionsPath },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/JSON array/);
   });
@@ -333,7 +386,7 @@ describe("spec-update", () => {
           name: "Target",
           actions: [{ type: "SET_MODEL_NAME", input: { wrong: 1 } }],
         },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/input SetModelNameInput[\s\S]*name: String!/);
   });
@@ -346,7 +399,7 @@ describe("spec-update", () => {
         name: "Target",
         actions: [{ type: "SET_MODEL_NAME", input: { wrong: 1 } }],
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await expect(promise).rejects.toThrow(/SET_MODEL_NAME: [^\n]*name/);
     await expect(promise).rejects.toThrow(
@@ -363,7 +416,7 @@ describe("spec-update", () => {
           name: "Target",
           actions: [{ type: "NOT_A_REAL_ACTION", input: {} }],
         },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/Valid action types[\s\S]*SET_MODEL_NAME/);
   });
@@ -377,7 +430,7 @@ describe("spec-update", () => {
           name: "Target",
           actions: [{ type: "SET_NAME", input: { name: "x" } }],
         },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/Did you mean:[^\n]*SET_MODEL_NAME/);
   });
@@ -394,7 +447,7 @@ describe("spec-update", () => {
           { type: "SET_INITIAL_STATE", input: { initialValue: "{}" } },
         ],
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Applied 2 action/);
   });
@@ -402,14 +455,14 @@ describe("spec-update", () => {
   it("mints an id for an ADD_MODULE that supplies only a name", async () => {
     const result = await specUpdate.execute(
       { name: "Target", actions: [{ type: "ADD_MODULE", input: { name: "Workouts" } }] },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Applied 1 action/);
     // The minted id must be surfaced so a later action can target the module.
     expect(result.text).toMatch(/Minted id\(s\)[\s\S]*ADD_MODULE "Workouts" → [0-9a-f-]{36}/i);
     const ids = await specGet.execute(
       { name: "Target", full: false, latest: true, filter: "$.modules[*].id" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(ids.text).toMatch(/[0-9a-f-]{36}/i);
   });
@@ -430,18 +483,19 @@ describe("spec-update", () => {
           },
         ],
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Applied 2 action/);
     const ops = await specGet.execute(
       { name: "Target", full: false, latest: true, filter: "$.modules[?(@.id=='mod-1')].operations[*].name" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(ops.text).toMatch(/ADD_WORKOUT/);
   });
 });
 
 describe("spec-generate", () => {
+  const { ctx } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(async () => {
@@ -460,7 +514,7 @@ describe("spec-generate", () => {
     );
     await specCreate.execute(
       { type: DOC_TYPE, name: "Target", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await specUpdate.execute(
       {
@@ -471,7 +525,7 @@ describe("spec-generate", () => {
           { type: "SET_MODEL_EXTENSION", input: { extension: "tgt" } },
         ],
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
   });
   afterEach(() => cleanup());
@@ -498,14 +552,14 @@ describe("spec-generate", () => {
           },
         ],
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
 
     // Codegen runs in this process (makeCtx's runProcess rejects any spawn);
     // @graphql-tools/load inlines the SDL around the parse error.
     const promise = specGenerate.execute(
       { name: "Target", skipChecks: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     await expect(promise).rejects.toThrow(
       /Failed to parse the GraphQL document/,
@@ -522,6 +576,7 @@ describe("spec-generate", () => {
 // M0: the agent hand-wrote powerhouse.config.json + package.json; spec-create
 // accepted the stub and spec-generate then failed fetching ph-cli (npm 404).
 describe("a hand-written (never installed) project", () => {
+  const { ctx } = useSpecDrive();
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vetra-stub-"));
@@ -533,59 +588,62 @@ describe("a hand-written (never installed) project", () => {
   it("spec-create and spec-generate refuse it and say to install it", async () => {
     const notInstalled = /The project is not installed \(no node_modules at [\s\S]*pnpm install/;
     await expect(
-      specCreate.execute({ type: DOC_TYPE, name: "Todo", dryRun: false }, makeCtx(dir)),
+      specCreate.execute({ type: DOC_TYPE, name: "Todo", dryRun: false }, ctx(dir)),
     ).rejects.toThrow(notInstalled);
     await expect(
-      specGenerate.execute({ skipChecks: true }, makeCtx(dir)),
+      specGenerate.execute({ skipChecks: true }, ctx(dir)),
     ).rejects.toThrow(notInstalled);
     // Product specs generate no code and are unaffected.
     await expect(
-      specCreate.execute({ type: PRODUCT_TYPE, name: "Todo", dryRun: false }, makeCtx(dir)),
+      specCreate.execute({ type: PRODUCT_TYPE, name: "Todo", dryRun: false }, ctx(dir)),
     ).resolves.toMatchObject({ text: expect.stringContaining("Created") });
   });
 });
 
 describe("spec-delete", () => {
+  const { ctx } = useSpecDrive();
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
   afterEach(() => cleanup());
 
-  it("removes a spec from disk", async () => {
+  it("removes a spec from the drive", async () => {
     await specCreate.execute(
       { type: DOC_TYPE, name: "Doomed", dryRun: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     const result = await specDelete.execute(
       { name: "Doomed" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/Deleted "Doomed"/);
-    const list = await specList.execute({}, makeCtx(workdir));
+    const list = await specList.execute({}, ctx(workdir));
     expect(list.text).toBe("(no specs)");
   });
 
   it("throws if the spec is missing", async () => {
     await expect(
-      specDelete.execute({ name: "Missing" }, makeCtx(workdir)),
+      specDelete.execute({ name: "Missing" }, ctx(workdir)),
     ).rejects.toThrow(/Unknown spec "Missing"/);
   });
 });
 
 describe("spec-schema-list", () => {
+  const ctx = makeCtx;
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
   afterEach(() => cleanup());
 
   it("returns registered document model types", async () => {
-    const result = await specSchemaList.execute({}, makeCtx(workdir));
+    const result = await specSchemaList.execute({}, ctx(workdir));
     expect(result.text).toMatch(/powerhouse\/document-model/);
     expect(result.text).toContain(DOC_TYPE);
   });
 });
 
 describe("spec-schema", () => {
+  const ctx = makeCtx;
   let workdir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir, cleanup } = makeWorkdir()));
@@ -594,7 +652,7 @@ describe("spec-schema", () => {
   it("returns a summary + help by default (no slicer, no --full)", async () => {
     const result = await specSchema.execute(
       { type: DOC_TYPE, state: false, full: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(new RegExp(`^${DOC_TYPE} —`));
     expect(result.text).toMatch(/^Modules: /m);
@@ -606,7 +664,7 @@ describe("spec-schema", () => {
   it("returns the full schema when --full is passed", async () => {
     const result = await specSchema.execute(
       { type: DOC_TYPE, state: false, full: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toContain("specifications");
   });
@@ -614,7 +672,7 @@ describe("spec-schema", () => {
   it("--action returns the GraphQL input for one operation", async () => {
     const result = await specSchema.execute(
       { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/^input SetModelNameInput/);
     expect(result.text).toMatch(/name: String!/);
@@ -623,19 +681,19 @@ describe("spec-schema", () => {
   it("--action lists the values of the state enums its input uses", async () => {
     const result = await specSchema.execute(
       { type: "powerhouse/problem-sheet", action: "SET_CORE_JOB", state: false, full: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/^input SetCoreJobInput/);
     expect(result.text).toMatch(/\n\nEnum values:\n {2}Motivation: LOVE_TO \| WANT_TO \| NEED_TO \| HAVE_TO \| HATE_TO \| CANNOT$/);
     // An input without enums, or a --format payload, gets no extra lines.
     const plain = await specSchema.execute(
       { type: DOC_TYPE, action: "SET_MODEL_NAME", state: false, full: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(plain.text).not.toContain("Enum values");
     const json = await specSchema.execute(
       { type: "powerhouse/problem-sheet", action: "SET_CORE_JOB", state: false, full: false, format: "json" },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(json.text).not.toContain("Enum values");
   });
@@ -658,14 +716,14 @@ describe("spec-schema", () => {
   it("--action implies --type when only one type has the action", async () => {
     const result = await specSchema.execute(
       { type: "", action: "SET_EDITOR_STATUS", state: false, full: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toMatch(/^input SetEditorStatusInput/);
     expect(result.text).toMatch(/Enum values:\n {2}StatusType: /);
     // Types that disagree on the input: every variant, in one answer.
     const shared = await specSchema.execute(
       { type: "", action: "ADD_DOCUMENT_TYPE", state: false, full: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(shared.text).toContain("the input differs by type");
     expect(shared.text).toMatch(
@@ -677,7 +735,7 @@ describe("spec-schema", () => {
     // Without an action the type is still needed, and the error lists the
     // valid ones inline (no extra spec-schema-list call).
     await expect(
-      specSchema.execute({ type: "", state: false, full: false }, makeCtx(workdir)),
+      specSchema.execute({ type: "", state: false, full: false }, ctx(workdir)),
     ).rejects.toThrow(/Missing required option --type\.\nValid types: .*powerhouse\/document-editor/);
   });
 
@@ -689,7 +747,7 @@ describe("spec-schema", () => {
         state: false,
         full: false,
       },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text).toContain("input SetEditorNameInput");
     expect(result.text).toContain("input SetEditorStatusInput");
@@ -697,7 +755,7 @@ describe("spec-schema", () => {
     await expect(
       specSchema.execute(
         { type: "powerhouse/document-editor", action: "SET_EDITOR_NAME,NOPE", state: false, full: false },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/Unknown action "NOPE"/);
   });
@@ -705,7 +763,7 @@ describe("spec-schema", () => {
   it("--state returns the GraphQL state schema", async () => {
     const result = await specSchema.execute(
       { type: DOC_TYPE, full: false, state: true },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     expect(result.text.length).toBeGreaterThan(0);
     expect(result.text).not.toMatch(/^Schema for /);
@@ -715,7 +773,7 @@ describe("spec-schema", () => {
     await expect(
       specSchema.execute(
         { type: DOC_TYPE, action: "NOT_A_REAL_ACTION", full: false, state: false },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(
       /Unknown action "NOT_A_REAL_ACTION"[\s\S]*spec-schema --type/,
@@ -726,7 +784,7 @@ describe("spec-schema", () => {
     await expect(
       specSchema.execute(
         { type: DOC_TYPE, action: "SET_NAME", full: false, state: false },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/Did you mean:[^.]*SET_MODEL_NAME/);
   });
@@ -735,7 +793,7 @@ describe("spec-schema", () => {
     await expect(
       specSchema.execute(
         { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: true },
-        makeCtx(workdir),
+        ctx(workdir),
       ),
     ).rejects.toThrow(/mutually exclusive/);
   });
@@ -746,7 +804,7 @@ describe("spec-schema", () => {
     // (Defensive: prevents regression to the buggy `[0]` form.)
     const result = await specSchema.execute(
       { type: DOC_TYPE, action: "SET_MODEL_NAME", full: false, state: false },
-      makeCtx(workdir),
+      ctx(workdir),
     );
     // Latest-spec correctness is verified end-to-end in the multi-spec
     // simulation; here we just confirm the action shortcut still resolves.
@@ -754,44 +812,44 @@ describe("spec-schema", () => {
   });
 });
 
-describe("specs live in the project (the workdir)", () => {
+describe("specs live in the Studio drive", () => {
+  const { ctx } = useSpecDrive();
   let dir: string;
   let cleanup: () => void;
   beforeEach(() => ({ workdir: dir, cleanup } = makeWorkdir()));
   afterEach(() => cleanup());
 
   it("a project spec and a product spec sit side by side; get/update/delete reach both", async () => {
-    const created = await specCreate.execute(
+    await specCreate.execute(
       { type: "powerhouse/document-editor", name: "Todo Editor", dryRun: false },
-      makeCtx(dir),
+      ctx(dir),
     );
-    expect(created.text).toContain(join(dir, "specs"));
     const updated = await specUpdate.execute(
       {
         name: "Todo Editor",
         actions: [{ type: "SET_EDITOR_NAME", input: { name: "Todo Board" } }],
       },
-      makeCtx(dir),
+      ctx(dir),
     );
     expect(updated.text).not.toMatch(/Unknown spec/);
     const got = await specGet.execute(
       { name: "Todo Editor", full: false, latest: false },
-      makeCtx(dir),
+      ctx(dir),
     );
     expect(got.text).toMatch(/powerhouse\/document-editor "Todo Editor"/);
 
     await specCreate.execute(
       { type: PRODUCT_TYPE, name: "RootFeature", dryRun: false },
-      makeCtx(dir),
+      ctx(dir),
     );
     const root = await specGet.execute(
       { name: "RootFeature", full: false, latest: false },
-      makeCtx(dir),
+      ctx(dir),
     );
     expect(root.text).toMatch(/RootFeature/);
-    const deleted = await specDelete.execute({ name: "RootFeature" }, makeCtx(dir));
+    const deleted = await specDelete.execute({ name: "RootFeature" }, ctx(dir));
     expect(deleted.text).toMatch(/Deleted "RootFeature"/);
-    const list = await specList.execute({}, makeCtx(dir));
+    const list = await specList.execute({}, ctx(dir));
     expect(list.text).toMatch(/Todo Editor/);
     expect(list.text).not.toMatch(/RootFeature/);
   });

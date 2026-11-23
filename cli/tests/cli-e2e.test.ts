@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -20,8 +26,13 @@ async function run(
 ): Promise<RunResult> {
   const cliArgs = opts.workdir ? ["-w", opts.workdir, ...args] : args;
   return new Promise((resolve, reject) => {
+    const env = { ...process.env };
+    // One-shot: no switchboard drive to attach to.
+    delete env.VETRA_SWITCHBOARD_URL;
     const child = spawn(process.execPath, [TSX_CLI, CLI_PATH, ...cliArgs], {
       stdio: ["pipe", "pipe", "pipe"],
+      env,
+      windowsHide: true,
     });
     let stdout = "";
     let stderr = "";
@@ -70,77 +81,23 @@ describe("vetra spec-* (e2e)", () => {
   );
 
   it(
-    "walks a full CRUD lifecycle in a temp workdir",
+    "with no drive to reach, says where specifications live and writes no specs/ folder",
     async () => {
       const workdir = mkdtempSync(join(tmpdir(), "vetra-e2e-"));
       writeFileSync(join(workdir, "powerhouse.config.json"), "{}\n");
       mkdirSync(join(workdir, "node_modules"));
       try {
-        // list: empty
-        let r = await run({ workdir }, "spec-list");
-        expect(r.code).toBe(0);
-        expect(r.stdout).toContain("(no specs)");
-
-        // create
-        r = await run(
-          { workdir },
-          "spec-create",
-          "--type",
-          "powerhouse/document-model",
-          "--name",
-          "E2E",
-        );
-        expect(r.code).toBe(0);
-        expect(r.stdout).toMatch(/Created/);
-
-        // list: shows the new spec
-        r = await run({ workdir }, "spec-list");
-        expect(r.stdout).toContain("E2E");
-        expect(r.stdout).toContain("powerhouse/document-model");
-
-        // get with --filter projecting to a scalar (filter applies to state)
-        r = await run(
-          { workdir },
-          "spec-get",
-          "--name",
-          "E2E",
-          "--filter",
-          "$.global.specifications[0].version",
-        );
-        expect(r.stdout.trim()).toBe("1");
-
-        // update via piped stdin (no --from)
-        r = await run(
-          {
-            workdir,
-            input: '[{"type":"SET_MODEL_NAME","input":{"name":"Updated"}}]',
-          },
-          "spec-update",
-          "--name",
-          "E2E",
-        );
-        expect(r.code).toBe(0);
-        expect(r.stdout).toMatch(/Applied 1 action/);
-
-        // verify the update landed
-        r = await run(
-          { workdir },
-          "spec-get",
-          "--name",
-          "E2E",
-          "--filter",
-          "$.global.name",
-        );
-        expect(r.stdout.trim()).toBe("Updated");
-
-        // delete
-        r = await run({ workdir }, "spec-delete", "--name", "E2E");
-        expect(r.code).toBe(0);
-        expect(r.stdout).toMatch(/Deleted "E2E"/);
-
-        // list: empty again
-        r = await run({ workdir }, "spec-list");
-        expect(r.stdout).toContain("(no specs)");
+        for (const args of [
+          ["spec-list"],
+          ["spec-create", "--type", "powerhouse/document-model", "--name", "E2E"],
+          ["spec-get", "--name", "E2E"],
+        ]) {
+          const r = await run({ workdir }, ...args);
+          expect(r.code).not.toBe(0);
+          expect(r.stderr).toMatch(/Specifications are kept in the Studio drive/);
+          expect(r.stderr).toMatch(/VETRA_SWITCHBOARD_URL/);
+        }
+        expect(existsSync(join(workdir, "specs"))).toBe(false);
       } finally {
         rmSync(workdir, { recursive: true, force: true });
       }

@@ -1,16 +1,14 @@
 /**
- * Integration tests for the `spec-*` write commands pushing the embedded drive
- * directly.
+ * Integration tests for the `spec-*` write commands on the Studio drive.
  *
- * Each command writes the filesystem `specs/` unconditionally, and — when a
- * reactor is running (signalled by a truthy `context.folders`) — ALSO pushes
- * the change into the embedded `vetra` drive synchronously, without the
- * `spec-fs-sync` watcher round-trip. These tests build an in-memory reactor,
- * hand the command a fake `context` whose `reactor()` resolves it, and assert:
+ * The drive is the only place a specification is kept. These tests build an
+ * in-memory reactor, hand the command a fake `context` whose `reactor()`
+ * resolves it, and assert:
  *   - create  → drive gets a file node + a gettable doc with the right state
- *   - update  → drive doc state reflects the new actions; re-run is idempotent
+ *   - update  → drive doc state reflects the new actions; no duplicate node
  *   - delete  → drive node + document removed
- *   - folders absent → FS only, drive untouched, reactor never booted
+ *   - one-shot (no `folders`) → the drive `reactor()` reaches is written
+ *   - no drive to reach → a clear error, nothing written
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
@@ -159,9 +157,9 @@ describe("spec-* commands → embedded drive", () => {
     let inDrive = await module.client.get<AppModuleDocument>(docId);
     expect((inDrive.state.global as { name: string }).name).toBe("renamed-app");
 
-    // Re-apply the same file (SET_APP_NAME changes state.global.name, not
-    // header.name, so the spec is still found by its display name "Up App").
-    // The drive dedups by action.id, so this must not duplicate the file node.
+    // Apply it again (SET_APP_NAME changes state.global.name, not header.name,
+    // so the spec is still found by its display name "Up App"): the file node
+    // is not duplicated.
     await specUpdate.execute(
       {
         name: "Up App",
@@ -194,33 +192,51 @@ describe("spec-* commands → embedded drive", () => {
     await expect(module.client.get(docId)).rejects.toBeTruthy();
   }, 15_000);
 
-  it("with folders absent: writes FS only, leaves the drive untouched, never boots the reactor", async () => {
-    let reactorCalls = 0;
+  const specsDirExists = () =>
+    fs
+      .stat(path.join(tmpDir, "specs"))
+      .then(() => true)
+      .catch(() => false);
+
+  it("one-shot (folders absent): writes the drive reactor() reaches, and no specs/ folder", async () => {
     const ctx = {
       workdir: tmpDir,
       folders: undefined,
-      reactor: async () => {
-        reactorCalls++;
-        return { client: module.client, personalDriveId: driveId, driveId };
-      },
+      reactor: async () => ({
+        client: module.client,
+        personalDriveId: driveId,
+        driveId,
+      }),
       log: makeLog().api,
     } as never;
 
     await specCreate.execute(
-      { type: APP_TYPE, name: "Fs Only", dryRun: false },
+      { type: APP_TYPE, name: "One Shot", dryRun: false },
       ctx,
     );
 
-    // File written to disk.
-    const specsDir = path.join(tmpDir, "specs");
-    const wrote = await fs
-      .stat(specsDir)
-      .then((s) => s.isDirectory())
-      .catch(() => false);
-    expect(wrote).toBe(true);
+    expect(
+      (await driveNodes()).some((n) => n.kind === "file" && n.name === "One Shot"),
+    ).toBe(true);
+    expect(await specsDirExists()).toBe(false);
+  }, 15_000);
 
-    // Drive untouched, reactor never resolved.
+  it("with no drive to reach: fails with where specifications live, writes nothing", async () => {
+    const ctx = {
+      workdir: tmpDir,
+      folders: undefined,
+      reactor: async () => {
+        throw new Error("vetra attaches to a switchboard: set VETRA_SWITCHBOARD_URL");
+      },
+      log: makeLog().api,
+    } as never;
+
+    await expect(
+      specCreate.execute({ type: APP_TYPE, name: "Nowhere", dryRun: false }, ctx),
+    ).rejects.toThrow(
+      /Specifications are kept in the Studio drive, and none can be reached: vetra attaches to a switchboard/,
+    );
+    expect(await specsDirExists()).toBe(false);
     expect((await driveNodes()).some((n) => n.kind === "file")).toBe(false);
-    expect(reactorCalls).toBe(0);
   }, 15_000);
 });

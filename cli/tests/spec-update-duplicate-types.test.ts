@@ -1,41 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { runSpecCommand, useSpecDrive } from "./spec/_fixtures.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI_PATH = join(__dirname, "..", "src", "main.ts");
-// tsx's own entry, run by this node: the `.bin/tsx` shim is a shell script,
-// which Windows cannot spawn without a shell.
-const TSX_CLI = createRequire(import.meta.url).resolve("tsx/cli");
-
-type RunResult = { stdout: string; stderr: string; code: number };
-
-async function run(
-  opts: { workdir?: string },
-  ...args: string[]
-): Promise<RunResult> {
-  const cliArgs = opts.workdir ? ["-w", opts.workdir, ...args] : args;
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [TSX_CLI, CLI_PATH, ...cliArgs], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString();
-    });
-    child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
-    child.stdin.end();
-  });
-}
+// Specifications live in the Studio drive: the commands run in this process
+// against a drive of their own.
+const { ctx } = useSpecDrive();
+const run = (opts: { workdir: string }, command: string, ...args: string[]) =>
+  runSpecCommand(ctx(opts.workdir), command, ...args);
 
 /**
  * Sentry #917 regression: spec-update must reject a document model that defines

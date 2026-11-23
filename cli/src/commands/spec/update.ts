@@ -4,14 +4,12 @@ import { projectRoot } from "../../helpers/project.js";
 import {
   actionInputSchema,
   enrichActionValidationError,
-  loadByName,
   normalizeSpecActions,
   resolveActionsInput,
 } from "./_helpers.js";
-import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
-import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
-import { studioSignatureMode } from "../../auth/studio-mode.js";
-import { applyActions, saveSpec } from "./registry.js";
+import { serialized } from "../../helpers/spec-drive-sync.js";
+import { contentOperationCount, findSpec } from "./drive-specs.js";
+import { applySpecActions, createSpecDocument } from "./registry.js";
 
 export const specUpdate = defineCommand({
   id: "spec-update",
@@ -46,51 +44,35 @@ export const specUpdate = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const { workdir } = context;
-    const drive = await getEmbeddedDrive(context);
-    const base = await projectRoot(workdir);
-    const doc = await loadByName(base, input.name);
+    await projectRoot(context.workdir);
+    const { drive, doc: held } = await findSpec(context, input.name);
+    const { id, name, documentType } = held.header;
+    // The reactor records a failing action without throwing, so the batch is
+    // applied to a copy of the held state first and executed only when clean.
+    const state = held.state as { global?: unknown; local?: unknown };
+    const copy = createSpecDocument(documentType, {
+      name,
+      initialState: { global: state.global, local: state.local ?? {} },
+    });
     const { actions, minted } = normalizeSpecActions(
-      doc,
+      copy,
       await resolveActionsInput({
         actions: input.actions,
         from: input.from,
       }),
     );
-    let next: ReturnType<typeof applyActions>;
+    let built: Record<string, unknown>[];
     try {
-      next = applyActions(doc, actions);
+      built = applySpecActions(copy, actions).built;
     } catch (err) {
-      enrichActionValidationError(err, doc.header.documentType);
+      enrichActionValidationError(err, documentType);
     }
-    // Docs loaded from disk may omit empty operation scopes entirely.
-    const opScopes = next.operations as Partial<
-      Record<"global" | "local", unknown[]>
-    >;
-    const opsCount =
-      (opScopes.global?.length ?? 0) + (opScopes.local?.length ?? 0);
-    const path = await saveSpec(next, base);
-    // Push the updated ops into the Studio drive when the reactor is attached.
-    // On a v2-required switchboard the client signs them and the file is
-    // rewritten from the signed document.
-    if (drive) {
-      await applyFsChangesToReactor(
-        [path],
-        workdir,
-        drive.reactor,
-        drive.driveId,
-        context.log,
-        undefined,
-        {
-          signatureMode: await studioSignatureMode(
-            drive.reactor,
-            context.config,
-            context.log,
-          ),
-        },
-      );
+    // On a v2-required switchboard the client signs them.
+    if (built.length > 0) {
+      await serialized(() => drive.client.execute(id, "main", built));
     }
-    let text = `Applied ${actions.length} action(s) to ${next.header.documentType} "${next.header.name}" (now ${opsCount} op(s) total) → ${path}`;
+    const opsCount = await contentOperationCount(drive, id);
+    let text = `Applied ${actions.length} action(s) to ${documentType} "${name}" (now ${opsCount} op(s) total)`;
     if (minted.length > 0) {
       /* The agent omitted these creation ids, so it can't know them; list them
        * so a follow-up action can target the entity. */
@@ -102,11 +84,7 @@ export const specUpdate = defineCommand({
     }
     return {
       text,
-      data: {
-        documentId: next.header.id,
-        documentType: next.header.documentType,
-        name: next.header.name,
-      },
+      data: { documentId: id, documentType, name },
     };
   },
 });

@@ -1,10 +1,8 @@
-import { deleteDocument } from "../../generation/spec/spec.js";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
-import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { removeSpecFromDrive } from "../../helpers/spec-drive-sync.js";
-import { findByName } from "./_helpers.js";
+import { findSpec } from "./drive-specs.js";
 
 export const specDelete = defineCommand({
   id: "spec-delete",
@@ -18,23 +16,14 @@ export const specDelete = defineCommand({
       ),
   }),
   execute: async (input, context) => {
-    const { workdir } = context;
-    const base = await projectRoot(workdir);
-    const { doc, path } = await findByName(base, input.name);
-    const result = await deleteDocument(path);
-    if (!result.success) {
-      return { text: `Failed to delete "${doc.header.name}" at ${path}` };
-    }
-    // Mirror the FS removal into the embedded drive when a reactor is running.
-    const drive = await getEmbeddedDrive(context);
-    if (drive) {
-      await removeSpecFromDrive(
-        drive.reactor,
-        drive.driveId,
-        doc.header.id,
-        context.log,
-      );
-    }
+    await projectRoot(context.workdir);
+    const { embedded, doc } = await findSpec(context, input.name);
+    await removeSpecFromDrive(
+      embedded.reactor,
+      embedded.driveId,
+      doc.header.id,
+      context.log,
+    );
     return { text: `Deleted "${doc.header.name}" (${doc.header.id})` };
   },
 });

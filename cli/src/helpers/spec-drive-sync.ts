@@ -88,7 +88,7 @@ export interface SpecDriveClient {
   deleteDocument(id: string): Promise<unknown>;
 }
 
-function specClient(reactor: Pick<ReactorContext, "client">): SpecDriveClient {
+export function specClient(reactor: Pick<ReactorContext, "client">): SpecDriveClient {
   return reactor.client as unknown as SpecDriveClient;
 }
 
@@ -238,7 +238,7 @@ async function replayUnknownActions(
   return executed;
 }
 
-interface PushedSpec {
+export interface PushedSpec {
   id: string;
   name: string;
   documentType: string;
