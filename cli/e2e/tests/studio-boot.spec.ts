@@ -125,10 +125,7 @@ test.describe("Vetra studio — boot", () => {
       ).toHaveText(stage.types);
     });
 
-    // The explorer's dialog throws while it closes ("Cannot read properties
-    // of undefined (reading 'toLowerCase')"): the document is created, the
-    // page shows Connect's error screen.
-    test.fixme(`a document created from + on ${stage.name} opens in its editor`, async ({
+    test(`a document created from + on ${stage.name} opens in its editor`, async ({
       page,
     }) => {
       await page.goto(studioHome, { waitUntil: "domcontentloaded" });
