@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -17,6 +19,13 @@ const notOurs = [
 export default defineConfig({
   test: {
     globals: true,
+    // No test meets the user's own supervisor: the folder holds none.
+    env: {
+      PH_SUPERVISOR_HOME: path.join(
+        os.tmpdir(),
+        "vetra-cli-test-no-supervisor",
+      ),
+    },
     coverage: {
       provider: "v8",
       include: ["document-models/**/src/reducers/**", "cli/src/**/*.ts"],

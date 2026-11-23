@@ -790,6 +790,18 @@ is live; stopped through its stdin
 by the service manager when the Cli ends. Ports are the hosts' data; a
 taken port moves to the next free one.
 
+**Beside the user's process supervisor** (`ph run supervisor`, one per OS
+user, recorded in `~/.ph/supervisor/supervisor.json`; not the agent of that
+name): clint's service manager starts the Preview run through it, so the run
+is the supervisor's child and not the Cli's. The default
+(`--lifetime caller`) behaves as above: the Cli holds a lease on the
+supervisor's channel and the run stops, with its tree, when the Cli ends,
+however it ends. `reactor-project-start --lifetime supervisor` leaves it
+running after the Cli; a later Cli lists it and stops it through the
+supervisor. With no supervisor recorded the Cli supervises the run itself;
+with one recorded that does not answer, the start is refused. Forwarded
+commands and the project hosts below do not go through it.
+
 The service's endpoints come from the record (`previewEndpoints`):
 `vetra-studio` = the Connect member's `endpoints.connect`,
 `vetra-switchboard` = the switchboard member's `endpoints.graphql`,

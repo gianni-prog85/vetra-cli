@@ -7,7 +7,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { PreflightContext, ServiceBuildContext } from '@powerhousedao/clint';
+import {
+  createServiceCommands,
+  type PreflightContext,
+  type ServiceBuildContext,
+} from '@powerhousedao/clint';
 import type { Config } from '../../src/framework.js';
 import {
   PREVIEW_CONNECT_MEMBER,
@@ -28,6 +32,13 @@ describe('reactor-project as a host service', () => {
     expect(reactorProject.run).toEqual({ host: '@powerhousedao/vetra-cli/preview', verb: 'dev' });
     expect(reactorProject.command).toBeUndefined();
     expect(reactorProject.readiness?.patterns).toBeUndefined();
+  });
+
+  it('its start takes --lifetime: a host service can be left with the user\'s supervisor', () => {
+    const [start] = createServiceCommands(reactorProject);
+    expect(start?.id).toBe('reactor-project-start');
+    const shape = (start?.inputSchema as unknown as { shape: Record<string, unknown> }).shape;
+    expect(Object.keys(shape)).toContain('lifetime');
   });
 
   it('keeps the preview reactor open and caps the heap; ports are host data', () => {
