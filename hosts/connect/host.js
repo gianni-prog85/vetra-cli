@@ -17,9 +17,19 @@ export default /** @satisfies {PHHost} */ ({
     outDir: "${package}/dist/connect",
     // Read per request (no-store, 404 while missing): the Cli writes it once
     // its local API listens and removes it at its end. It names the local
-    // API's address and the Studio's origin to the tab.
+    // API's address and the Studio's origin to the tab. The Vetra Labs
+    // screenshots are the Build and Deploy placeholder pages of Specs.
     serveFiles: {
       "/studio.config.json": "${userData}/.ph/vetra/studio.config.json",
+      "/vetra-labs/versions.jpg": "${package}/hosts/connect/labs/versions.jpg",
+      "/vetra-labs/packages.jpg": "${package}/hosts/connect/labs/packages.jpg",
+      "/vetra-labs/images.jpg": "${package}/hosts/connect/labs/images.jpg",
+      "/vetra-labs/installers.jpg":
+        "${package}/hosts/connect/labs/installers.jpg",
+      "/vetra-labs/environments.jpg":
+        "${package}/hosts/connect/labs/environments.jpg",
+      "/vetra-labs/environment.jpg":
+        "${package}/hosts/connect/labs/environment.jpg",
     },
     // The browser talks to this origin only: Connect's server proxies the
     // switchboard's paths (/graphql, /d/*, /attachments, /mcp, /api/*).

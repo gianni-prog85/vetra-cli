@@ -1,133 +1,244 @@
 /**
- * The Studio page (spec §5.1, G1). A Studio runs inside one project: without
- * a product document it shows the project home (the project, its
- * conversations and specifications). Studio starts no product and creates no
- * project, so the product states — the build (story | preview) or the live
- * product, under one step strip that is the only navigation — show only for
- * a drive that already holds a product document.
+ * The Studio page: a top bar over up to three panels. Specs is the explorer
+ * of the specification drive, Test / Preview is not available yet, Agent is
+ * the chat. Specs and Test also open in a tab of their own, without the bar;
+ * there a spec document is its editor only.
  */
-import { isChatSessionDocument } from "@powerhousedao/clint-common/document-models/chat-session";
-import {
-  dispatchActions,
-  useDocumentSafe,
-  usePHToast,
-  type DocumentDispatch,
-} from "@powerhousedao/reactor-browser";
+import type { DocumentDispatch } from "@powerhousedao/reactor-browser";
 import type {
   DocumentDriveAction,
   DocumentDriveDocument,
 } from "@powerhousedao/shared/document-drive";
-import type { PHDocument } from "document-model";
 import {
-  actions as productActions,
-  type StepKind,
-  type StudioProductState,
-} from "document-models/studio-product";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useStudioBudget } from "../budget/useStudioBudget.js";
-import { ConversationPane } from "../ChatPane.js";
-import { StripBudget } from "../budget/BudgetMeter.js";
-import { budgetView } from "../budget/budgetStore.js";
+  VetraExplorer,
+  type CreateDocumentInput,
+} from "@powerhousedao/vetra/editors/vetra-explorer";
+import { useCallback, useState, type ReactNode } from "react";
+import { addAgentWritableDocument } from "../addAgentWritableDocument.js";
+import { ChatPane } from "../ChatPane.js";
 import {
   ProductDebugPanel,
   isProductDebugEnabled,
 } from "../debug/ProductDebugPanel.js";
-import { SignInModal, useFailureHandlers } from "../failures/FailureLine.js";
-import { failureFor, withFailure } from "../failures/failureStates.js";
-import { useStudioRestarting } from "../failures/useStudioRestarting.js";
-import { GithubStatusLine } from "../github/GithubStatusLine.js";
 import { useStudioSignIn } from "../idea/useStudioSignIn.js";
-import { LiveSurface } from "../change/LiveSurface.js";
-import { ReadyBar } from "../change/ReadyBar.js";
-import { startChange } from "../change/startChange.js";
 import { PublishPermissionModal } from "../permission/PublishPermissionModal.js";
-import { usePublishPermission } from "../permission/usePublishPermission.js";
-import { PreviewPane, restartPreview } from "../preview/PreviewPane.js";
 import { SettingsDialog } from "../settings/SettingsDialog.js";
-import { DataDetail } from "../steps/DataDetail.js";
-import { LiveDetail } from "../steps/LiveDetail.js";
-import { PlanDetail } from "../steps/PlanDetail.js";
-import { planBrief } from "../steps/planBrief.js";
-import { TestsDetail } from "../steps/TestsDetail.js";
-import { StoryPane } from "../story/StoryPane.js";
-import { StepStrip } from "../strip/StepStrip.js";
-import { openChange, stripChange, stripModel } from "../strip/stripModel.js";
-import { PHASE_AVERAGES } from "../strip/timeLeft.js";
-import { useVersionsPanel } from "../versions/VersionsPanel.js";
-import { showsFirstVersionBar } from "./firstVersion.js";
-import { ProjectHome } from "./ProjectHome.js";
+import { PROJECT_FALLBACK_NAME } from "../specify/projects.js";
+import { AccountMenu } from "./AccountMenu.js";
+import { LABS_SCREENS } from "./labsScreens.js";
+import {
+  PANELS,
+  PANEL_LABELS,
+  drivePathOf,
+  openCount,
+  ownTabHref,
+  readPanels,
+  tabView,
+  togglePanel,
+  writePanels,
+  type OpenPanels,
+  type PanelId,
+} from "./panels.js";
+import { useProjectPackage } from "./useProjectPackage.js";
 import { useStudioState } from "./useStudioState.js";
 
-const STORY_WIDTH_STORAGE_KEY = "vetra-studio:story-width";
-/** The live page's failure rows never focus the build's steer box. */
-const NO_FOCUS = () => {};
-const STORY_WIDTH_DEFAULT = 38;
-const STORY_WIDTH_MIN = 24;
-const STORY_WIDTH_MAX = 62;
+export const ALL_CLOSED = "All panels are closed";
+export const TEST_NOT_AVAILABLE = "Test is not available yet.";
+export const PREVIEW_NOT_AVAILABLE = "Preview is not available yet.";
+const LABS_LINK = "Open in Vetra Labs ↗";
 
 export type StudioShellProps = {
   document: DocumentDriveDocument;
   dispatch: DocumentDispatch<DocumentDriveAction>;
+  /** The open document's editor, as Connect hands it to a drive app. */
+  children?: ReactNode;
+  /** The project's page in Vetra Labs; without it the links are left out. */
+  labsUrl?: string;
 };
 
-export function StudioShell({ document, dispatch }: StudioShellProps) {
+// The Studio page is the whole window; style.css hides Connect's sidebar
+// under `.studio-page`. No z-index, so Connect's dialogs (portals on the
+// body) stay above it.
+const PAGE =
+  "studio-page fixed inset-0 flex flex-col overflow-hidden bg-background";
+
+export function StudioShell({
+  document,
+  dispatch,
+  children,
+  labsUrl,
+}: StudioShellProps) {
   const result = useStudioState(document);
+  const project = useProjectPackage();
+  const auth = useStudioSignIn();
+  const [panels, setPanels] = useState<OpenPanels>(readPanels);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // "Change who can use it" opens Settings straight on the access switch.
-  const [settingsOnAccess, setSettingsOnAccess] = useState(false);
+  const [sessionId, setSessionId] = useState<string | undefined>();
   const [showDebug] = useState(isProductDebugEnabled);
 
-  const openSettings = useCallback(() => {
-    setSettingsOnAccess(false);
-    setSettingsOpen(true);
+  const toggle = useCallback((id: PanelId) => {
+    setPanels((current) => {
+      const next = togglePanel(current, id);
+      writePanels(next);
+      return next;
+    });
   }, []);
-  const openAccessSettings = useCallback(() => {
-    setSettingsOnAccess(true);
-    setSettingsOpen(true);
-  }, []);
-  const closeSettings = useCallback(() => {
-    setSettingsOpen(false);
-    setSettingsOnAccess(false);
-  }, []);
+
+  const driveId = document.header.id;
+  const createDocument = useCallback(
+    ({ name, documentType }: CreateDocumentInput) =>
+      addAgentWritableDocument(driveId, name, documentType),
+    [driveId],
+  );
 
   if (result.status === "loading") return <ShellLoading />;
 
-  const { status, product, productId, documents } = result;
-  // No product document (a fresh drive, or one with conversations or specs
-  // only): the project home.
-  const home = status === "idea" || status === "legacy";
+  const view = tabView(window.location.search);
+  const pathname = window.location.pathname;
+
+  const explorer = (
+    <VetraExplorer
+      document={document}
+      packageName={project?.name}
+      pageImages={LABS_SCREENS}
+      labsUrl={labsUrl}
+      createDocument={createDocument}
+    >
+      {children}
+    </VetraExplorer>
+  );
+
+  if (view === "test") {
+    return (
+      <div data-own-tab="test" className={PAGE}>
+        <TestPreview />
+      </div>
+    );
+  }
+  if (view === "specs") {
+    // A document is its editor only; without one the tab is the explorer.
+    return (
+      <div data-own-tab="specs" className={PAGE}>
+        <div className="min-h-0 flex-1 overflow-auto">
+          {children ?? explorer}
+        </div>
+      </div>
+    );
+  }
+
+  const sidePanels = panels.specs || panels.test;
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
-      {home ? (
-        <ProjectHome
-          drive={document}
-          dispatch={dispatch}
-          onOpenSettings={openSettings}
+    <div className={PAGE}>
+      <header
+        aria-label="Vetra Studio"
+        className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-card px-3"
+      >
+        <span className="shrink-0 text-sm font-semibold tracking-tight text-foreground">
+          Vetra Studio
+        </span>
+        <span
+          data-project
+          className="flex min-w-0 items-baseline gap-1.5 text-sm text-muted-foreground"
+        >
+          <span data-project-name className="truncate">
+            {project?.name ?? PROJECT_FALLBACK_NAME}
+          </span>
+          {project?.version ? (
+            <span data-project-version className="shrink-0 tabular-nums">
+              {project.version}
+            </span>
+          ) : null}
+        </span>
+        <div
+          role="group"
+          aria-label="Panels"
+          className="ml-auto flex shrink-0 items-center gap-1.5"
+        >
+          {PANELS.map((id) => (
+            <PanelToggle key={id} id={id} open={panels[id]} onToggle={toggle} />
+          ))}
+        </div>
+        {labsUrl ? (
+          <a
+            href={labsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {LABS_LINK}
+          </a>
+        ) : null}
+        <AccountMenu
+          name={auth.name}
+          hasUser={auth.hasUser}
+          onSignIn={auth.signIn}
+          onSignOut={auth.signOut}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
+      </header>
+
+      {openCount(panels) === 0 ? (
+        <div
+          data-panels="none"
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3"
+        >
+          <p className="text-sm text-muted-foreground">{ALL_CLOSED}</p>
+          <div className="flex items-center gap-1.5">
+            {PANELS.map((id) => (
+              <PanelToggle key={id} id={id} open={false} onToggle={toggle} />
+            ))}
+          </div>
+        </div>
       ) : (
-        <StudioPage
-          drive={document}
-          documents={documents}
-          product={product}
-          live={status === "live"}
-          productId={productId}
-          onOpenSettings={openSettings}
-          onOpenAccess={openAccessSettings}
-        />
+        <div className="flex min-h-0 flex-1">
+          {sidePanels ? (
+            // The Agent panel keeps its width; these two scroll sideways.
+            <div className="flex min-w-0 flex-1 overflow-x-auto">
+              {panels.specs ? (
+                <Panel
+                  id="specs"
+                  ownTab={ownTabHref("specs", pathname, drivePathOf(pathname))}
+                  onClose={toggle}
+                >
+                  {explorer}
+                </Panel>
+              ) : null}
+              {panels.test ? (
+                <Panel
+                  id="test"
+                  ownTab={ownTabHref("test", pathname, drivePathOf(pathname))}
+                  onClose={toggle}
+                >
+                  <TestPreview />
+                </Panel>
+              ) : null}
+            </div>
+          ) : null}
+          {panels.agent ? (
+            <Panel id="agent" narrow={sidePanels} onClose={toggle}>
+              <ChatPane
+                document={document}
+                dispatch={dispatch}
+                selectedSessionId={sessionId}
+                onSelectSession={setSessionId}
+                driveLoaded={true}
+              />
+            </Panel>
+          ) : null}
+        </div>
       )}
+
       {settingsOpen ? (
         <SettingsDialog
-          product={product}
-          productId={productId}
+          product={result.product}
+          productId={result.productId}
           drive={document}
-          initialSection={settingsOnAccess ? "access" : undefined}
-          onClose={closeSettings}
+          onClose={() => setSettingsOpen(false)}
         />
       ) : null}
-      {/* D7: the one-time ask right after sign-in, over either screen. */}
       <PublishPermissionModal
-        productId={productId}
+        productId={result.productId}
         studioId={document.header.id}
       />
       {showDebug ? <ProductDebugPanel drive={document} /> : null}
@@ -139,458 +250,137 @@ function ShellLoading() {
   return (
     <div
       aria-busy="true"
-      className="flex h-full w-full items-center justify-center bg-background text-sm text-muted-foreground"
+      className={`${PAGE} items-center justify-center text-sm text-muted-foreground`}
     >
       Opening your Studio…
     </div>
   );
 }
 
-/** Re-renders every `ms` so relative times ("2 min ago") stay current. */
-function useNow(ms: number): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), ms);
-    return () => clearInterval(timer);
-  }, [ms]);
-  return now;
-}
-
-function readStoryWidth(): number {
-  try {
-    const raw = window.localStorage.getItem(STORY_WIDTH_STORAGE_KEY);
-    const parsed = raw === null ? NaN : Number(raw);
-    return Number.isFinite(parsed)
-      ? clamp(parsed, STORY_WIDTH_MIN, STORY_WIDTH_MAX)
-      : STORY_WIDTH_DEFAULT;
-  } catch {
-    return STORY_WIDTH_DEFAULT;
-  }
-}
-
-function writeStoryWidth(width: number): void {
-  try {
-    window.localStorage.setItem(STORY_WIDTH_STORAGE_KEY, String(width));
-  } catch {
-    // Blocked storage: the width lasts for this visit only.
-  }
-}
-
-/** States 1 and 2: the strip over the build (story | preview) or the live product. */
-function StudioPage({
-  drive,
-  documents,
-  product,
-  live,
-  productId,
-  onOpenSettings,
-  onOpenAccess,
-}: {
-  drive: DocumentDriveDocument;
-  documents: readonly PHDocument[];
-  product: StudioProductState | null;
-  live: boolean;
-  productId: string | null;
-  onOpenSettings: () => void;
-  onOpenAccess: () => void;
-}) {
-  const now = useNow(30_000);
-  const budget = useStudioBudget();
-  const usage = budget.snapshot.usage;
-  const change = product ? stripChange(product) : null;
-  // The time left shown before for this change: it never goes back up.
-  const shownTimeLeft = useRef<{ changeId: string; text: string | null }>(null);
-  const plainView = stripModel(product, {
-    budget: usage
-      ? { spentUsd: usage.usageUsd, limitUsd: usage.limitUsd }
-      : null,
-    averages: PHASE_AVERAGES,
-    now,
-    prevTimeLeft:
-      change && shownTimeLeft.current?.changeId === change.id
-        ? shownTimeLeft.current.text
-        : null,
-  });
-  const right = plainView.right;
-  const shownBudget = budgetView(budget.snapshot);
-  const budgetLevel = shownBudget?.level;
-  const studioRestarting = useStudioRestarting();
-  const signIn = useStudioSignIn();
-  useEffect(() => {
-    if (!change || "liveUrl" in right) return;
-    shownTimeLeft.current = {
-      changeId: change.id,
-      text: right.timeLeft ?? null,
-    };
-  }, [change, right]);
-  const [openStep, setOpenStep] = useState<StepKind | null>(null);
-
-  const sessionId = change?.chatSessionId ?? undefined;
-  const sessionState = useDocumentSafe(sessionId ?? null);
-  const sessionDocument =
-    sessionState.status === "success" &&
-    isChatSessionDocument(sessionState.data)
-      ? sessionState.data
-      : undefined;
-  const chat = sessionDocument?.state.global ?? null;
-  const failureBudget = shownBudget
-    ? { level: shownBudget.level, request: shownBudget.request }
-    : null;
-  const permission = usePublishPermission(productId);
-  const handlers = useFailureHandlers({
-    sessionId: sessionId ?? null,
-    productId,
-    product,
-    requestedBy: signIn.name ?? "you",
-    allowPublish: permission.allow,
-    focusSteer: NO_FOCUS,
-    requestBudget: budget.request,
-    restartPreview,
-  });
-  // Versions (§5.7): every Go back — the panel's and the unhealthy
-  // banner's — goes through the same confirmation and checks.
-  const versions = useVersionsPanel({
-    product,
-    productId,
-    drive,
-    now,
-    requestRollback: handlers.requestRollback,
-  });
-  const liveHandlers = useMemo(
-    () => ({ ...handlers, requestRollback: versions.confirmGoBack }),
-    [handlers, versions.confirmGoBack],
-  );
-  // The strip marks the step a failure is on (spec §5.9); state 2's row uses
-  // the same failure.
-  const failure = failureFor(
-    product,
-    chat,
-    failureBudget,
-    {
-      studioRestarting,
-      publish: permission.state ? { state: permission.state } : null,
-    },
-    { now, handlers: liveHandlers },
-  );
-  const view = withFailure(plainView, failure);
-  // State 2 (spec §5.6): live, and no change in progress; a change on a live
-  // product shows the Live | Preview split (§5.7) on the same surface.
-  const liveView = live && product !== null;
-  const stateTwo = liveView && openChange(product) === null;
-  const previewPane = (
-    <PreviewPane
-      change={change}
-      documents={documents}
-      session={sessionDocument}
-    />
-  );
-
-  // An existing Studio's work before versions is closed: the next request
-  // starts a change, which becomes Version 1 (spec §6.6).
-  const startNextChange = useCallback(
-    (request: string) =>
-      productId
-        ? startChange({ drive, productId, request, kind: "CHANGE" })
-        : Promise.reject(
-            new Error("Your product is still loading. Try again in a moment."),
-          ),
-    [drive, productId],
-  );
-
-  // X33: an existing Studio's product gets Version 1 only on the customer's
-  // Make it live (no automatic first launch).
-  const firstVersionBar =
-    product && change && showsFirstVersionBar(product, change) ? (
-      <ReadyBar
-        product={product}
-        productId={productId}
-        change={change}
-        requestedBy={signIn.name ?? "you"}
-        onKeepChanging={NO_FOCUS}
-      />
-    ) : null;
-
-  const story =
-    product && change ? (
-      <StoryPane
-        product={product}
-        change={change}
-        chat={chat}
-        sessionId={sessionId ?? null}
-        productId={productId}
-        failureContext={{
-          budget: failureBudget,
-          requestBudget: budget.request,
-          studioRestarting,
-          restartPreview,
-          publish: permission.state ? { state: permission.state } : null,
-          requestedBy: signIn.name ?? "you",
-          allowPublish: permission.allow,
-        }}
-        onStartChange={productId ? startNextChange : undefined}
-      />
-    ) : sessionId ? (
-      /* No readable product yet: the conversation as it is. */
-      <ConversationPane
-        document={drive}
-        sessionId={sessionId}
-        driveLoaded={true}
-      />
-    ) : (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Getting ready…
-      </div>
-    );
-
-  const toast = usePHToast();
-  const rename = useCallback(
-    (name: string) => {
-      if (!productId) return;
-      const failed = () =>
-        toast?.("Couldn't rename it. Try again.", { type: "error" });
-      // The name only: the web address (slug) is separate and never changes here.
-      dispatchActions(
-        productActions.renameProduct({ name }),
-        productId,
-        failed,
-      ).catch(failed);
-    },
-    [productId, toast],
-  );
-
-  const toggleStep = useCallback((kind: StepKind) => {
-    setOpenStep((current) => (current === kind ? null : kind));
-  }, []);
-
-  // A change on a live product keeps its split: no step detail over it.
-  const following =
-    openStep === null || (!stateTwo && (liveView || openStep === "EDITORS"));
-  const detail = following ? null : (
-    <StepDetail
-      kind={openStep}
-      drive={drive}
-      documents={documents}
-      product={product}
-      productId={productId}
-      now={now}
-      preview={previewPane}
-    />
-  );
-
+function Notice({ children }: { children: ReactNode }) {
   return (
-    <>
-      <StepStrip
-        view={view}
-        selected={openStep}
-        onOpenStep={toggleStep}
-        onOpenSettings={onOpenSettings}
-        onRename={productId ? rename : undefined}
-        versions={
-          product?.liveVersion != null
-            ? { live: product.liveVersion, onOpen: versions.openPanel }
-            : undefined
-        }
-        github={
-          "liveUrl" in right && product ? (
-            <GithubStatusLine
-              product={product}
-              productId={productId}
-              drive={drive}
-              requestedBy={signIn.name ?? "you"}
-            />
-          ) : undefined
-        }
-        budget={
-          "budget" in right && (right.budget || budgetLevel === "exhausted") ? (
-            <StripBudget
-              text={right.budget}
-              view={budgetView(budget.snapshot)}
-              onRequest={budget.request}
-            />
-          ) : undefined
-        }
-      />
-      {liveView ? (
-        detail ? (
-          <main className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-            {detail}
-          </main>
-        ) : (
-          <main className="flex min-h-0 flex-1 flex-col">
-            <LiveSurface
-              product={product}
-              productId={productId}
-              drive={drive}
-              documents={documents}
-              failure={failure}
-              now={now}
-              story={change ? story : null}
-              preview={previewPane}
-              requestedBy={signIn.name ?? "you"}
-              onOpenAccess={onOpenAccess}
-            />
-          </main>
-        )
-      ) : (
-        <BuildSplit
-          story={story}
-          main={
-            detail ? (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex shrink-0 justify-end border-b border-border bg-card px-4 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setOpenStep(null)}
-                    className="rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-accent"
-                  >
-                    Following you · Back to the build
-                  </button>
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-                  {detail}
-                </div>
-              </div>
-            ) : firstVersionBar ? (
-              <div className="flex min-h-0 flex-1 flex-col">
-                {firstVersionBar}
-                {previewPane}
-              </div>
-            ) : (
-              previewPane
-            )
-          }
-        />
-      )}
-      {signIn.status === "signed-out" ? (
-        /* The session ended: sign in again over the page, which stays. */
-        <SignInModal onSignIn={signIn.signIn} />
-      ) : null}
-      {versions.element}
-    </>
-  );
-}
-
-function StepDetail({
-  kind,
-  drive,
-  documents,
-  product,
-  productId,
-  now,
-  preview,
-}: {
-  kind: StepKind;
-  drive: DocumentDriveDocument;
-  documents: readonly PHDocument[];
-  product: StudioProductState | null;
-  productId: string | null;
-  now: Date;
-  preview: React.ReactNode;
-}) {
-  switch (kind) {
-    case "PLAN":
-      return (
-        <PlanDetail
-          idea={product?.idea ?? null}
-          brief={planBrief(drive.state.global.nodes, documents)}
-        />
-      );
-    case "DATA":
-      return <DataDetail documents={documents} />;
-    case "EDITORS":
-      return <div className="flex h-[70vh] flex-col">{preview}</div>;
-    case "TESTS":
-      return <TestsDetail change={product ? stripChange(product) : null} />;
-    case "LIVE":
-      return (
-        <LiveDetail
-          product={product}
-          productId={productId}
-          drive={drive}
-          now={now}
-        />
-      );
-  }
-}
-
-/** Story on the left (resizable, ~38 %), the preview or a step on the right. */
-function BuildSplit({
-  story,
-  main,
-}: {
-  story: React.ReactNode;
-  main: React.ReactNode;
-}) {
-  const [width, setWidth] = useState(readStoryWidth);
-  const [dragging, setDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  /** Removes a drag's window listeners (on mouse up or unmount). */
-  const endDrag = useRef<(() => void) | null>(null);
-
-  useEffect(() => () => endDrag.current?.(), []);
-
-  function onMouseDown(event: React.MouseEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
-    endDrag.current?.();
-    setDragging(true);
-    let latest: number | null = null;
-    function onMove(e: MouseEvent) {
-      if (!rect) return;
-      const percent = ((e.clientX - rect.left) / rect.width) * 100;
-      latest = clamp(percent, STORY_WIDTH_MIN, STORY_WIDTH_MAX);
-      setWidth(latest);
-    }
-    function detach() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      endDrag.current = null;
-    }
-    function onUp() {
-      detach();
-      setDragging(false);
-      // Stored once per drag, when it ends.
-      if (latest !== null) writeStoryWidth(latest);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    endDrag.current = detach;
-  }
-
-  function resetWidth() {
-    setWidth(STORY_WIDTH_DEFAULT);
-    writeStoryWidth(STORY_WIDTH_DEFAULT);
-  }
-
-  return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 overflow-hidden">
-      <aside
-        aria-label="Story"
-        className="flex shrink-0 flex-col bg-card"
-        style={{ width: `${width}%` }}
-      >
-        {story}
-      </aside>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize"
-        onMouseDown={onMouseDown}
-        onDoubleClick={resetWidth}
-        className="w-1.5 shrink-0 cursor-col-resize border-x border-border bg-card hover:bg-accent"
-      />
-      <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-        {main}
-      </main>
-      {dragging ? (
-        /* Keeps the preview iframe from swallowing the drag. */
-        <div aria-hidden className="fixed inset-0 z-50 cursor-col-resize" />
-      ) : null}
+    <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      {children}
     </div>
   );
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+function PanelToggle({
+  id,
+  open,
+  onToggle,
+}: {
+  id: PanelId;
+  open: boolean;
+  onToggle: (id: PanelId) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-panel-toggle={id}
+      aria-pressed={open}
+      onClick={() => onToggle(id)}
+      className={`h-7 rounded-md border px-2.5 text-xs font-medium ${
+        open
+          ? "border-foreground bg-foreground text-background"
+          : "border-border bg-card text-foreground hover:bg-accent"
+      }`}
+    >
+      {PANEL_LABELS[id]}
+    </button>
+  );
+}
+
+function Panel({
+  id,
+  ownTab,
+  narrow = false,
+  onClose,
+  children,
+}: {
+  id: PanelId;
+  /** The panel's address in a tab of its own. */
+  ownTab?: string;
+  /** Keeps a fixed width beside other panels. */
+  narrow?: boolean;
+  onClose: (id: PanelId) => void;
+  children: ReactNode;
+}) {
+  const label = PANEL_LABELS[id];
+  return (
+    <section
+      aria-label={label}
+      data-panel={id}
+      className={`flex min-h-0 flex-col border-r border-border last:border-r-0 ${
+        id === "agent"
+          ? narrow
+            ? "w-[420px] max-w-full shrink-0 border-l"
+            : "min-w-0 flex-1"
+          : "min-w-[640px] flex-1"
+      }`}
+    >
+      <header className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-card px-3">
+        <h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+          {label}
+        </h2>
+        {ownTab ? (
+          <a
+            href={ownTab}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${label} in its own tab`}
+            title="Open in its own tab"
+            className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            ↗
+          </a>
+        ) : null}
+        <button
+          type="button"
+          aria-label={`Close ${label}`}
+          title="Close"
+          onClick={() => onClose(id)}
+          className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          ✕
+        </button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+    </section>
+  );
+}
+
+/** Test (a plain Connect on the project) and Preview (the project's host). */
+function TestPreview() {
+  const [mode, setMode] = useState<"test" | "preview">("test");
+  return (
+    <div data-test-preview={mode} className="flex h-full flex-col">
+      <div
+        role="group"
+        aria-label="Test or Preview"
+        className="flex shrink-0 items-center gap-1.5 border-b border-border bg-card px-3 py-1.5"
+      >
+        {(["test", "preview"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            onClick={() => setMode(value)}
+            className={`h-6 rounded-full border px-2.5 text-xs font-medium ${
+              mode === value
+                ? "border-foreground bg-foreground text-background"
+                : "border-border bg-card text-foreground hover:bg-accent"
+            }`}
+          >
+            {value === "test" ? "Test" : "Preview"}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1">
+        <Notice>
+          {mode === "test" ? TEST_NOT_AVAILABLE : PREVIEW_NOT_AVAILABLE}
+        </Notice>
+      </div>
+    </div>
+  );
 }

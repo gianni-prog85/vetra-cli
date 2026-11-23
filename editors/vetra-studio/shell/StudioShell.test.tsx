@@ -4,80 +4,63 @@ import type {
   Node,
 } from "@powerhousedao/shared/document-drive";
 import type { PHDocument } from "document-model";
-import { actions } from "document-models/studio-product";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { expectNoForbiddenWords } from "../test-utils/forbiddenWords.js";
-import {
-  button,
-  click,
-  pressKey,
-  render,
-  rerender,
-  typeInto,
-} from "../test-utils/render.js";
-import { plainModel } from "../steps/plainModel.js";
-import type * as PlainModelModule from "../steps/plainModel.js";
+import { button, click, render } from "../test-utils/render.js";
 import {
   PRODUCT_ID,
   SESSION_ID,
-  at,
   buildingOps,
   chatDoc,
   file,
   productDoc,
-  withLiveVersion,
 } from "../test-utils/studioFixtures.js";
-import { StudioShell } from "./StudioShell.js";
+import { LABS_SCREENS } from "./labsScreens.js";
+import { PANELS_STORAGE_KEY } from "./panels.js";
+import {
+  ALL_CLOSED,
+  PREVIEW_NOT_AVAILABLE,
+  StudioShell,
+  TEST_NOT_AVAILABLE,
+} from "./StudioShell.js";
+
+type ExplorerProps = {
+  packageName?: string;
+  pageImages?: Record<string, string>;
+  labsUrl?: string;
+  createDocument?: (input: {
+    name: string;
+    documentType: string;
+  }) => Promise<unknown>;
+  children?: ReactNode;
+};
 
 const hoisted = vi.hoisted(() => ({
   documents: undefined as PHDocument[] | undefined,
-  dispatched: [] as { action: unknown; id: string }[],
+  explorer: undefined as ExplorerProps | undefined,
+  added: [] as string[][],
 }));
 
-vi.mock("../steps/plainModel.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof PlainModelModule>();
-  return { ...actual, plainModel: vi.fn(actual.plainModel) };
-});
-
+vi.mock("@powerhousedao/vetra/editors/vetra-explorer", () => ({
+  VetraExplorer: (props: ExplorerProps) => {
+    hoisted.explorer = props;
+    return <div data-explorer>{props.children}</div>;
+  },
+}));
+vi.mock("../addAgentWritableDocument.js", () => ({
+  addAgentWritableDocument: (...args: string[]) => {
+    hoisted.added.push(args);
+    return Promise.resolve(undefined);
+  },
+}));
 vi.mock("../hooks/useDriveDocuments.js", () => ({
   useDriveDocuments: () => hoisted.documents,
 }));
-vi.mock("../VetraStudio.js", () => ({
-  VetraStudio: () => <div>Old Studio view</div>,
-}));
 vi.mock("../ChatPane.js", () => ({
-  ConversationPane: ({ sessionId }: { sessionId: string }) => (
-    <div>Conversation {sessionId}</div>
-  ),
   ChatPane: () => <div>Chat sessions</div>,
 }));
 vi.mock("./useProjectPackage.js", () => ({
   useProjectPackage: () => ({ name: "@acme/shop", version: "1.0.9" }),
-}));
-vi.mock("../BuildSection.js", () => ({
-  PreviewBody: () => <div>Preview pane</div>,
-}));
-vi.mock("../budget/useStudioBudget.js", () => ({
-  useStudioBudget: () => ({
-    snapshot: {
-      environmentId: null,
-      usage: {
-        source: "VETRA",
-        model: "m",
-        usageUsd: 0.31,
-        limitUsd: 10,
-        resetsAt: null,
-      },
-      exhaustedByFailure: false,
-      request: { kind: "idle" },
-    },
-    request: () => {},
-    markExhausted: () => {},
-  }),
-}));
-// No daemon polls or sign-in lookups in shell tests.
-vi.mock("../failures/useStudioRestarting.js", () => ({
-  useStudioRestarting: () => false,
 }));
 vi.mock("../idea/useStudioSignIn.js", () => ({
   useStudioSignIn: () => ({
@@ -88,49 +71,15 @@ vi.mock("../idea/useStudioSignIn.js", () => ({
     signOut: () => {},
   }),
 }));
-vi.mock("../budget/BudgetMeter.js", () => ({
-  StudioBudgetMeter: () => <span>$0.31 of $10</span>,
-  StripBudget: ({ text }: { text: string }) => <span>{text}</span>,
-}));
-vi.mock("../hooks/useSessionPreviewTarget.js", () => ({
-  useSessionPreviewTarget: () => undefined,
-  useProjectHomeTarget: () => undefined,
-}));
-vi.mock("../hooks/useResolvedPreview.js", () => ({
-  useResolvedPreview: () => ({ kind: "no-target" }),
-}));
 vi.mock("../settings/SettingsDialog.js", () => ({
   SettingsDialog: () => <div role="dialog">Settings dialog</div>,
 }));
-// The live embed has its own test; the shell only routes to it.
-vi.mock("../live/LiveEmbed.js", () => ({
-  LiveEmbed: ({ liveUrl }: { liveUrl: string }) => (
-    <div data-embed="live">Live app at {liveUrl}</div>
-  ),
-}));
-// The one-time publish ask has its own test; shell tests are about routing.
 vi.mock("../permission/PublishPermissionModal.js", () => ({
   PublishPermissionModal: () => null,
 }));
-vi.mock("../permission/usePublishPermission.js", () => ({
-  usePublishPermission: () => ({
-    state: "GRANTED",
-    delegated: true,
-    pending: false,
-    allow: () => Promise.resolve(true),
-  }),
-}));
-vi.mock("../ideation/DocumentHost.js", () => ({
-  DocumentHost: () => <div>Document editor</div>,
-}));
-vi.mock("@powerhousedao/reactor-browser", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useDocumentSafe: () => ({ status: "loading" }),
-  usePHToast: () => undefined,
-  dispatchActions: (action: unknown, id: string) => {
-    hoisted.dispatched.push({ action, id });
-    return Promise.resolve(undefined);
-  },
+vi.mock("../debug/ProductDebugPanel.js", () => ({
+  ProductDebugPanel: () => null,
+  isProductDebugEnabled: () => false,
 }));
 
 function driveDoc(nodes: Node[]): DocumentDriveDocument {
@@ -140,260 +89,218 @@ function driveDoc(nodes: Node[]): DocumentDriveDocument {
   } as unknown as DocumentDriveDocument;
 }
 
-const PRODUCT = file(PRODUCT_ID, "vetra/studio-product");
 const SESSION = file(SESSION_ID, "powerhouse/chat-session");
-const MODEL_ID = "model-1";
+const explorerProps = (): ExplorerProps => hoisted.explorer ?? {};
 
-function modelDoc(): PHDocument {
-  return {
-    header: { id: MODEL_ID, documentType: "powerhouse/document-model" },
-    state: {
-      global: {
-        name: "Task board",
-        specifications: [
-          {
-            state: {
-              global: {
-                schema:
-                  "type TaskBoardState { tasks: [Task!]! }\ntype Task { id: OID! title: String }",
-              },
-            },
-            modules: [{ operations: [{ name: "ADD_TASK" }] }],
-          },
-        ],
-      },
-    },
-  } as unknown as PHDocument;
-}
-
-function building() {
-  const product = productDoc(
-    ...buildingOps(),
-    actions.startStep({ changeId: "c1", kind: "PLAN", at: at(2) }),
-    actions.startStep({ changeId: "c1", kind: "DATA", at: at(3) }),
-    actions.countStep({ changeId: "c1", kind: "DATA", done: 2, total: 3 }),
-  );
-  hoisted.documents = [product, chatDoc(SESSION_ID, 1), modelDoc()];
+function shell(children?: ReactNode, labsUrl?: string) {
   return render(
     <StudioShell
-      document={driveDoc([
-        PRODUCT,
-        SESSION,
-        file(MODEL_ID, "powerhouse/document-model"),
-      ])}
+      document={driveDoc([SESSION])}
       dispatch={() => {}}
-    />,
+      labsUrl={labsUrl}
+    >
+      {children}
+    </StudioShell>,
   );
 }
 
+const panel = (container: HTMLElement, id: string) =>
+  container.querySelector(`[data-panel="${id}"]`);
+const toggle = (container: HTMLElement, id: string) =>
+  container.querySelector(`header [data-panel-toggle="${id}"]`);
+const openPanels = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll("[data-panel]")).map((el) =>
+    el.getAttribute("data-panel"),
+  );
+
 beforeEach(() => {
-  hoisted.documents = undefined;
-  hoisted.dispatched = [];
-  vi.mocked(plainModel).mockClear();
+  hoisted.documents = [chatDoc(SESSION_ID, 1)];
+  hoisted.explorer = undefined;
+  hoisted.added = [];
+  window.localStorage.clear();
+  window.history.replaceState({}, "", "/d/studio");
 });
 
 describe("StudioShell", () => {
-  it("a drive with conversations but no product document opens the project home", () => {
-    hoisted.documents = [chatDoc(SESSION_ID, 3)];
-    const container = render(
-      <StudioShell document={driveDoc([SESSION])} dispatch={() => {}} />,
-    );
-    expect(container.textContent).not.toContain("Old Studio view");
-    expect(container.querySelector('[aria-label="Project"]')).not.toBeNull();
-    expect(container.textContent).toContain("Chat sessions");
-  });
-
-  it("a drive without a product shows the project home, never the idea screen", () => {
-    hoisted.documents = [];
-    const container = render(
-      <StudioShell document={driveDoc([])} dispatch={() => {}} />,
-    );
-    expect(
-      container.querySelector('[aria-label="Project"]')?.textContent,
-    ).toContain("@acme/shop");
-    expect(container.querySelector('[aria-label="Your idea"]')).toBeNull();
-    expect(container.textContent).not.toContain("What do you want to build?");
-    expect(container.textContent).not.toContain("Build it");
-    expect(container.querySelector('[aria-label="Steps"]')).toBeNull();
-    expectNoForbiddenWords(container);
-  });
-
-  it("waits for the drive before choosing a state", () => {
-    const container = render(
-      <StudioShell document={driveDoc([SESSION])} dispatch={() => {}} />,
-    );
+  it("waits for the drive before showing the page", () => {
+    hoisted.documents = undefined;
+    const container = shell();
     expect(container.textContent).toContain("Opening your Studio…");
+    expect(container.querySelector("[data-panel]")).toBeNull();
   });
 
-  it("no route other than strip steps, Settings and Versions", () => {
-    const container = building();
-    expect(
-      container.querySelectorAll('[role="tab"], [role="tablist"]'),
-    ).toHaveLength(0);
-    const names = Array.from(container.querySelectorAll("button, a")).map(
-      (el) =>
-        el.getAttribute("data-step") ??
-        el.getAttribute("aria-label") ??
-        el.textContent.trim(),
+  it("opens on Specs and Agent under the bar with the project", () => {
+    const container = shell();
+    const bar = container.querySelector('header[aria-label="Vetra Studio"]');
+    expect(bar?.textContent).toContain("Vetra Studio");
+    expect(bar?.querySelector("[data-project-name]")?.textContent).toBe(
+      "@acme/shop",
     );
-    const allowed = new Set([
-      "PLAN",
-      "DATA",
-      "EDITORS",
-      "TESTS",
-      "LIVE",
-      "Rename",
-      "Settings",
-      "Versions",
-      // The steer box's actions (Task 1.6), not routes.
-      "Send",
-      "Pause",
+    expect(bar?.querySelector("[data-project-version]")?.textContent).toBe(
+      "1.0.9",
+    );
+    expect(openPanels(container)).toEqual(["specs", "agent"]);
+    expect(toggle(container, "specs")?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(toggle(container, "test")?.getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(toggle(container, "test")?.textContent).toBe("Test / Preview");
+    expect(panel(container, "agent")?.textContent).toContain("Chat sessions");
+    expect(button(container, "Account")).toBeDefined();
+  });
+
+  it("hands the explorer the project, the Labs screens and its create", async () => {
+    shell();
+    expect(explorerProps().packageName).toBe("@acme/shop");
+    expect(explorerProps().pageImages).toBe(LABS_SCREENS);
+    await explorerProps().createDocument?.({
+      name: "Order",
+      documentType: "powerhouse/document-model",
+    });
+    expect(hoisted.added).toEqual([
+      ["drive-1", "Order", "powerhouse/document-model"],
     ]);
-    expect(names.filter((n) => !allowed.has(n))).toEqual([]);
-    expect(names).toContain("Settings");
-    expectNoForbiddenWords(container);
   });
 
-  it("building shows the strip over the story and the preview", () => {
-    const container = building();
+  it("shows the open document's editor in Specs", () => {
+    const container = shell(<div>Order editor</div>);
     expect(
-      container.querySelector('[data-step="DATA"]')?.textContent,
-    ).toContain("2/3");
-    // The story: the idea in quotes, the steer box under it.
-    const story = container.querySelector("aside");
-    expect(story?.textContent).toContain("“a task board for my team”");
-    expect(story?.querySelector('input[aria-label="Steer it"]')).not.toBeNull();
-    expect(container.textContent).toContain("Preview pane");
-    expect(container.textContent).toContain("$0.31 of $10");
+      panel(container, "specs")?.querySelector("[data-explorer]")?.textContent,
+    ).toBe("Order editor");
   });
 
-  it("a step opens its detail and the chip returns to the build", () => {
-    const container = building();
-    // Models are read only for the Data step, not on every drive change.
-    expect(plainModel).not.toHaveBeenCalled();
-    click(container.querySelector('button[data-step="DATA"]'));
-    expect(container.textContent).toContain("A Task board has tasks");
-    expect(plainModel).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain("Preview pane");
-    expectNoForbiddenWords(container);
-
-    click(container.querySelector('button[data-step="PLAN"]'));
-    expect(container.textContent).toContain("“a task board for my team”");
-
-    click(button(container, "Back to the build"));
-    expect(container.textContent).toContain("Preview pane");
-  });
-
-  it("the product name renames in place; Escape cancels", () => {
-    const container = building();
-    click(button(container, "Rename"));
-    const input = container.querySelector('input[aria-label="Product name"]');
-    typeInto(input, "Team tasks");
-    pressKey(input!, "Escape");
-    expect(hoisted.dispatched).toEqual([]);
-    expect(container.textContent).toContain("Task board");
-
-    click(button(container, "Rename"));
-    const again = container.querySelector('input[aria-label="Product name"]');
-    typeInto(again, "Team tasks");
-    pressKey(again!, "Enter");
-    expect(hoisted.dispatched).toMatchObject([
-      {
-        action: { type: "RENAME_PRODUCT", input: { name: "Team tasks" } },
-        id: PRODUCT_ID,
-      },
-    ]);
-    expect(
-      container.querySelector('input[aria-label="Product name"]'),
-    ).toBeNull();
-  });
-
-  it("Settings opens the settings dialog", () => {
-    const container = building();
-    click(button(container, "Settings"));
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-  });
-
-  it("a change open on a live product shows the Live | Preview split", () => {
-    // The live version is there and a change is being worked on: the strip
-    // stays in live mode with the change's progress; the page splits into
-    // the live app and the change's preview, the drawer holds its story.
-    const doc = withLiveVersion(productDoc(...buildingOps()));
-    const change = doc.state.global.changes[0];
-    change.status = "BUILDING";
-    change.steps[0].status = "WORKING";
-    hoisted.documents = [doc, chatDoc(SESSION_ID, 1)];
+  it("a drive with a product document shows the same panels, no step strip", () => {
+    hoisted.documents = [productDoc(...buildingOps()), chatDoc(SESSION_ID, 1)];
     const container = render(
       <StudioShell
-        document={driveDoc([PRODUCT, SESSION])}
+        document={driveDoc([file(PRODUCT_ID, "vetra/studio-product"), SESSION])}
         dispatch={() => {}}
       />,
     );
-    expect(
-      container.querySelector('[data-pane="live"] [data-embed="live"]')
-        ?.textContent,
-    ).toBe("Live app at https://task-board.vetra.io");
-    expect(
-      container.querySelector('[data-pane="preview"]')?.textContent,
-    ).toContain("Preview pane");
-    expect(
-      container.querySelector(
-        '[data-drawer="change"] input[aria-label="Steer it"]',
-      ),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-step="LIVE"]')?.textContent,
-    ).toContain("●");
-    expect(
-      container.querySelector("[data-change-progress]")?.textContent,
-    ).toContain("Change: Plan");
-    expect(container.textContent).toContain("task-board.vetra.io");
-    expect(container.querySelector('[data-banner="live"]')).toBeNull();
-    // The live version's pills don't open a step detail over the split.
-    expect(container.querySelector('button[data-step="DATA"]')).toBeNull();
-    expect(container.querySelector("[data-split]")).not.toBeNull();
-    expectNoForbiddenWords(container);
+    expect(openPanels(container)).toEqual(["specs", "agent"]);
+    expect(container.querySelector('[aria-label="Steps"]')).toBeNull();
+    expect(container.querySelector("[data-step]")).toBeNull();
+    expect(container.querySelector('[aria-label="Story"]')).toBeNull();
   });
 
-  it("transition to the live view with the banner after the first launch", () => {
-    window.localStorage.clear();
-    const container = building();
-    expect(container.textContent).toContain("Preview pane");
-    expect(container.querySelector("aside")).not.toBeNull();
+  it("a toggle opens and closes its panel and the choice is kept", () => {
+    const container = shell();
+    click(toggle(container, "test"));
+    expect(openPanels(container)).toEqual(["specs", "test", "agent"]);
+    click(toggle(container, "specs"));
+    expect(openPanels(container)).toEqual(["test", "agent"]);
+    expect(
+      JSON.parse(window.localStorage.getItem(PANELS_STORAGE_KEY) ?? "{}"),
+    ).toEqual({ specs: false, test: true, agent: true });
 
-    // The launch completes while the page is open: state 2 fills the page.
-    const live = withLiveVersion(productDoc(...buildingOps()));
-    hoisted.documents = [live, chatDoc(SESSION_ID, 1)];
-    rerender(
-      container,
-      <StudioShell
-        document={driveDoc([PRODUCT, SESSION])}
-        dispatch={() => {}}
-      />,
-    );
-    expect(container.querySelector("aside")).toBeNull();
-    expect(
-      container.querySelector('[data-banner="live"]')?.textContent,
-    ).toContain("Your product is live.");
-    expect(container.querySelector('[data-embed="live"]')?.textContent).toBe(
-      "Live app at https://task-board.vetra.io",
-    );
-    expect(
-      container.querySelector('[data-step="LIVE"]')?.textContent,
-    ).toContain("●");
-    expect(
-      container.querySelector('[data-step="TESTS"]')?.textContent,
-    ).toContain("✓");
-    expectNoForbiddenWords(container);
+    // The next visit opens the same panels.
+    expect(openPanels(shell())).toEqual(["test", "agent"]);
+  });
 
-    // A later visit to this Studio and version: the compact line only.
-    const again = render(
-      <StudioShell
-        document={driveDoc([PRODUCT, SESSION])}
-        dispatch={() => {}}
-      />,
+  it("each panel closes from its own header", () => {
+    const container = shell();
+    click(toggle(container, "test"));
+    click(button(container, "Close Test / Preview"));
+    click(button(container, "Close Specs"));
+    expect(openPanels(container)).toEqual(["agent"]);
+    click(button(container, "Close Agent"));
+    expect(openPanels(container)).toEqual([]);
+  });
+
+  it("with all panels closed it says so and offers the three again", () => {
+    const container = shell();
+    click(toggle(container, "specs"));
+    click(toggle(container, "agent"));
+    const empty = container.querySelector('[data-panels="none"]');
+    expect(empty?.textContent).toContain(ALL_CLOSED);
+    expect(
+      Array.from(empty?.querySelectorAll("button") ?? []).map(
+        (b) => b.textContent,
+      ),
+    ).toEqual(["Specs", "Test / Preview", "Agent"]);
+    click(empty?.querySelector('[data-panel-toggle="agent"]'));
+    expect(openPanels(container)).toEqual(["agent"]);
+  });
+
+  it("Test / Preview says it is not available yet, for both", () => {
+    const container = shell();
+    click(toggle(container, "test"));
+    const test = panel(container, "test");
+    expect(test?.textContent).toContain(TEST_NOT_AVAILABLE);
+    click(
+      test?.querySelector('[aria-label="Test or Preview"] button:last-child'),
     );
-    expect(again.textContent).toContain("Went live");
-    expect(again.textContent).not.toContain("Your product is live.");
+    expect(test?.textContent).toContain(PREVIEW_NOT_AVAILABLE);
+    expect(test?.textContent).not.toContain(TEST_NOT_AVAILABLE);
+  });
+
+  it("Specs and Test link to a tab of their own; Agent has none", () => {
+    window.history.replaceState({}, "", "/d/studio/order");
+    const container = shell(<div>Order editor</div>);
+    click(toggle(container, "test"));
+    const link = (id: string) =>
+      panel(container, id)?.querySelector("header a");
+    expect(link("specs")?.getAttribute("href")).toBe("/d/studio/order?embed=1");
+    expect(link("specs")?.getAttribute("target")).toBe("_blank");
+    expect(link("test")?.getAttribute("href")).toBe(
+      "/d/studio?embed=1&panel=test",
+    );
+    expect(link("agent")).toBeNull();
+  });
+
+  it("Agent keeps 420 px beside a panel of at least 640 px, and fills alone", () => {
+    const container = shell();
+    expect(panel(container, "agent")?.className).toContain("w-[420px]");
+    expect(panel(container, "specs")?.className).toContain("min-w-[640px]");
+    click(toggle(container, "specs"));
+    expect(panel(container, "agent")?.className).not.toContain("w-[420px]");
+    expect(panel(container, "agent")?.className).toContain("flex-1");
+  });
+
+  it("the account menu opens Settings", () => {
+    const container = shell();
+    click(button(container, "Account"));
+    click(button(container, "Settings"));
+    expect(container.querySelector('[role="dialog"]')?.textContent).toBe(
+      "Settings dialog",
+    );
+  });
+
+  it("links to Vetra Labs only when it has an address", () => {
+    expect(
+      shell().querySelector('header[aria-label="Vetra Studio"] a'),
+    ).toBeNull();
+    const container = shell(undefined, "https://labs.example/p");
+    const link = container.querySelector('header[aria-label="Vetra Studio"] a');
+    expect(link?.textContent).toBe("Open in Vetra Labs ↗");
+    expect(link?.getAttribute("href")).toBe("https://labs.example/p");
+    expect(explorerProps().labsUrl).toBe("https://labs.example/p");
+  });
+
+  it("a spec document in its own tab is the editor only", () => {
+    window.history.replaceState({}, "", "/d/studio/order?embed=1");
+    const container = shell(<div>Order editor</div>);
+    expect(container.textContent).toBe("Order editor");
+    expect(container.querySelector("header")).toBeNull();
+    expect(container.querySelector("[data-explorer]")).toBeNull();
+    expect(container.querySelector("[data-panel]")).toBeNull();
+  });
+
+  it("a Specs tab with no document open is the explorer without the bar", () => {
+    window.history.replaceState({}, "", "/d/studio?embed=1");
+    const container = shell();
+    expect(container.querySelector("[data-explorer]")).not.toBeNull();
+    expect(container.querySelector("header")).toBeNull();
+    expect(container.querySelector("[data-panel]")).toBeNull();
+  });
+
+  it("Test in its own tab is the Test / Preview page without the bar", () => {
+    window.history.replaceState({}, "", "/d/studio?embed=1&panel=test");
+    const container = shell();
+    expect(container.querySelector("header")).toBeNull();
+    expect(container.querySelector("[data-panel]")).toBeNull();
+    expect(container.textContent).toContain(TEST_NOT_AVAILABLE);
   });
 });

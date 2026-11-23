@@ -6,8 +6,8 @@ import { createRemoteAttachmentService } from "@powerhousedao/reactor-attachment
 import {
   assertNoReplayError,
   dismissCookieBanner,
-  projectHome,
   startConversation,
+  studioPage,
 } from "../support/studio-page.js";
 import {
   cliPaths,
@@ -18,7 +18,7 @@ import {
 } from "../support/target.js";
 
 /**
- * The chat round trip without an LLM key. A conversation on the project home
+ * The chat round trip without an LLM key. A conversation in the Agent panel
  * starts the agent; the replay agent (chat-spec fixture) writes a
  * document-model spec into the project through the real spec commands and
  * closes with its done text. Then a file goes into the conversation and the
@@ -121,9 +121,9 @@ test.describe("Vetra studio — chat round trip", () => {
       .toMatchObject({ id: spec.modelId, name: spec.name, description: spec.description });
     console.log(`[e2e] spec ${specDoc?.id} in the Studio drive`);
 
-    // The project home lists it with the project's specifications.
+    // The explorer lists it with the project's specifications.
     await expect(
-      projectHome(page).specifications.getByText(spec.name, { exact: true }),
+      studioPage(page).tree.getByText(spec.name, { exact: true }),
     ).toBeVisible({ timeout: 30_000 });
     // And the project holds it: the spec commands write the project's specs/.
     if (workdir) {

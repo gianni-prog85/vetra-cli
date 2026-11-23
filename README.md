@@ -96,9 +96,10 @@ pnpm dev:reset
 
 ## Your first session
 
-Studio works inside one project (the workdir). The Studio page opens on the
-project home: the project's name and version, your conversations with the
-agent and the project's specifications. Start a session there, or open the
+Studio works inside one project (the workdir). The Studio page has a top bar
+with the project's name and version over three panels: Specs (the project's
+specifications), Test / Preview and Agent (your conversations with the
+agent). Start a session in the Agent panel, or open the
 Cli's shell in the terminal
 (`pnpm exec ph-cli run studio -- -i --workdir ../vetra-test`). Studio creates no
 project: a new app starts with `ph init`, then Studio in it. Once the REPL is

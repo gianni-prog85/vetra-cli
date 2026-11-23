@@ -21,6 +21,8 @@
 @source "./editors/**/*.{ts,tsx}";
 
 @source "./node_modules/@powerhousedao/document-engineering/dist/**/*.js";
+/* The explorer in the Specs panel and the spec editors it opens. */
+@source "./node_modules/@powerhousedao/vetra/dist/**/*.js";
 
 @theme {
   /* Vetra brand color. Every other color comes from the design-system theme's
@@ -43,6 +45,11 @@
         color-mix(in srgb, var(--color-vetra-primary) 0%, transparent);
     }
   }
+}
+
+/* The Studio page is the whole window: Connect's sidebar goes while it shows. */
+body:has(.studio-page) [data-connect-sidebar] {
+  display: none;
 }
 
 /* Product-tour popover — theme driver.js to the vetra design tokens. Applied via

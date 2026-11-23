@@ -115,7 +115,7 @@ A host may import a sibling host file (`connect` and `studio-signed` do).
 | Host | Runner | What it is |
 |---|---|---|
 | `switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Studio switchboard: port 8091 on `127.0.0.1`, plugins `mcp` and `attachments`, `auth` off, `createSignaturePolicy: "legacy"` (a local Studio's Cli attaches without a signer). Its config file is the package's empty `hosts/switchboard/config.json` (`configFile: "${package}/…"`), its packages are `${package}`, `@powerhousedao/clint-common` and `@powerhousedao/vetra` with `disableLocal: true` (the working directory is not loaded), and its identity is `${userData}/.ph/vetra/switchboard/{.keypair.json,.renown.json}`. Declares one drive: slug `studio`, name `Home`, `powerhouse/document-drive`, `preferredEditor: vetra-studio` |
-| `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: "${package}/dist/connect"` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only. `runner.serveFiles` serves `/studio.config.json` from `${userData}/.ph/vetra/studio.config.json`, read per request (`no-store`, 404 while missing) |
+| `connect` | `@powerhousedao/ph-cli/runners/connect` | The Studio SPA: port 8090, `outDir: "${package}/dist/connect"` (`build` writes it, `serve` serves it), branding and Renown namespace. A remote client of the switchboard (no reactor in the tab); its server proxies the switchboard's paths (`runner.proxy` = the switchboard's `origin`), so the browser talks to 8090 only. `runner.serveFiles` serves `/studio.config.json` from `${userData}/.ph/vetra/studio.config.json`, read per request (`no-store`, 404 while missing), and the Vetra Labs screenshots of the Build and Deploy placeholder pages, `/vetra-labs/<page>.jpg` from `${package}/hosts/connect/labs/` |
 | `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
 | `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` and `config` replace the host's whole sections; only `runner` key-merges), the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store, and its identity to `${userData}/.ph/vetra-signed/switchboard/`. Auth stays off. Not run by anything; see "The signed check" |
@@ -223,7 +223,7 @@ is needed: a switchboard without a keypair generates one at
    starting a conversation: the tab creates the conversation, and a
    `v2-required` document refuses an unsigned create. On `127.0.0.1` the tab
    does not ask for the sign-in itself.
-5. Start a session in the project home and send a message. Expect the
+5. Start a session in the Agent panel and send a message. Expect the
    agent's answer, then every operation the agent
    wrote carrying its key: find the conversation with
    `findDocuments(search: { type: "powerhouse/chat-session", parentId: "<id>" })`,
@@ -327,16 +327,14 @@ is missing it is a 404 and the SPA sends nothing to the local API.
 The user's landing experience — `Vetra Studio` — is a custom **drive
 editor** registered against `powerhouse/document-drive` and selected
 via the vetra drive's `preferredEditor` field. A Studio runs inside one
-project, so a drive without a product document shows the **project home**
-(`shell/ProjectHome.tsx`): the project's name and version (its
-`package.json`, from `GET /project-package` with no parameter), the
-conversations with the agent (the chat pane: sessions list, a new session,
-the conversation) and the specifications in the drive, read-only. There is
-no idea screen and no "Build it": Studio starts no product and creates no
-project (a new app starts with `ph init`, then Studio in it). The product
-layer (the step strip over the build, versions, launch, the live product)
-shows only for a drive that already holds a `vetra/studio-product`
-document, which nothing in C1 creates.
+project, and its page is the **panel shell** (`shell/StudioShell.tsx`, see
+"Drive editor (Vetra Studio)"): a top bar with the project's name and
+version (its `package.json`, from `GET /project-package` with no
+parameter) over the Specs, Test / Preview and Agent panels. There is no
+idea screen, no project home and no "Build it": Studio starts no product
+and creates no project (a new app starts with `ph init`, then Studio in
+it). A `vetra/studio-product` document in the drive changes nothing on the
+page.
 
 ### vetra local API
 
@@ -374,7 +372,7 @@ answers `unknown-project`.
 - `GET /project-package` — read-only. Returns the project's package
   identity (`{ kind: "ok", name, version }`) read from
   `<workdir>/package.json`, or `unknown-project` / `no-package`. The
-  project home's header and the Deploy section's package display call this.
+  Studio page's top bar calls this.
 - `GET /release-status?registry=<url>` — read-only. Compares
   the project's current source content hash
   (`helpers/project-fingerprint.ts`) against the hash embedded in the latest
@@ -571,17 +569,43 @@ A custom editor registered for `powerhouse/document-drive`. Lives at
 document sets `preferredEditor` to this editor's id so Connect picks
 it up automatically.
 
-Composition:
+The page is the panel shell, `shell/StudioShell.tsx`. It covers the window
+(`style.css` hides Connect's own sidebar while it shows; Connect's dialogs
+stay above it) and has:
 
-- Subscribes via `useDocument` to the drive doc itself (to list chat
-  sessions) and to the currently-selected chat session (for messages,
-  tool calls, and stage content derived from tool history).
-- Subscribes via `fetch` + `EventSource` to the vetra local API
-  for project and workflow live state.
-- Renders the active workflow scaffold (default = four-step vertical
-  layout) in the right pane. Scaffold component reads tool-call
-  history from the chat session to populate step cards; reads project
-  state from the local API to resolve iframe URLs.
+- **The top bar**: "Vetra Studio", the project's name and version, one
+  toggle per panel, and the account menu (sign-in, Settings). A link to
+  the project in Vetra Labs shows only when the shell is given its address
+  (`labsUrl`); nothing configures one yet.
+- **Specs**: the explorer of the specification drive, `VetraExplorer` from
+  `@powerhousedao/vetra/editors/vetra-explorer` (a drive app of the
+  monorepo's `packages/vetra`; it needs neither the Cli nor Labs). Its tree
+  is the package row, then Ideate, Specify, Build and Deploy; a document
+  row opens the document in its editor, which Connect hands the drive
+  editor as `children` and the shell passes on. Ideate and Specify carry
+  `+` (Connect's new-document dialog, limited to the stage's types); the
+  shell creates the document with `addAgentWritableDocument`, so the agent
+  can write it. Build and Deploy rows open placeholder pages showing the
+  matching Vetra Labs screenshot (`shell/labsScreens.ts` names them;
+  Connect serves them, see "Hosts").
+- **Test / Preview**: a "not available yet" state for both.
+- **Agent**: the chat pane (`ChatPane.tsx`): sessions list, a new session,
+  the conversation.
+
+Each panel closes from the bar's toggle and from its own header; the open
+set is kept in the browser (`localStorage`, `vetra-studio:panels`; Specs
+and Agent on a first visit). Specs and Test / Preview are at least 640 px
+wide and scroll sideways below that; Agent keeps 420 px beside them and
+fills the page alone. With every panel closed the page says so and offers
+the three again.
+
+Specs and Test / Preview also open in a tab of their own, without the bar
+(`shell/panels.ts`, see "Browser addresses"). There a spec document is its
+editor only; without a document the tab is the explorer.
+
+The shell also subscribes via `fetch` to the vetra local API for the
+project's package identity, and the chat pane via `useDocument` to the
+drive and the selected chat session.
 
 ### reactor-project service
 
@@ -876,6 +900,12 @@ The Cli runs no proxy. What the browser reaches, all on this machine:
 - **The Studio** — Connect on 8090, which proxies the Studio switchboard's
   paths (see "Hosts"). Connect does not redirect `/`; the Cli prints
   `<connect>/d/<drive id>`.
+- **A panel in its own tab** — the same page with Connect's `embed=1`
+  (which Connect keeps across navigation): `<connect>/d/<drive>/<document>?embed=1`
+  is that spec document's editor only, `<connect>/d/<drive>?embed=1` the
+  explorer without the bar, and `<connect>/d/<drive>?embed=1&panel=test`
+  the Test / Preview page.
+- **The Labs screenshots** — `<connect>/vetra-labs/<page>.jpg`.
 - **The local API** — `http://127.0.0.1:<OS port>` directly, the address
   `<connect>/studio.config.json` names.
 - **BUILD iframe** — the project's own Connect at the URL its run record
@@ -921,13 +951,14 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 ├── index.ts                   ← package export: models, editors, processors
 ├── document-models/           ← studio-product (spec documents: @powerhousedao/vetra)
 ├── editors/
-│   └── vetra-studio/          ← drive editor (Vetra Studio)
+│   └── vetra-studio/          ← drive editor (Vetra Studio); shell/ is the page
 ├── processors/
 ├── subgraphs/
 ├── prompts/                   ← agent sections and skill templates
 ├── cloud-client/              ← Vetra Cloud environment client
 ├── bin/vetra.mjs              ← the `vetra` bin over dist/node/cli
 ├── hosts/                     ← switchboard, connect, cli, studio and studio-signed (compounds)
+│   └── connect/labs/          ← Vetra Labs screenshots Connect serves
 ├── cli/
 │   ├── index.ts               ← ./cli: startup guards, `cli`, `ensureModelAuth`
 │   ├── src/

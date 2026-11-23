@@ -5,16 +5,19 @@ switchboard, Connect and the Cli, booted once per run the way a user runs it:
 `ph-cli run @powerhousedao/vetra-cli/studio` in a fixture project in a temp dir.
 
 - **`studio-boot.spec.ts`** — the stack is up: Connect serves the Studio drive and
-  the page shows the project home (the fixture project's name and version, its
-  conversations, its specifications), not an idea screen; Connect serves
+  the page is the Studio page (the top bar with the fixture project's name and
+  version, the Specs and Agent panels, the explorer's four stages), not an idea
+  screen; the panels close and open from the bar and Test / Preview says it is
+  not available yet; a Build row opens its placeholder page with the Labs
+  screenshot Connect serves; Test opens in a tab of its own; Connect serves
   `studio.config.json` naming the Cli's local API.
 - **`studio-chat.spec.ts`** — the chat round trip (fixture `chat-spec`, the
-  default): a conversation on the project home ("New session", then a message)
+  default): a conversation in the Agent panel ("New session", then a message)
   starts the agent; the replay writes a document-model spec into the project
   with `spec-create` and `spec-update`; the conversation shows the agent's done
   text; the spec is in the Studio drive with spec-update's state
-  (`findDocuments(search: { type, parentId })` on `<baseUrl>/graphql`), on the
-  project home and in the project's `specs/`; then a file is sent into the
+  (`findDocuments(search: { type, parentId })` on `<baseUrl>/graphql`), in the
+  explorer's tree and in the project's `specs/`; then a file is sent into the
   conversation and the Cli logs `extracted 1 attachment(s)` and writes it to
   `<project>/.ph/vetra/downloads/`. The spec sends the file as the chat box does:
   reserve and upload through Connect's origin (`/attachments`), then

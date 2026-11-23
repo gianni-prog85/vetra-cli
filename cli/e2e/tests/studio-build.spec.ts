@@ -21,7 +21,7 @@ import {
  *
  * Out of C1: its fixture starts with `reactor-project-init` and the preview
  * is the project run, which a Studio inside a project no longer has (no init,
- * the run opt-in, no preview pane on the project home). It returns with C2's
+ * the run opt-in, no preview pane on the Studio page). It returns with C2's
  * Preview run.
  */
 const fixture = loadFixture();

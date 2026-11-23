@@ -38,21 +38,24 @@ export function assertNoReplayError(log: string | undefined): void {
   if (m) throw new Error(`replay failed — ${m[0].trim()}`);
 }
 
-/** The project home a Studio inside a project shows: the project's header,
- * its conversations and its specifications. */
-export function projectHome(page: Page) {
+/** The Studio page: the top bar, its panels and the explorer's tree. */
+export function studioPage(page: Page) {
   return {
-    header: page.locator('header[aria-label="Project"]'),
-    conversations: page.locator('aside[aria-label="Conversations"]'),
-    specifications: page.locator('main[aria-label="Specifications"]'),
+    bar: page.locator('header[aria-label="Vetra Studio"]'),
+    toggle: (id: "specs" | "test" | "agent") =>
+      page.locator(`header [data-panel-toggle="${id}"]`),
+    specs: page.locator('section[data-panel="specs"]'),
+    test: page.locator('section[data-panel="test"]'),
+    agent: page.locator('section[data-panel="agent"]'),
+    tree: page.locator('nav[aria-label="Specifications"]'),
   };
 }
 
-/** Talk to the agent the way a customer does: on the project home, start a
+/** Talk to the agent the way a customer does: in the Agent panel, start a
  * conversation ("New session") and send the first message. Returns the
- * conversation's pane. */
+ * panel. */
 export async function startConversation(page: Page, prompt: string) {
-  const { conversations } = projectHome(page);
+  const conversations = studioPage(page).agent;
   await expect(conversations).toBeVisible({ timeout: 60_000 });
   await dismissCookieBanner(page); // in case it painted late, before the next click
   await conversations
@@ -68,6 +71,6 @@ export async function startConversation(page: Page, prompt: string) {
   await expect(conversations.getByText(prompt).first()).toBeVisible({
     timeout: 30_000,
   });
-  console.log("[e2e] conversation started on the project home");
+  console.log("[e2e] conversation started in the Agent panel");
   return conversations;
 }

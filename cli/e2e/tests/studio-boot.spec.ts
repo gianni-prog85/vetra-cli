@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { dismissCookieBanner, projectHome } from "../support/studio-page.js";
+import { dismissCookieBanner, studioPage } from "../support/studio-page.js";
 import {
   FIXTURE_PROJECT_NAME,
   FIXTURE_PROJECT_VERSION,
@@ -10,26 +10,30 @@ import {
 /**
  * The Studio stack boots from a project: `ph-cli run
  * @powerhousedao/vetra-cli/studio` in the fixture project (global-setup)
- * serves Connect, which shows the project home for the Studio drive: the
- * project's name and version, its conversations and its specifications.
+ * serves Connect, which shows the Studio page for the Studio drive: the top
+ * bar with the project's name and version, and the Specs and Agent panels.
  */
 const run = loadRun();
 /** Booted (not attached): the fixture project's name and version show. */
 const booted = Boolean(readRunFile()?.tmp);
+const studioHome = `${run.baseUrl}/d/${run.driveId}`;
 
 test.describe("Vetra studio — boot", () => {
-  test("the stack serves the project home", async ({ page }) => {
-    await page.goto(`${run.baseUrl}/d/${run.driveId}`, {
-      waitUntil: "domcontentloaded",
-    });
+  test("the stack serves the Studio page", async ({ page }) => {
+    await page.goto(studioHome, { waitUntil: "domcontentloaded" });
     await dismissCookieBanner(page);
 
-    const home = projectHome(page);
-    await expect(home.header).toBeVisible({ timeout: 60_000 });
-    await expect(home.conversations).toBeVisible();
-    await expect(
-      home.specifications.getByRole("heading", { name: "Specifications" }),
-    ).toBeVisible();
+    const studio = studioPage(page);
+    await expect(studio.bar).toBeVisible({ timeout: 60_000 });
+    await expect(studio.specs).toBeVisible();
+    await expect(studio.agent).toBeVisible();
+    await expect(studio.test).toHaveCount(0);
+    // The explorer's stages, over the specification drive.
+    for (const stage of ["Ideate", "Specify", "Build", "Deploy"]) {
+      await expect(
+        studio.tree.getByText(stage, { exact: true }).first(),
+      ).toBeVisible();
+    }
     // No idea screen: Studio creates no project and starts no product.
     await expect(
       page.getByRole("heading", { name: "What do you want to build?" }),
@@ -37,13 +41,64 @@ test.describe("Vetra studio — boot", () => {
 
     if (booted) {
       // The project's package.json, read by the Cli's local API.
-      await expect(
-        home.header.getByRole("heading", { name: FIXTURE_PROJECT_NAME }),
-      ).toBeVisible({ timeout: 30_000 });
-      await expect(home.header.locator("[data-project-version]")).toHaveText(
+      await expect(studio.bar.locator("[data-project-name]")).toHaveText(
+        FIXTURE_PROJECT_NAME,
+        { timeout: 30_000 },
+      );
+      await expect(studio.bar.locator("[data-project-version]")).toHaveText(
         FIXTURE_PROJECT_VERSION,
       );
     }
+  });
+
+  test("panels close and open from the bar; Test is not available yet", async ({
+    page,
+  }) => {
+    await page.goto(studioHome, { waitUntil: "domcontentloaded" });
+    await dismissCookieBanner(page);
+
+    const studio = studioPage(page);
+    await expect(studio.bar).toBeVisible({ timeout: 60_000 });
+    await studio.toggle("test").click();
+    await expect(studio.test).toContainText("Test is not available yet.");
+
+    await studio.toggle("specs").click();
+    await studio.toggle("test").click();
+    await studio.toggle("agent").click();
+    await expect(page.getByText("All panels are closed")).toBeVisible();
+    await page
+      .locator('[data-panels="none"] [data-panel-toggle="specs"]')
+      .click();
+    await expect(studio.specs).toBeVisible();
+  });
+
+  test("a Build row opens its placeholder page with the Labs screen", async ({
+    page,
+  }) => {
+    await page.goto(studioHome, { waitUntil: "domcontentloaded" });
+    await dismissCookieBanner(page);
+
+    const studio = studioPage(page);
+    await expect(studio.tree).toBeVisible({ timeout: 60_000 });
+    await studio.tree.getByText("Packages", { exact: true }).click();
+    const screen = studio.specs.locator('img[src="/vetra-labs/packages.jpg"]');
+    await expect(screen).toBeVisible();
+    // Connect serves the picture, and the browser decodes it.
+    await expect
+      .poll(() =>
+        screen.evaluate((img: HTMLImageElement) => img.naturalWidth),
+      )
+      .toBeGreaterThan(0);
+  });
+
+  test("Test opens in a tab of its own, without the bar", async ({ page }) => {
+    await page.goto(`${studioHome}?embed=1&panel=test`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByText("Test is not available yet.")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(studioPage(page).bar).toHaveCount(0);
   });
 
   test("Connect serves studio.config.json naming the Cli's local API", async () => {

@@ -12,8 +12,8 @@ export const REPO_ROOT = path.resolve(E2E_DIR, "..", "..");
 export const PACKAGE_NAME = "@powerhousedao/vetra-cli";
 /** What a project runs: the package's Studio host, by reference. */
 export const STUDIO_REF = `${PACKAGE_NAME}/studio`;
-/** The fixture project's package name and version: the project home shows
- * them. */
+/** The fixture project's package name and version: the Studio page's bar
+ * shows them. */
 export const FIXTURE_PROJECT_NAME = "e2e-project";
 export const FIXTURE_PROJECT_VERSION = "0.1.0";
 export const CACHE_DIR = path.join(E2E_DIR, ".cache");
