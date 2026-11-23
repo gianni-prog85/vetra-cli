@@ -20,6 +20,7 @@ import {
 } from "@powerhousedao/reactor";
 import type { ReactorContext } from "@powerhousedao/clint";
 import { documentModels as vetraDocumentModels } from "@powerhousedao/vetra";
+import { PACKAGE_DRIVE_FOLDERS, layoutFolderId } from "@powerhousedao/vetra/drive-layout";
 import { documentModels as driveDocumentModels } from "@powerhousedao/clint-common";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { AppModuleV1 } from "@powerhousedao/vetra/document-models";
@@ -246,11 +247,11 @@ describe("spec-fs-sync FS → drive", () => {
       expect(inDrive.header.documentType).toBe("powerhouse/app");
       expect(logs.some((l) => l.level === "error")).toBe(false);
 
-      // Single-project layout (saved at tmpDir/specs/) → file node at root.
+      // The file node sits in the layout folder of its type.
       const nodes = await driveNodes();
       const fileNode = nodes.find((n) => n.kind === "file" && n.id === draft.header.id);
       expect(fileNode).toBeDefined();
-      expect(fileNode?.parentFolder ?? null).toBeNull();
+      expect(fileNode?.parentFolder).toBe(layoutFolderId(driveId, "specify/apps"));
       // The content arrived (executed, not loaded), and the drive holds the
       // doc as a `child`, which lookups by type read.
       expect((inDrive.state.global as { name: string }).name).toBe("fresh-app");
@@ -303,9 +304,9 @@ describe("spec-fs-sync FS → drive", () => {
     expect((await driveNodes()).filter((n) => n.kind === "file" && n.id === doc.header.id)).toHaveLength(1);
   }, 15_000);
 
-  // ── FS → drive: one project, every spec at the drive root ─────────
+  // ── FS → drive: one project, every spec in its layout folder ──────
 
-  it("files a spec at the drive root and makes no project folder", async () => {
+  it("files a spec in the layout folder of its type and makes no project folder", async () => {
     const { id, path: filePath } = await makeSpecFile("root-app");
     expect(filePath.startsWith(path.join(tmpDir, "specs"))).toBe(true);
 
@@ -313,14 +314,18 @@ describe("spec-fs-sync FS → drive", () => {
     await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
 
     const nodes = await driveNodes();
-    expect(nodes.filter((n) => n.kind === "folder")).toEqual([]);
+    expect(nodes.filter((n) => n.kind === "folder").map((n) => n.name).sort()).toEqual([
+      "apps",
+      "specify",
+    ]);
     const fileNode = nodes.find((n) => n.kind === "file" && n.id === id);
-    expect(fileNode?.parentFolder ?? null).toBeNull();
+    expect(fileNode?.parentFolder).toBe(layoutFolderId(driveId, "specify/apps"));
     expect(logs.some((l) => l.level === "error")).toBe(false);
 
-    // Re-sync: no duplicate file node.
+    // Re-sync: no duplicate file node, no second folder.
     await applyFsChangesToReactor([filePath], tmpDir, contextOf(module), driveId, log);
     const after = await driveNodes();
+    expect(after.filter((n) => n.kind === "folder")).toHaveLength(2);
     expect(after.filter((n) => n.kind === "file" && n.id === id)).toHaveLength(1);
   }, 15_000);
 
@@ -477,10 +482,11 @@ describe("spec-fs-sync FS → drive", () => {
       expect(changed.has(outside.file)).toBe(false);
       await specFsSyncTrigger.poll(ctx);
 
+      // The first poll lays the drive out; the spec goes in its folder.
       const nodes = await driveNodes();
-      expect(nodes.filter((n) => n.kind === "folder")).toEqual([]);
+      expect(nodes.filter((n) => n.kind === "folder")).toHaveLength(PACKAGE_DRIVE_FOLDERS.length);
       const fileNode = nodes.find((n) => n.kind === "file" && n.id === inside.id);
-      expect(fileNode?.parentFolder ?? null).toBeNull();
+      expect(fileNode?.parentFolder).toBe(layoutFolderId(driveId, "specify/apps"));
       expect(nodes.some((n) => n.kind === "file" && n.id === outside.id)).toBe(false);
       expect(logs.some((l) => l.level === "error")).toBe(false);
     } finally {

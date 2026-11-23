@@ -91,8 +91,14 @@ export function StudioShell({
 
   const driveId = document.header.id;
   const createDocument = useCallback(
-    ({ name, documentType }: CreateDocumentInput) =>
-      addAgentWritableDocument(driveId, name, documentType),
+    ({ name, documentType, parentFolder }: CreateDocumentInput) =>
+      addAgentWritableDocument(
+        driveId,
+        name,
+        documentType,
+        undefined,
+        parentFolder,
+      ),
     [driveId],
   );
 

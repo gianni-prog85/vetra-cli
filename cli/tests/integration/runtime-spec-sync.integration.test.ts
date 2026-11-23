@@ -15,6 +15,7 @@ import {
 } from "@powerhousedao/reactor";
 import type { ReactorContext } from "@powerhousedao/clint";
 import { documentModels as vetraDocumentModels } from "@powerhousedao/vetra";
+import { findLayoutFolder, layoutFolderId } from "@powerhousedao/vetra/drive-layout";
 import { documentModels as driveDocumentModels } from "@powerhousedao/clint-common";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import { documentModelDocumentModelModule } from "document-model";
@@ -26,6 +27,7 @@ import { readRuntimeSpecRecord } from "../../src/helpers/runtime-spec-record.js"
 import { syncRuntimeSpecs } from "../../src/helpers/runtime-spec-sync.js";
 import {
   ensureFileNode,
+  getDriveNodes,
   operationsByScope,
   type SpecDriveClient,
 } from "../../src/helpers/spec-drive-sync.js";
@@ -265,6 +267,12 @@ describe("runtime → drive model specification sync", () => {
 
     expect(result.skipped).toEqual(["sektar/contact"]);
     expect(result.created).toEqual(["sektar/invoice"]);
+    // Both sit in the layout's folder, made once.
+    const nodes = await getDriveNodes(client(), driveId);
+    const folder = findLayoutFolder(nodes, "specify/document-models");
+    expect(folder?.id).toBe(layoutFolderId(driveId, "specify/document-models"));
+    expect(nodes.filter((n) => n.kind === "folder")).toHaveLength(2);
+    expect((await modelNodes()).map((n) => n.parentFolder)).toEqual([folder?.id, folder?.id]);
     expect(Object.keys(readRuntimeSpecRecord(workdir))).toEqual(["sektar/invoice"]);
     expect(await modelNodes()).toHaveLength(2);
   });

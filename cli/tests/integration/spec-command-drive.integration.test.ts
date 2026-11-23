@@ -22,6 +22,7 @@ import {
   type InProcessReactorClientModule,
 } from "@powerhousedao/reactor";
 import { documentModels as vetraDocumentModels } from "@powerhousedao/vetra";
+import { layoutFolderId } from "@powerhousedao/vetra/drive-layout";
 import { documentModels as driveDocumentModels } from "@powerhousedao/clint-common";
 import { driveDocumentModelModule } from "@powerhousedao/shared/document-drive";
 import type { AppModuleDocument } from "@powerhousedao/vetra/document-models/app-module";
@@ -133,8 +134,8 @@ describe("spec-* commands → embedded drive", () => {
     expect(inDrive.header.name).toBe("Drive App");
     expect(logs.some((l) => l.level === "error")).toBe(false);
 
-    // Every spec attaches at the drive root (one project, specs at workdir/specs).
-    expect(fileNode!.parentFolder ?? null).toBeNull();
+    // A spec attaches in the layout folder of its type.
+    expect(fileNode!.parentFolder).toBe(layoutFolderId(driveId, "specify/apps"));
   }, 15_000);
 
   it("update pushes new ops into the drive doc; re-run is idempotent", async () => {

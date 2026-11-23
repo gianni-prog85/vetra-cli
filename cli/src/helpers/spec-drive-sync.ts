@@ -29,6 +29,13 @@ import { baseLoadFromFile } from "document-model/node";
 import { signaturePolicyOf } from "document-model";
 import type { ReactorContext } from "@powerhousedao/clint";
 import {
+  ensurePackageDrive,
+  findLayoutFolder,
+  folderForDocumentType,
+  missingLayoutFolders,
+  type PackageDriveReport,
+} from "@powerhousedao/vetra/drive-layout";
+import {
   createSpecDocument,
   listSpecTypes,
   resolveSpecEntry,
@@ -285,6 +292,7 @@ async function pushSpec(
 }
 
 interface DriveActions {
+  addFolder: (input: { id: string; name: string; parentFolder: string | null }) => unknown;
   addFile: (input: {
     id: string;
     name: string;
@@ -306,6 +314,7 @@ async function getDriveActions(): Promise<DriveActions> {
       "@powerhousedao/shared/document-drive"
     )) as unknown as DriveActions;
     _driveActions = {
+      addFolder: mod.addFolder,
       addFile: mod.addFile,
       deleteNode: mod.deleteNode,
     };
@@ -324,10 +333,11 @@ export async function getDriveNodes(
 }
 
 /**
- * Ensure a file node for `docId` exists at the drive root. Idempotent: skips
- * when a file node with the same id is already present (wherever it is filed).
- * On create, also adds the drive's `child` relationship to the doc, which
- * `find({ parentId })` reads.
+ * Ensure a file node for `docId` exists in the drive, in the folder the
+ * package drive layout gives its type (made when missing; the drive root for
+ * a type the layout does not place). Idempotent: skips when a file node with
+ * the same id is already present (wherever it is filed). On create, also adds
+ * the drive's `child` relationship to the doc, which `find({ parentId })` reads.
  */
 export async function ensureFileNode(
   client: SpecDriveClient,
@@ -337,18 +347,24 @@ export async function ensureFileNode(
 ): Promise<void> {
   const nodes = await getDriveNodes(client, driveId);
   if (nodes.some((n) => n.kind === "file" && n.id === spec.id)) return;
-  const { addFile } = await getDriveActions();
+  const { addFile, addFolder } = await getDriveActions();
+  const path = folderForDocumentType(spec.documentType);
+  const folders = path ? missingLayoutFolders(driveId, nodes, [path]) : [];
+  const parentFolder = path
+    ? (folders.at(-1)?.id ?? findLayoutFolder(nodes, path)?.id ?? null)
+    : null;
   await client.execute(driveId, "main", [
+    ...folders.map((folder) => addFolder(folder)),
     addFile({
       id: spec.id,
       name: spec.name,
       documentType: spec.documentType,
-      parentFolder: null,
+      parentFolder,
     }),
   ]);
   log?.debug?.(
     `[spec-fs-sync] filed ${spec.documentType} "${spec.name}" ` +
-      `documentId=${spec.id} driveId=${driveId}`,
+      `documentId=${spec.id} driveId=${driveId} folder=${path ?? "(root)"}`,
   );
   // The file node is what Vetra Studio reads: a relationship failure is
   // reported, not allowed to abort the attach.
@@ -359,6 +375,35 @@ export async function ensureFileNode(
       `[spec-fs-sync] addRelationship failed for ${spec.id}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
+
+/**
+ * Give the Studio drive the package drive layout's folders. Adds what is
+ * missing, moves no document and makes no package document. Returns what the
+ * drive still lacks.
+ */
+export function ensureDriveLayout(
+  reactor: Pick<ReactorContext, "client">,
+  driveId: string,
+  log?: FsSyncLogger,
+): Promise<PackageDriveReport> {
+  return serialized(async () => {
+    const client = specClient(reactor);
+    const { addFolder } = await getDriveActions();
+    return ensurePackageDrive(driveId, {
+      nodes: () => getDriveNodes(client, driveId),
+      addFolders: async (folders) => {
+        await client.execute(
+          driveId,
+          "main",
+          folders.map((folder) => addFolder(folder)),
+        );
+        log?.info?.(
+          `[spec-fs-sync] drive layout: added ${folders.length} folder(s) to drive ${driveId}`,
+        );
+      },
+    });
+  });
 }
 
 export interface ApplyFsChangesOptions {

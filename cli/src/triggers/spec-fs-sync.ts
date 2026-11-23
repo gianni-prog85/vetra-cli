@@ -9,7 +9,9 @@
  * hand-edited `.phd`, `git pull`, codegen writes.
  *
  * Layout: specs live at `<workdir>/specs/<subdir>/<name>.<ext>.phd` and attach
- * at the drive root. Nothing else under the workdir is watched.
+ * in the drive folder the package drive layout gives their type; the first
+ * poll adds the layout's folders to the drive. Nothing else under the workdir
+ * is watched.
  *
  * The sync executes only the actions whose ids the reactor does not hold, one
  * sync at a time, so re-feeding a file the commands already pushed is a
@@ -20,6 +22,7 @@ import path from "node:path";
 import type { ReactorContext } from "@powerhousedao/clint";
 import {
   applyFsChangesToReactor,
+  ensureDriveLayout,
   removeSpecFromDrive,
   specForPath,
   SPECS_DIRNAME,
@@ -35,6 +38,8 @@ interface TriggerState {
   docIdByPath: Map<string, string>;
   watcher: ReturnType<typeof chokidar.watch> | undefined;
   driveId: string | undefined;
+  // The drive's layout folders were checked this session.
+  laidOut: boolean;
 }
 
 // Specs live only under the project's `specs/` folder (`<workdir>/specs/...`).
@@ -72,6 +77,7 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
     docIdByPath: new Map<string, string>(),
     watcher: undefined,
     driveId: undefined,
+    laidOut: false,
   }),
 
   async setup(ctx) {
@@ -142,7 +148,11 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
     // No boot-time orphan reconciliation: this only mirrors deletes observed
     // live this session. The switchboard's store persists, so a spec deleted
     // while the Cli was down stays in the drive.
-    if (ctx.state.changed.size === 0 && ctx.state.removed.size === 0)
+    if (
+      ctx.state.laidOut &&
+      ctx.state.changed.size === 0 &&
+      ctx.state.removed.size === 0
+    )
       return null;
     const reactor = await ctx.reactor();
     if (!reactor) return null;
@@ -151,6 +161,22 @@ export const specFsSyncTrigger = defineTrigger<TriggerState>({
         .personalDriveId ??
       (reactor as { driveId?: string }).driveId;
     const log = ctx.context.log;
+
+    if (!ctx.state.laidOut && ctx.state.driveId) {
+      // Once per session; a drive that refuses the folders still syncs.
+      ctx.state.laidOut = true;
+      try {
+        await ensureDriveLayout(
+          reactor as unknown as Pick<ReactorContext, "client">,
+          ctx.state.driveId,
+          log,
+        );
+      } catch (err) {
+        log?.warn?.(
+          `[spec-fs-sync] drive layout not applied: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     // Changes before removals: a rename/atomic-save emits unlink(old) +
     // add(new) for the same doc id in one cycle. Syncing the new path first

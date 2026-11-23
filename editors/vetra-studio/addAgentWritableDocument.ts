@@ -66,6 +66,8 @@ export async function addAgentWritableDocument(
   name: string,
   documentType: string,
   deps: Partial<AgentWritableDocumentDeps> = defaultDeps,
+  /** The folder node the document goes in; the drive root when absent. */
+  parentFolder?: string,
 ): ReturnType<typeof addDocument> {
   const resolved = { ...defaultDeps, ...deps };
   await assertStudioWritable(resolved);
@@ -74,5 +76,11 @@ export async function addAgentWritableDocument(
   const module = await resolved.getDocumentModelModule(documentType);
   const document = withSignaturePolicy(module.utils.createDocument(), policy);
   document.state.document.version = module.version ?? 1;
-  return resolved.addDocument(driveId, name, documentType, undefined, document);
+  return resolved.addDocument(
+    driveId,
+    name,
+    documentType,
+    parentFolder,
+    document,
+  );
 }

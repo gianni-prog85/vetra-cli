@@ -35,6 +35,7 @@ type ExplorerProps = {
   createDocument?: (input: {
     name: string;
     documentType: string;
+    parentFolder?: string;
   }) => Promise<unknown>;
   children?: ReactNode;
 };
@@ -184,9 +185,10 @@ describe("StudioShell", () => {
     await explorerProps().createDocument?.({
       name: "Order",
       documentType: "powerhouse/document-model",
+      parentFolder: "folder-1",
     });
     expect(hoisted.added).toEqual([
-      ["drive-1", "Order", "powerhouse/document-model"],
+      ["drive-1", "Order", "powerhouse/document-model", undefined, "folder-1"],
     ]);
   });
 

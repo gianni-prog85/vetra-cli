@@ -260,7 +260,11 @@ drive. `create` only throws: vetra builds no in-process reactor.
 
 The Home drive holds: chat session documents, spec documents
 (mirrored from the reactor-project filesystems by the spec-sync
-triggers), and any other domain content the studio surfaces.
+triggers), and any other domain content the studio surfaces. A spec
+document the sync or the explorer adds goes in the folder
+`@powerhousedao/vetra/drive-layout` gives its type (`specify/document-models`,
+`ideate/features`, …), made on first use; documents already in the drive
+are not moved, and chat sessions stay at the root.
 
 **Signing.** A cloud Studio (`VETRA_ENVIRONMENT_ID` or
 `config.environmentId`; `isCloudStudio` in `cli/src/auth/studio-mode.ts`)
