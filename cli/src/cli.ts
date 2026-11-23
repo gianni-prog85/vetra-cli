@@ -26,6 +26,7 @@ import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
 import { previewRunTrigger } from './triggers/preview-run.js';
+import { runtimeSpecSyncTrigger } from './triggers/runtime-spec-sync.js';
 import { genGuard } from './lifecycle/gen-guard.js';
 import { shellGuard } from './lifecycle/shell-guard.js';
 import { tsCheck } from './lifecycle/ts-check.js';
@@ -82,6 +83,7 @@ export const cli = defineCli({
     specFsSyncTrigger,
     previewServerTrigger,
     previewRunTrigger,
+    runtimeSpecSyncTrigger,
     studioUrlTrigger,
     productSupervisorTrigger,
     productRequestsTrigger,

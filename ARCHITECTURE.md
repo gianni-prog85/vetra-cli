@@ -662,6 +662,27 @@ service instance is ready (a hard kill leaves the file). It is exposed as
 the `preview-models` command (the agent's tool, always on) and
 `GET /preview/models`.
 
+**Model specifications from the runtime.** `triggers/runtime-spec-sync.ts`
+reads each new report of a ready Preview and brings the Studio drive to it
+(`helpers/runtime-spec-sync.ts`): one `powerhouse/document-model` document
+per document type the project's own packages supply (`local`), holding every
+loaded version's specification. Types of other packages get none. Each pass
+is a diff (`helpers/model-spec-diff.ts`): a plan of document-model actions,
+checked on a scratch document through the model's reducer before it is
+dispatched. A document equal to the report gets no operation, so a restart
+with unchanged code writes nothing. A new document is created holding the
+reported state. A change no action expresses (an earlier version, the
+version numbers, a refused action) replaces the document under a new id. A
+type gone from the report loses its document.
+
+The sync writes the drive only. The documents it made are listed in
+`<project>/.ph/vetra/runtime-specs.json` (type → document id,
+`helpers/runtime-spec-record.ts`), each before it exists, and `spec-sync`
+skips listed documents: no file under `specs/`, so no generation. A type
+that already has a document from a `specs/` file is left to the file flow.
+The other spec kinds (editor, app, subgraph, processor) are not derived from
+the runtime.
+
 It starts with the Cli (`triggers/preview-run.ts`, not awaited) unless the
 config says `previewRun: false` (env `VETRA_PREVIEW_RUN=0`), and on request
 through the `reactor-project-start` tool or `POST /start`; every start is
@@ -997,7 +1018,8 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │   └── triggers/
 │   │       ├── preview-server.ts   ← hosts the local API
 │   │       ├── spec-sync.ts
-│   │       └── spec-fs-sync.ts
+│   │       ├── spec-fs-sync.ts
+│   │       └── runtime-spec-sync.ts ← model specs from the Preview's report
 │   ├── tests/                 ← vitest project `cli` (the app's tests: `app`)
 │   ├── scripts/               ← build-assets.ts (ph-version), dev scripts
 │   └── e2e/                   ← playwright suite

@@ -31,6 +31,8 @@ export const STUDIO_FILES = {
   upgradeRecord: path.join(STUDIO_DIR, "upgrade-existing.json"),
   /** What the Preview run loaded; its switchboard's inspector writes it. */
   previewInspector: path.join(STUDIO_DIR, "preview", "inspector.json"),
+  /** The model specification documents the Cli made from the Preview's report. */
+  runtimeSpecs: path.join(STUDIO_DIR, "runtime-specs.json"),
   /** Files extracted from chat messages for the agent. */
   downloads: path.join(STUDIO_DIR, "downloads"),
 } as const;

@@ -12,6 +12,7 @@ import { createDocumentChangeTrigger } from "@powerhousedao/clint";
 import { loadByName } from "../commands/spec/_helpers.js";
 import { listSpecTypes, saveSpec } from "../commands/spec/registry.js";
 import { withProjectCodegenLock } from "../helpers/project-lock.js";
+import { runtimeSpecIds } from "../helpers/runtime-spec-record.js";
 
 // Every spec type the `spec-*` tools can produce: the five codegen builder
 // specs plus vetra-app domain models (brand-sheet, feature, …). Mirroring all
@@ -162,7 +163,11 @@ export const specSyncTrigger = createDocumentChangeTrigger({
   initialReconcile: false,
   async onChange(docs, ctx) {
     const reactor = await ctx.reactor?.();
-    await syncSpecsToFs(docs, ctx.context.workdir, {
+    // Model specifications made from the runtime are not the project's files.
+    const fromRuntime = runtimeSpecIds(ctx.context.workdir);
+    const own = docs.filter((doc) => !fromRuntime.has(doc.header.id));
+    if (own.length === 0) return null;
+    await syncSpecsToFs(own, ctx.context.workdir, {
       log: ctx.context.log,
       client: reactor?.client as OperationsClient | undefined,
     });

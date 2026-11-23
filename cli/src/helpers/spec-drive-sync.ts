@@ -89,7 +89,7 @@ function specClient(reactor: Pick<ReactorContext, "client">): SpecDriveClient {
 // of the same file would each find its actions unknown and execute them twice,
 // and two attaches of a new file would each add its node.
 let syncQueue: Promise<unknown> = Promise.resolve();
-function serialized<T>(fn: () => Promise<T>): Promise<T> {
+export function serialized<T>(fn: () => Promise<T>): Promise<T> {
   const run = syncQueue.then(fn);
   syncQueue = run.catch(() => undefined);
   return run;
@@ -313,8 +313,8 @@ async function getDriveActions(): Promise<DriveActions> {
   return _driveActions;
 }
 
-async function getDriveNodes(
-  client: SpecDriveClient,
+export async function getDriveNodes(
+  client: Pick<SpecDriveClient, "get">,
   driveId: string,
 ): Promise<DriveNode[]> {
   const drive = (await client.get(driveId)) as {
@@ -329,7 +329,7 @@ async function getDriveNodes(
  * On create, also adds the drive's `child` relationship to the doc, which
  * `find({ parentId })` reads.
  */
-async function ensureFileNode(
+export async function ensureFileNode(
   client: SpecDriveClient,
   driveId: string,
   spec: PushedSpec,
@@ -434,41 +434,48 @@ export function removeSpecFromDrive(
   docId: string,
   log?: FsSyncLogger,
 ): Promise<void> {
-  return serialized(async () => {
-    const client = specClient(reactor);
-    try {
-      const nodes = await getDriveNodes(client, driveId);
-      if (nodes.some((n) => n.kind === "file" && n.id === docId)) {
-        const { deleteNode } = await getDriveActions();
-        await client.execute(driveId, "main", [deleteNode({ id: docId })]);
-        log?.debug?.(
-          `[spec-fs-sync] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
-        );
-      } else {
-        log?.debug?.(
-          `[spec-fs-sync] no file node for ${docId} in drive ${driveId} — skipping node delete`,
-        );
-      }
-    } catch (err) {
+  return serialized(() => removeSpecNode(specClient(reactor), driveId, docId, log));
+}
+
+/** {@link removeSpecFromDrive} without the queue, for a caller already in it. */
+export async function removeSpecNode(
+  client: SpecDriveClient,
+  driveId: string,
+  docId: string,
+  log?: FsSyncLogger,
+): Promise<void> {
+  try {
+    const nodes = await getDriveNodes(client, driveId);
+    if (nodes.some((n) => n.kind === "file" && n.id === docId)) {
+      const { deleteNode } = await getDriveActions();
+      await client.execute(driveId, "main", [deleteNode({ id: docId })]);
       log?.debug?.(
-        `[spec-fs-sync] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+        `[spec-fs-sync] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
+      );
+    } else {
+      log?.debug?.(
+        `[spec-fs-sync] no file node for ${docId} in drive ${driveId} — skipping node delete`,
       );
     }
-    try {
-      await client.removeRelationship(driveId, docId, "child");
-    } catch (err) {
-      log?.debug?.(
-        `[spec-fs-sync] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    try {
-      await client.deleteDocument(docId);
-    } catch (err) {
-      log?.debug?.(
-        `[spec-fs-sync] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  });
+  } catch (err) {
+    log?.debug?.(
+      `[spec-fs-sync] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  try {
+    await client.removeRelationship(driveId, docId, "child");
+  } catch (err) {
+    log?.debug?.(
+      `[spec-fs-sync] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  try {
+    await client.deleteDocument(docId);
+  } catch (err) {
+    log?.debug?.(
+      `[spec-fs-sync] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 /** Write the reactor's (signed) version of a document over its `.phd`. */
