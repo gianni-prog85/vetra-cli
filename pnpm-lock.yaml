@@ -117,9 +117,6 @@ importers:
       '@powerhousedao/vetra':
         specifier: 'catalog:'
         version: 6.4.0-next.1(b7be6b4faba21746893d9fc04b6545d7)
-      '@powerhousedao/vetra-cloud-package':
-        specifier: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz
-        version: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz(60efc1a75357b73213c1aa6ea94538ba)
       '@renown/sdk':
         specifier: 'catalog:'
         version: 6.4.0-next.1(dbaf7d8f2db2ab9c5b20334c725e3de4)
@@ -193,6 +190,9 @@ importers:
       '@powerhousedao/switchboard':
         specifier: 'catalog:'
         version: 6.4.0-next.1(81688a297be2b0d6aaf924b514e08a39)
+      '@powerhousedao/vetra-cloud-package':
+        specifier: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz
+        version: https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz(60efc1a75357b73213c1aa6ea94538ba)
       '@tailwindcss/cli':
         specifier: ^4.1.18
         version: 4.3.0
@@ -15004,7 +15004,7 @@ snapshots:
       '@ethereumjs/tx': 4.2.0
       '@types/debug': 4.1.13
       debug: 4.4.3(supports-color@8.1.1)
-      semver: 7.8.0
+      semver: 7.8.6
       superstruct: 1.0.4
     transitivePeerDependencies:
       - supports-color
@@ -21705,7 +21705,7 @@ snapshots:
 
   async-mutex@0.2.6:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   async-mutex@0.5.0:
     dependencies:

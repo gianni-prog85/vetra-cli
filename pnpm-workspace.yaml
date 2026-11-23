@@ -58,12 +58,14 @@ overrides:
   # Connect build returns (B2); until then it only affects vitest's vite.
   rolldown: '1.2.12'
 
-  # One copy of each of these across the tree, @powerhousedao/vetra-cloud-package's
-  # transitive ones included: the published tarball declares them at
-  # 6.2.0-dev.43, and its VetraCloudEnvironmentV1 model object must load the
-  # same document-model instance as the PHDocumentController it is fed into
-  # (cloud-client/controller.ts), a class-identity hazard. Unscoped, so
-  # local-link's overrides replace them with links to the monorepo.
+  # One copy of each of these across this checkout's tree, the transitive ones
+  # of @powerhousedao/vetra-cloud-package included: the tarball declares them
+  # at an older version. It is a devDependency, so these overrides and its
+  # dependencies never reach an install of the published package: the build
+  # inlines the model code cloud-client/ imports, and the PHDocumentController
+  # it is fed into (cloud-client/controller.ts) stays the host's
+  # document-model. Unscoped, so local-link's overrides replace them with
+  # links to the monorepo.
   document-model: '6.4.0-next.1'
   '@powerhousedao/shared': '6.4.0-next.1'
   '@powerhousedao/builder-tools': '6.4.0-next.1'

@@ -157,10 +157,13 @@ project's code (`disableLocal`), and reads the package's empty
 nothing is fetched from a registry. Connect serves the package's
 `dist/connect`; `ph run <package>/connect build` is refused in another
 project (the package builds it). Relative paths in a host file still
-resolve against the project. `@powerhousedao/vetra-cloud-package` stays a
-dependency but is no Studio package: its processors and subgraphs belong to
-the cloud switchboard, and the Studio's Deploy view imports its document
-models through `cloud-client/`. `dev` on the package's compound runs Vite
+resolve against the project. `@powerhousedao/vetra-cloud-package` is a
+devDependency and no Studio package: its processors and subgraphs belong to
+the cloud switchboard, and `cloud-client/` (the Studio's Deploy view, the
+Cli's cloud commands) imports its document models. Every build inlines that
+model code (`ph-cli build` leaves only declared packages and the shared set
+external), so the published package neither declares nor imports it; it is
+installed from a registry URL, which pnpm refuses in a sub-dependency. `dev` on the package's compound runs Vite
 over the project: unsupported for Studio.
 
 `hosts/tsconfig.json` type-checks the host files (`tsc -p hosts`, part of
