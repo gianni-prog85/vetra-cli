@@ -915,6 +915,10 @@ reactor is attached with a personal drive, absent in one-shot CLI) so a standalo
 present, `ctx.reactor()` returns the attached reactor. Lookups by type
 in the drive (the product document, chat sessions) use
 `findInDrive` there: `client.find({ type, parentId })` over every page.
+- `driveLayoutTrigger` — on its first poll with a drive to reach, adds
+  the package drive layout's folders the Home drive lacks
+  (`ensureDriveLayout`). Once per session; it moves no document, and a
+  drive that refuses the folders is logged and left.
 - `previewServerTrigger` — runs the local API server. Triggers
   receive `commandContext.services` + `commandContext.on`, which is
   exactly what the http handlers need. `setup()` boots the server,
@@ -1084,6 +1088,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │       ├── preview-server.ts   ← hosts the local API
 │   │       ├── spec-sync.ts
 │   │       ├── spec-fs-sync.ts
+│   │       ├── drive-layout.ts     ← the Home drive's layout folders
 │   │       └── runtime-spec-sync.ts ← model specs from the Preview's report
 │   ├── tests/                 ← vitest project `cli` (the app's tests: `app`)
 │   ├── scripts/               ← build-assets.ts (ph-version), dev scripts
