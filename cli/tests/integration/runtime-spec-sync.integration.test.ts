@@ -251,21 +251,28 @@ describe("runtime → drive model specification sync", () => {
     expect((await modelNodes()).map((n) => n.id)).toEqual([record["sektar/invoice"]]);
   });
 
-  it("leaves a type to the document its specs/ file made", async () => {
-    const fromFile = createSpecDocument(DOCUMENT_MODEL_TYPE, {
-      name: "Contact",
-      initialState: { global: contact(), local: {} },
+  /** A model document as the agent's spec-create and spec-update leave it. */
+  async function agentModel(state: Json): Promise<string> {
+    const doc = createSpecDocument(DOCUMENT_MODEL_TYPE, {
+      name: state.name,
+      initialState: { global: state, local: {} },
     });
-    await module.client.create(fromFile as never);
+    await module.client.create(doc as never);
     await ensureFileNode(client(), driveId, {
-      id: fromFile.header.id,
-      name: "Contact",
+      id: doc.header.id,
+      name: state.name,
       documentType: DOCUMENT_MODEL_TYPE,
     });
+    return doc.header.id;
+  }
+
+  it("adopts the agent's document of a type the project now reports", async () => {
+    const agentId = await agentModel(contact());
 
     const result = await sync([reported(invoice()), reported(contact())]);
 
-    expect(result.skipped).toEqual(["sektar/contact"]);
+    expect(result.adopted).toEqual(["sektar/contact"]);
+    expect(result.unchanged).toEqual(["sektar/contact"]);
     expect(result.created).toEqual(["sektar/invoice"]);
     // Both sit in the layout's folder, made once.
     const nodes = await getDriveNodes(client(), driveId);
@@ -273,8 +280,38 @@ describe("runtime → drive model specification sync", () => {
     expect(folder?.id).toBe(layoutFolderId(driveId, "specify/document-models"));
     expect(nodes.filter((n) => n.kind === "folder")).toHaveLength(2);
     expect((await modelNodes()).map((n) => n.parentFolder)).toEqual([folder?.id, folder?.id]);
-    expect(Object.keys(readRuntimeSpecRecord(workdir))).toEqual(["sektar/invoice"]);
+    // No second document for the type: the agent's is the runtime's now.
+    expect(readRuntimeSpecRecord(workdir)["sektar/contact"]).toBe(agentId);
     expect(await modelNodes()).toHaveLength(2);
+
+    const again = await sync([reported(invoice()), reported(contact())]);
+    expect(again.adopted).toEqual([]);
+    expect(again.unchanged.sort()).toEqual(["sektar/contact", "sektar/invoice"]);
+  });
+
+  it("brings an adopted document to the report with operations", async () => {
+    const drafted = contact();
+    drafted.description = "the agent's draft";
+    const agentId = await agentModel(drafted);
+
+    const result = await sync([reported(contact())]);
+
+    expect(result.adopted).toEqual(["sektar/contact"]);
+    expect(result.updated).toEqual([{ documentType: "sektar/contact", operations: 1 }]);
+    expect(result.created).toEqual([]);
+    expect(readRuntimeSpecRecord(workdir)).toEqual({ "sektar/contact": agentId });
+    expect(modelStatesEqual(await globalState(agentId), contact())).toBe(true);
+    expect(await modelNodes()).toHaveLength(1);
+  });
+
+  it("leaves the agent's document of a type the project does not report", async () => {
+    const agentId = await agentModel(contact());
+
+    const result = await sync([reported(invoice())]);
+
+    expect(result.adopted).toEqual([]);
+    expect(readRuntimeSpecRecord(workdir)["sektar/contact"]).toBeUndefined();
+    expect((await modelNodes()).map((n) => n.id)).toContain(agentId);
   });
 
   it("never reaches the project's specs/ through spec-sync", async () => {

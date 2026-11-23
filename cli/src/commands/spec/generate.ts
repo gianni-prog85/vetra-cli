@@ -14,6 +14,7 @@ import {
   type GenerationKind,
 } from "../../generation/run.js";
 import { requireSpecDrive } from "../../helpers/embedded-drive.js";
+import { runtimeSpecIds } from "../../helpers/runtime-spec-record.js";
 import {
   findSpecInDrive,
   listDriveSpecs,
@@ -119,12 +120,22 @@ export const specGenerate = defineCommand({
     // concurrent runs clobber each other; serialize per project.
     return withProjectCodegenLock(base, async () => {
       // The documents are read from the drive when the lock is held.
-      const targets: PHDocument[] = input.name
+      // Without a name, the models inspection keeps are left alone: their
+      // code is what they were read from.
+      const inspected = input.name ? new Set<string>() : runtimeSpecIds(workdir);
+      const found: PHDocument[] = input.name
         ? [await findSpecInDrive(drive, input.name)]
         : await listDriveSpecs(drive);
+      const targets = found.filter((doc) => !inspected.has(doc.header.id));
+      const leftToInspection = found.length - targets.length;
 
       if (targets.length === 0) {
-        return { text: "(no specs to generate)" };
+        return {
+          text:
+            leftToInspection > 0
+              ? `(no specs to generate; ${leftToInspection} model(s) are kept by inspection)`
+              : "(no specs to generate)",
+        };
       }
 
       const generated: { name: string; type: string }[] = [];
@@ -215,6 +226,9 @@ export const specGenerate = defineCommand({
       }
       for (const s of skipped) {
         lines.push(`  ✗ ${s.type} — ${s.name}: ${s.reason}`);
+      }
+      if (leftToInspection > 0) {
+        lines.push(`  · ${leftToInspection} model(s) kept by inspection were left alone`);
       }
       if (diagnostics.length > 0) {
         lines.push(

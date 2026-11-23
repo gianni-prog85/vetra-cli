@@ -164,42 +164,43 @@ export async function generateFromSpec(
   }
 }
 
-/** `ph generate <kind> --extract` in `projectDir`; resolves to the spec files written. */
-export async function extractSpecFiles(
+/** The specification documents the source of `projectDir` describes. */
+export function extractSpecDocuments(
   kind: GenerationKind | "all",
   projectDir: string,
-  onWritten?: (path: string) => void,
-): Promise<string[]> {
+): PHDocument[] {
   const project = buildTsMorphProject(projectDir);
-  let docs: PHDocument[];
   switch (kind) {
     case "all": {
       const all = extractAllDocuments(project);
-      docs = [
+      return [
         ...all.documentModels,
         ...all.editors,
         ...all.processors,
         ...all.subgraphs,
         ...all.apps,
       ];
-      break;
     }
     case "document-model":
-      docs = extractDocumentModelDocuments(project);
-      break;
+      return extractDocumentModelDocuments(project);
     case "editor":
-      docs = extractEditorDocuments(project);
-      break;
+      return extractEditorDocuments(project);
     case "app":
-      docs = extractAppDocuments(project);
-      break;
+      return extractAppDocuments(project);
     case "processor":
-      docs = extractProcessorDocuments(project);
-      break;
+      return extractProcessorDocuments(project);
     case "subgraph":
-      docs = extractSubgraphDocuments(project);
-      break;
+      return extractSubgraphDocuments(project);
   }
+}
+
+/** `ph generate <kind> --extract` in `projectDir`; resolves to the spec files written. */
+export async function extractSpecFiles(
+  kind: GenerationKind | "all",
+  projectDir: string,
+  onWritten?: (path: string) => void,
+): Promise<string[]> {
+  const docs = extractSpecDocuments(kind, projectDir);
   const written: string[] = [];
   for (const doc of docs) {
     const path = await saveSpec(doc, projectDir);

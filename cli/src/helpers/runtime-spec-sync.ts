@@ -4,12 +4,12 @@
  * equal to what the Preview run loaded (its inspector's report).
  *
  * The runtime is the source, so the sync writes the drive only, never the
- * project: a document it makes is listed in `.ph/vetra/runtime-specs.json`
- * (`runtime-spec-record.ts`) before it exists, and `spec-sync` (drive →
- * `specs/`) leaves listed documents alone. Each pass is a diff (`model-spec-diff.ts`): a document equal to the
- * report gets no operation. A new document is created holding the reported
- * state. A type whose document came from a `specs/` file stays with the file
- * flow.
+ * project: a document it keeps is listed in `.ph/vetra/runtime-specs.json`
+ * (`runtime-spec-record.ts`) before it exists. Each pass is a diff
+ * (`model-spec-diff.ts`): a document equal to the report gets no operation. A
+ * new document is created holding the reported state. A model document the
+ * agent made is adopted once the project reports its type: listed, then
+ * brought to the report like any other.
  */
 import type { ReactorContext } from "@powerhousedao/clint";
 import { createSpecDocument } from "../commands/spec/registry.js";
@@ -62,8 +62,8 @@ export interface RuntimeSpecSyncResult {
   recreated: { documentType: string; reason: string }[];
   /** Types the report no longer has; their documents were removed. */
   removed: string[];
-  /** Types left to a document that came from a `specs/` file. */
-  skipped: string[];
+  /** Types whose document the agent made; it is the runtime's from here on. */
+  adopted: string[];
   failed: { documentType: string; error: string }[];
   /** Content operations dispatched over all documents. */
   operations: number;
@@ -110,7 +110,7 @@ export function syncRuntimeSpecs(args: RuntimeSpecSyncArgs): Promise<RuntimeSpec
       updated: [],
       recreated: [],
       removed: [],
-      skipped: [],
+      adopted: [],
       failed: [],
       operations: 0,
     };
@@ -123,20 +123,21 @@ export function syncRuntimeSpecs(args: RuntimeSpecSyncArgs): Promise<RuntimeSpec
       if (state) targets.set(type.documentType, { name: type.name, state });
     }
 
-    // Types a document from a `specs/` file already describes, read on demand.
-    let fromFiles: Set<string> | undefined;
-    const typesFromFiles = async (): Promise<Set<string>> => {
-      if (fromFiles) return fromFiles;
+    // Model documents the record does not list (the agent's), by the type
+    // they describe; read on demand.
+    let unlisted: Map<string, string> | undefined;
+    const unlistedModels = async (): Promise<Map<string, string>> => {
+      if (unlisted) return unlisted;
       const owned = new Set(Object.values(record));
-      const found = new Set<string>();
+      const found = new Map<string, string>();
       for (const node of await getDriveNodes(client, driveId)) {
         if (node.kind !== "file" || node.documentType !== DOCUMENT_MODEL_TYPE) continue;
         if (owned.has(node.id)) continue;
         const held = await globalStateOf(client, node.id);
-        const id = (held?.global as { id?: unknown } | undefined)?.id;
-        if (typeof id === "string" && id) found.add(id);
+        const type = (held?.global as { id?: unknown } | undefined)?.id;
+        if (typeof type === "string" && type && !found.has(type)) found.set(type, node.id);
       }
-      fromFiles = found;
+      unlisted = found;
       return found;
     };
 
@@ -165,16 +166,22 @@ export function syncRuntimeSpecs(args: RuntimeSpecSyncArgs): Promise<RuntimeSpec
 
     for (const [documentType, target] of targets) {
       try {
-        const id = record[documentType];
-        const held = id ? await globalStateOf(client, id) : undefined;
+        let id = record[documentType];
+        let held = id ? await globalStateOf(client, id) : undefined;
         if (!id || !held) {
-          if ((await typesFromFiles()).has(documentType)) {
-            result.skipped.push(documentType);
+          // The project now reports the type: its document becomes the
+          // runtime's and is brought to the report below.
+          const adopted = (await unlistedModels()).get(documentType);
+          held = adopted ? await globalStateOf(client, adopted) : undefined;
+          if (!adopted || !held) {
+            await create(documentType, target.name, target.state);
+            result.created.push(documentType);
             continue;
           }
-          await create(documentType, target.name, target.state);
-          result.created.push(documentType);
-          continue;
+          id = adopted;
+          record[documentType] = id;
+          writeRuntimeSpecRecord(workdir, record);
+          result.adopted.push(documentType);
         }
         const plan = planModelSpecSync(held.global, target.state);
         if (plan.kind === "none") {
@@ -229,8 +236,8 @@ export function formatRuntimeSpecSync(result: RuntimeSpecSyncResult): string | u
     );
   }
   if (result.removed.length) parts.push(`${result.removed.length} removed`);
-  if (result.skipped.length) {
-    parts.push(`${result.skipped.length} left to their specs/ file (${result.skipped.join(", ")})`);
+  if (result.adopted.length) {
+    parts.push(`${result.adopted.length} adopted (${result.adopted.join(", ")})`);
   }
   if (result.failed.length) {
     parts.push(
