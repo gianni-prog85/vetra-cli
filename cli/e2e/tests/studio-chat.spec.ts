@@ -125,9 +125,9 @@ test.describe("Vetra studio — chat round trip", () => {
     await expect(
       studioPage(page).tree.getByText(spec.name, { exact: true }),
     ).toBeVisible({ timeout: 30_000 });
-    // And the project holds it: the spec commands write the project's specs/.
+    // The drive is its only place: the spec commands write no specs/ folder.
     if (workdir) {
-      expect(existsSync(path.join(workdir, "specs")), "the project's specs/").toBe(true);
+      expect(existsSync(path.join(workdir, "specs")), "the project's specs/").toBe(false);
     }
 
     // The conversation: the drive's only chat session.

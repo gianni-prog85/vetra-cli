@@ -13,11 +13,11 @@ switchboard, Connect and the Cli, booted once per run the way a user runs it:
   `studio.config.json` naming the Cli's local API.
 - **`studio-chat.spec.ts`** — the chat round trip (fixture `chat-spec`, the
   default): a conversation in the Agent panel ("New session", then a message)
-  starts the agent; the replay writes a document-model spec into the project
-  with `spec-create` and `spec-update`; the conversation shows the agent's done
+  starts the agent; the replay writes a document-model spec into the Studio
+  drive with `spec-create` and `spec-update`; the conversation shows the agent's done
   text; the spec is in the Studio drive with spec-update's state
-  (`findDocuments(search: { type, parentId })` on `<baseUrl>/graphql`), in the
-  explorer's tree and in the project's `specs/`; then a file is sent into the
+  (`findDocuments(search: { type, parentId })` on `<baseUrl>/graphql`) and in
+  the explorer's tree, and the project has no `specs/` folder; then a file is sent into the
   conversation and the Cli logs `extracted 1 attachment(s)` and writes it to
   `<project>/.ph/vetra/downloads/`. The spec sends the file as the chat box does:
   reserve and upload through Connect's origin (`/attachments`), then

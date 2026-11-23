@@ -164,7 +164,7 @@ export async function ensureFileNode(
     }),
   ]);
   log?.debug?.(
-    `[spec-fs-sync] filed ${spec.documentType} "${spec.name}" ` +
+    `[spec-drive] filed ${spec.documentType} "${spec.name}" ` +
       `documentId=${spec.id} driveId=${driveId} folder=${path ?? "(root)"}`,
   );
   // The file node is what Vetra Studio reads: a relationship failure is
@@ -173,7 +173,7 @@ export async function ensureFileNode(
     await client.addRelationship(driveId, spec.id, "child");
   } catch (err) {
     log?.warn?.(
-      `[spec-fs-sync] addRelationship failed for ${spec.id}: ${err instanceof Error ? err.message : String(err)}`,
+      `[spec-drive] addRelationship failed for ${spec.id}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -200,7 +200,7 @@ export function ensureDriveLayout(
           folders.map((folder) => addFolder(folder)),
         );
         log?.info?.(
-          `[spec-fs-sync] drive layout: added ${folders.length} folder(s) to drive ${driveId}`,
+          `[spec-drive] drive layout: added ${folders.length} folder(s) to drive ${driveId}`,
         );
       },
     });
@@ -235,30 +235,30 @@ export async function removeSpecNode(
       const { deleteNode } = await getDriveActions();
       await client.execute(driveId, "main", [deleteNode({ id: docId })]);
       log?.debug?.(
-        `[spec-fs-sync] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
+        `[spec-drive] removed spec node from drive: documentId=${docId} driveId=${driveId}`,
       );
     } else {
       log?.debug?.(
-        `[spec-fs-sync] no file node for ${docId} in drive ${driveId} — skipping node delete`,
+        `[spec-drive] no file node for ${docId} in drive ${driveId} — skipping node delete`,
       );
     }
   } catch (err) {
     log?.debug?.(
-      `[spec-fs-sync] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      `[spec-drive] deleteNode skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   try {
     await client.removeRelationship(driveId, docId, "child");
   } catch (err) {
     log?.debug?.(
-      `[spec-fs-sync] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      `[spec-drive] removeRelationship skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   try {
     await client.deleteDocument(docId);
   } catch (err) {
     log?.debug?.(
-      `[spec-fs-sync] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      `[spec-drive] deleteDocument skipped for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
