@@ -1,0 +1,58 @@
+import type { ModuleSpecification } from "@powerhousedao/shared";
+import { ts } from "@tmpl/core";
+import { camelCase } from "change-case";
+import type { DocumentModelFileMakerArgs } from "../../file-builders/index.mjs";
+
+function buildModuleActionsName(
+  module: ModuleSpecification,
+  camelCaseDocumentType: string,
+) {
+  const camelCaseModuleName = camelCase(module.name);
+  return `${camelCaseDocumentType}${camelCaseModuleName.charAt(0).toUpperCase()}${camelCaseModuleName.slice(1)}Actions`;
+}
+
+function buildModuleActionsNames(
+  modules: ModuleSpecification[],
+  camelCaseDocumentType: string,
+) {
+  return modules.map((m) => buildModuleActionsName(m, camelCaseDocumentType));
+}
+
+function buildModuleActionsImports(
+  modules: ModuleSpecification[],
+  camelCaseDocumentType: string,
+) {
+  const actionNames = buildModuleActionsNames(
+    modules,
+    camelCaseDocumentType,
+  ).join(",\n");
+  return `import { ${actionNames} } from "./gen/creators.js";`;
+}
+
+function buildModuleActionsSpreadExport(
+  modules: ModuleSpecification[],
+  camelCaseDocumentType: string,
+) {
+  const spreadActionNames = buildModuleActionsNames(
+    modules,
+    camelCaseDocumentType,
+  )
+    .map((n) => `...${n}`)
+    .join(",\n");
+  return `
+export const actions = { ...baseActions, ${spreadActionNames} }`;
+}
+export const documentModelRootActionsFileTemplate = (
+  v: DocumentModelFileMakerArgs,
+) =>
+  ts`
+/**
+ * WARNING: DO NOT EDIT
+ * This file is auto-generated and updated by codegen
+ */
+import { baseActions } from "document-model";
+${buildModuleActionsImports(v.specification.modules, v.camelCaseDocumentType)}
+
+/** Actions for the ${v.pascalCaseDocumentType} document model */
+${buildModuleActionsSpreadExport(v.specification.modules, v.camelCaseDocumentType)}
+`.raw;

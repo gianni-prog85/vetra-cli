@@ -1,4 +1,4 @@
-import { deleteDocument } from "@powerhousedao/vetra/codegen/spec";
+import { deleteDocument } from "../../generation/spec/spec.js";
 import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";

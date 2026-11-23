@@ -5,7 +5,7 @@ import {
   getDocumentModelSchema as getBuiltinSchema,
   getSpecEntry as getBuiltinSpecEntry,
   listSpecDocumentTypes as listBuiltinTypes,
-} from "@powerhousedao/vetra/codegen/spec";
+} from "../../generation/spec/spec.js";
 import { withSignaturePolicy } from "document-model";
 import { baseLoadFromFile, baseSaveToFile } from "document-model/node";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
@@ -18,7 +18,7 @@ import {
   parseSdl,
 } from "./document-model.js";
 
-/* The codegen package owns a private registry of five Powerhouse builder spec
+/* The generation engine (`cli/src/generation/spec`) owns a private registry of five Powerhouse builder spec
  * types (document-model, editor, app, processor, subgraph) and resolves every
  * spec operation through it. vetra-app ships its own domain document models
  * (Feature, Audience Sheet, …) as `DocumentModelModule`s. This module merges

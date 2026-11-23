@@ -9,7 +9,10 @@ import {
 } from "../../helpers/project-checks.js";
 import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
 import { withProjectCodegenLock } from "../../helpers/project-lock.js";
-import { phBuildNodeOptions } from "../../helpers/node-memory.js";
+import {
+  generateFromSpecFile,
+  type GenerationKind,
+} from "../../generation/run.js";
 import { findByName, getDocumentsWithPaths } from "./_helpers.js";
 import {
   attachCheckResults,
@@ -17,9 +20,9 @@ import {
   type ObservedCheck,
 } from "../../product/check-results.js";
 
-// documentType → `ph generate <subcommand>`. The five builder types each map to
-// a subcommand; domain (vetra-app product) spec types have no codegen path.
-const GENERATE_SUBCOMMAND: Record<string, string> = {
+// documentType → generation kind. The five builder types each have one;
+// domain (vetra-app product) spec types have no codegen path.
+const GENERATE_SUBCOMMAND: Record<string, GenerationKind> = {
   [DOCUMENT_MODEL_TYPE]: "document-model",
   "powerhouse/document-editor": "editor",
   "powerhouse/app": "app",
@@ -27,17 +30,9 @@ const GENERATE_SUBCOMMAND: Record<string, string> = {
   "powerhouse/subgraph": "subgraph",
 };
 
-type RunProcess = (
-  command: string,
-  opts?: {
-    label?: string;
-    cwd?: string;
-    timeout?: number;
-    env?: Record<string, string>;
-  },
-) => Promise<{ success: boolean; output: string }>;
+type Log = { info: (message: string) => void; warn: (message: string) => void };
 
-// `@graphql-tools/load` inlines the failing SDL into the subprocess output;
+// `@graphql-tools/load` inlines the failing SDL into the error message;
 // these patterns pull the real GraphQLError back out of the wall of types.
 const DIAGNOSTIC_PATTERNS = [
   /Failed to parse the GraphQL document\.[^\n]*/,
@@ -61,30 +56,26 @@ function trimGenerateError(message: string): string {
   return message;
 }
 
-// Run `ph generate <subcommand> --document <specFilePath>` in the reactor
-// project. The subprocess owns codegen; vetra no longer generates in-process.
+// Generate the spec's code in the reactor project with the engine in
+// `cli/src/generation`, in this process.
 async function generateOne(
   doc: PHDocument,
   specFilePath: string,
   base: string,
-  runProcess: RunProcess,
+  log: Log | undefined,
 ): Promise<void> {
-  const subcommand = GENERATE_SUBCOMMAND[doc.header.documentType];
-  if (!subcommand) {
+  const kind = GENERATE_SUBCOMMAND[doc.header.documentType];
+  if (!kind) {
     throw new Error(
       `Unsupported document type for code generation: ${doc.header.documentType}`,
     );
   }
-  const command = `ph generate ${subcommand} --document "${specFilePath}"`;
-  const { success, output } = await runProcess(command, {
-    label: "ph-generate",
-    timeout: 120_000,
-    cwd: base,
-    env: { FORCE_COLOR: "1", NODE_OPTIONS: phBuildNodeOptions() },
+  await generateFromSpecFile(kind, specFilePath, base, {
+    installStdio: "ignore",
+    quiet: true,
+    log: (message) => log?.info(message),
+    warn: (message) => log?.warn(message),
   });
-  if (!success) {
-    throw new Error(output);
-  }
 }
 
 /* `reason` is stored and shown to the customer; `detail` is for the agent. */
@@ -115,14 +106,14 @@ export const specGenerate = defineCommand({
         "Skip the post-generation typecheck and lint over generated files. Defaults to false.",
       ),
   }),
-  execute: async (input, { workdir, runProcess }) => {
+  execute: async (input, { workdir, runProcess, log }) => {
     const base = await projectRoot(workdir);
     await assertProjectInstalled(base);
     // codegen rewrites shared barrels/manifest from the project's view, so
     // concurrent runs clobber each other; serialize per project.
     return withProjectCodegenLock(base, async () => {
-      // Each target carries the doc plus its on-disk spec file, passed to
-      // `ph generate --document`.
+      // Each target carries the doc plus its on-disk spec file, which the
+      // engine reads.
       // Real on-disk path only (never a recomputed specPath): the saved filename
       // uses a different kebab than specPath derives, so a recompute can miss.
       const targets: { doc: PHDocument; path: string }[] = input.name
@@ -154,7 +145,7 @@ export const specGenerate = defineCommand({
           continue;
         }
         try {
-          await generateOne(doc, path, base, runProcess);
+          await generateOne(doc, path, base, log);
           generated.push({ name: doc.header.name, type });
         } catch (err) {
           const reason = trimGenerateError(

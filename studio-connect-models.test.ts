@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { listSpecDocumentTypes } from "@powerhousedao/vetra/codegen/spec";
+import { listSpecDocumentTypes } from "./cli/src/generation/spec/spec.js";
 import { describe, expect, it } from "vitest";
 import { documentModels as productSpecModels } from "./cli/src/vetra-app-models.js";
 import { documentModels as vetraAppModels } from "./document-models/document-models.js";

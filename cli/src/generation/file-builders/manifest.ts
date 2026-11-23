@@ -1,0 +1,156 @@
+import type { ConfigEntry, Manifest } from "@powerhousedao/shared";
+import { defaultManifest, fileExists } from "@powerhousedao/shared/clis";
+import { ManifestSchema } from "@powerhousedao/shared/document-model";
+import { loadJsonFile } from "load-json-file";
+import { writeFile } from "node:fs/promises";
+import { join } from "path";
+import {
+  concat,
+  filter,
+  isIncludedIn,
+  isPlainObject,
+  map,
+  merge,
+  pipe,
+  prop,
+  uniqueBy,
+} from "remeda";
+import { formatJson } from "../utils/index.mjs";
+
+function withUnknownKeys(parsed: unknown, raw: unknown): unknown {
+  if (Array.isArray(parsed) && Array.isArray(raw)) {
+    return parsed.map((value, index) => withUnknownKeys(value, raw[index]));
+  }
+  if (isPlainObject(parsed) && isPlainObject(raw)) {
+    return Object.fromEntries([
+      ...Object.entries(parsed).map(([key, value]) => [
+        key,
+        withUnknownKeys(value, raw[key]),
+      ]),
+      ...Object.entries(raw).filter(([key]) => !Object.hasOwn(parsed, key)),
+    ]);
+  }
+  return parsed;
+}
+
+function parseManifest(raw: unknown): Manifest {
+  return withUnknownKeys(ManifestSchema.parse(raw), raw) as Manifest;
+}
+
+// Parsing puts keys in the schema's order, so a rewrite changes no key order.
+async function writeManifest(manifestPath: string, manifest: Manifest) {
+  await writeFile(
+    manifestPath,
+    await formatJson("powerhouse.manifest.json", parseManifest(manifest)),
+  );
+}
+
+export async function getOrCreateManifestFile(
+  manifestPath: string,
+): Promise<Manifest> {
+  const hasManifestFile = await fileExists(manifestPath);
+  if (!hasManifestFile) {
+    await writeManifest(manifestPath, defaultManifest);
+  }
+  return parseManifest(await loadJsonFile(manifestPath));
+}
+
+// Generic over the entry: a `pieces` entry carries fields `PowerhouseModule`
+// has no room for, and the widened return type would drop them.
+function makeUpdatedModulesList<T extends { id: string }>(
+  oldModules: T[] = [],
+  newModules: T[] = [],
+): T[] {
+  return pipe(
+    concat(oldModules, newModules),
+    uniqueBy((module) => module.id),
+  );
+}
+/* Updates the config field of powerhouse.manifest.json assuming unique `name` fields in the `ConfigEntry` objects */
+function makeUpdatedConfig(
+  oldConfig: ConfigEntry[] = [],
+  newConfig: ConfigEntry[] = [],
+) {
+  return pipe(
+    oldConfig,
+    filter(({ name }) => !isIncludedIn(name, map(newConfig, prop("name")))),
+    concat(newConfig),
+    uniqueBy(prop("name")),
+  );
+}
+
+/**
+ * Removes entries from a manifest module list whose id is not in `validIds`.
+ * Used by `generateAll<X>` to prune entries that no longer correspond to any
+ * directory in the project (e.g. a module that was renamed or deleted). No-op
+ * if the manifest file doesn't exist yet.
+ */
+export async function pruneManifestSection(
+  projectDir: string,
+  kind:
+    | "documentModels"
+    | "editors"
+    | "apps"
+    | "processors"
+    | "subgraphs"
+    | "pieces",
+  validIds: readonly string[],
+): Promise<void> {
+  const manifestPath = join(projectDir, "powerhouse.manifest.json");
+  if (!(await fileExists(manifestPath))) return;
+  const manifest = await getOrCreateManifestFile(manifestPath);
+  const existing = manifest[kind];
+  // Nothing to prune if the section was never present.
+  if (existing === undefined) return;
+  const validSet = new Set(validIds);
+  const filtered = existing.filter((entry) => validSet.has(entry.id));
+  // Skip the write when nothing changed.
+  if (filtered.length === existing.length) return;
+  await writeManifest(manifestPath, { ...manifest, [kind]: filtered });
+}
+
+/* Creates a powerhouse.manifest.json file, or updates an existing one with the data provided */
+export async function createOrUpdateManifest(
+  manifestData: Partial<Manifest>,
+  projectDir: string,
+) {
+  const manifestPath = join(projectDir, "powerhouse.manifest.json");
+  const existingManifest = await getOrCreateManifestFile(manifestPath);
+
+  const updatedManifest: Manifest = {
+    ...existingManifest,
+    ...manifestData,
+    publisher: merge(existingManifest.publisher, manifestData.publisher),
+    documentModels: makeUpdatedModulesList(
+      existingManifest.documentModels,
+      manifestData.documentModels,
+    ),
+    editors: makeUpdatedModulesList(
+      existingManifest.editors,
+      manifestData.editors,
+    ),
+    apps: makeUpdatedModulesList(existingManifest.apps, manifestData.apps),
+    processors: makeUpdatedModulesList(
+      existingManifest.processors,
+      manifestData.processors,
+    ),
+    subgraphs: makeUpdatedModulesList(
+      existingManifest.subgraphs,
+      manifestData.subgraphs,
+    ),
+    // Materialized only when there is something to put in it: a project that
+    // ships no piece should not grow an empty array on an unrelated run.
+    ...(existingManifest.pieces !== undefined ||
+    manifestData.pieces !== undefined
+      ? {
+          pieces: makeUpdatedModulesList(
+            existingManifest.pieces,
+            manifestData.pieces,
+          ),
+        }
+      : {}),
+    config: makeUpdatedConfig(existingManifest.config, manifestData.config),
+  };
+  await writeManifest(manifestPath, updatedManifest);
+  return updatedManifest;
+}

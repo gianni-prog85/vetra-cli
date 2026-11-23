@@ -1,0 +1,191 @@
+import { pascalCase } from "change-case";
+import path from "path";
+import { filter, forEach, isTruthy, map, pipe, uniqueBy } from "remeda";
+import {
+  documentEditorModuleFileTemplate,
+  editorsIndexTemplate,
+  editorsTemplate,
+} from "../templates/index.mjs";
+import { SyntaxKind, type Project } from "ts-morph";
+import {
+  formatSourceFileWithPrettier,
+  getOrCreateSourceFile,
+  getVariableDeclarationByTypeName,
+  projectPath,
+} from "../utils/index.mjs";
+
+type MakeEditorModuleFileArgs = {
+  project: Project;
+  editorName: string;
+  editorId: string;
+  documentModelId?: string;
+  editorDirPath: string;
+  legacyMultipleDocumentTypes?: string[];
+  documentModel?: {
+    documentTypeName: string;
+    actionTypeName: string;
+    importPath: string;
+  };
+  writtenOnce?: boolean;
+};
+/** Generates the `module.ts` file for a document editor or app */
+export async function makeEditorModuleFile({
+  project,
+  editorDirPath,
+  editorName,
+  documentModelId,
+  editorId,
+  legacyMultipleDocumentTypes,
+  documentModel,
+  writtenOnce,
+}: MakeEditorModuleFileArgs) {
+  if (documentModelId && !!legacyMultipleDocumentTypes) {
+    throw new Error(
+      "Cannot specify both documentModelId and legacyMultipleDocumentTypes",
+    );
+  }
+  const filePath = path.join(editorDirPath, "module.ts");
+  const { sourceFile } = getOrCreateSourceFile(project, filePath);
+
+  sourceFile.replaceWithText("");
+
+  const pascalCaseEditorName = pascalCase(editorName);
+  const documentTypes = documentModelId
+    ? [documentModelId]
+    : (legacyMultipleDocumentTypes ?? []);
+
+  const template = documentEditorModuleFileTemplate({
+    editorName,
+    editorId,
+    pascalCaseEditorName,
+    documentTypes,
+    documentModel,
+    writtenOnce,
+  });
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+export async function makeEditorsFile(args: {
+  project: Project;
+  editorsDirPath: string;
+}) {
+  const { project } = args;
+  const editorsDirPath = projectPath(project, args.editorsDirPath);
+  // With skipAddingFilesFromTsConfig, pre-existing module.ts files aren't in
+  // the project; add them so existing editors/apps are preserved on rebuild.
+  project.addSourceFilesAtPaths(path.join(editorsDirPath, "**", "module.ts"));
+  const sourceFile = project.createSourceFile(
+    path.join(editorsDirPath, "editors.ts"),
+    editorsTemplate,
+    { overwrite: true },
+  );
+
+  const editorsArray = sourceFile
+    .getVariableDeclarationOrThrow("editors")
+    .getFirstDescendantByKindOrThrow(SyntaxKind.ArrayLiteralExpression);
+
+  pipe(
+    project.getDirectoryOrThrow(editorsDirPath).getDescendantSourceFiles(),
+    filter((sourceFile) => sourceFile.getBaseName() === "module.ts"),
+    uniqueBy((sourceFile) => sourceFile.getFilePath()),
+    map((sourceFile) =>
+      getVariableDeclarationByTypeName(sourceFile, "EditorModule"),
+    ),
+    filter(isTruthy),
+    map((variableDeclaration) => ({
+      name: variableDeclaration.getName(),
+      editorDir: variableDeclaration
+        .getSourceFile()
+        .getDirectory()
+        .getBaseName(),
+    })),
+    map(({ name, editorDir }) => ({
+      name,
+      namedImports: [name],
+      moduleSpecifier: `./${path.posix.join(editorDir, "module.js")}`,
+    })),
+    forEach(({ name, namedImports, moduleSpecifier }) => {
+      sourceFile.addImportDeclaration({
+        namedImports,
+        moduleSpecifier,
+      });
+      editorsArray.addElement(name);
+    }),
+  );
+
+  const importedNames = new Set(
+    sourceFile
+      .getImportDeclarations()
+      .filter(
+        (declaration) =>
+          declaration.getModuleSpecifierValue() !== "document-model",
+      )
+      .flatMap((declaration) =>
+        declaration
+          .getNamedImports()
+          .map(
+            (specifier) =>
+              specifier.getAliasNode()?.getText() ?? specifier.getName(),
+          ),
+      ),
+  );
+  if (importedNames.has("EditorModule")) {
+    let namespaceImport = "documentModelTypes";
+    while (importedNames.has(namespaceImport)) namespaceImport += "_";
+    sourceFile.getImportDeclarationOrThrow("document-model").remove();
+    sourceFile.addImportDeclaration({
+      isTypeOnly: true,
+      namespaceImport,
+      moduleSpecifier: "document-model",
+    });
+    sourceFile
+      .getVariableDeclarationOrThrow("editors")
+      .setType(`${namespaceImport}.EditorModule[]`);
+  }
+
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+export async function makeEditorsIndexFile(args: {
+  project: Project;
+  editorsDirPath: string;
+}) {
+  const { project } = args;
+  const editorsDirPath = projectPath(project, args.editorsDirPath);
+  project.addSourceFilesAtPaths(path.join(editorsDirPath, "**", "module.ts"));
+  const sourceFile = project.createSourceFile(
+    path.join(editorsDirPath, "index.ts"),
+    editorsIndexTemplate,
+    { overwrite: true },
+  );
+
+  pipe(
+    project.getDirectoryOrThrow(editorsDirPath).getDescendantSourceFiles(),
+    filter((sourceFile) => sourceFile.getBaseName() === "module.ts"),
+    uniqueBy((sourceFile) => sourceFile.getFilePath()),
+    map((sourceFile) =>
+      getVariableDeclarationByTypeName(sourceFile, "EditorModule"),
+    ),
+    filter(isTruthy),
+    map((variableDeclaration) => ({
+      name: variableDeclaration.getName(),
+      editorDir: variableDeclaration
+        .getSourceFile()
+        .getDirectory()
+        .getBaseName(),
+    })),
+    map(({ name, editorDir }) => ({
+      namedExports: [name],
+      moduleSpecifier: `./${path.posix.join(editorDir, "module.js")}`,
+    })),
+    forEach(({ namedExports, moduleSpecifier }) => {
+      sourceFile.addExportDeclaration({
+        namedExports,
+        moduleSpecifier,
+      });
+    }),
+  );
+
+  await formatSourceFileWithPrettier(sourceFile);
+}

@@ -6,7 +6,7 @@ import { projectRoot } from "../../helpers/project.js";
 import { getEmbeddedDrive } from "../../helpers/embedded-drive.js";
 import { applyFsChangesToReactor } from "../../helpers/spec-drive-sync.js";
 import { studioSignatureMode } from "../../auth/studio-mode.js";
-import { phBuildNodeOptions } from "../../helpers/node-memory.js";
+import { extractSpecFiles } from "../../generation/run.js";
 import { loadSpecDocument } from "./registry.js";
 import { slugify } from "./_helpers.js";
 
@@ -17,25 +17,7 @@ const typeSchema = z
     'Which modules to extract. "all" (default) covers every type; or pick one.',
   );
 
-// `ph generate <subcommand> --extract` writes a spec for each existing module
-// into specs/ and logs `Wrote <path>` per file.
-function extractCommand(type: z.infer<typeof typeSchema>): string {
-  return type === "all"
-    ? "ph generate all --extract"
-    : `ph generate ${type} --extract`;
-}
-
-// Pull the `Wrote <path>` lines the extract subprocess prints.
-export function parseWritten(output: string): string[] {
-  const paths: string[] = [];
-  for (const line of output.split(/\r?\n/)) {
-    const m = line.match(/^Wrote\s+(.+)$/);
-    if (m) paths.push(m[1].trim());
-  }
-  return paths;
-}
-
-// `ph generate --extract` doesn't seed header.slug; restore the slug invariant
+// The extract doesn't seed header.slug; restore the slug invariant
 // spec-create establishes, rewriting the file in place (same path).
 async function backfillSlug(filePath: string): Promise<void> {
   const doc = await loadSpecDocument(filePath);
@@ -53,21 +35,22 @@ export const specExtract = defineCommand({
     type: typeSchema,
   }),
   execute: async (input, context) => {
-    const { workdir, runProcess } = context;
+    const { workdir } = context;
     const drive = await getEmbeddedDrive(context);
     const base = await projectRoot(workdir);
 
-    const command = extractCommand(input.type);
-    const { success, output } = await runProcess(command, {
-      label: "ph-generate-extract",
-      timeout: 120_000,
-      cwd: base,
-      env: { FORCE_COLOR: "1", NODE_OPTIONS: phBuildNodeOptions() },
-    });
+    // The engine in `cli/src/generation` writes a spec for each existing
+    // module into specs/, in this process.
+    const written: string[] = [];
+    let failure: Error | undefined;
+    try {
+      await extractSpecFiles(input.type, base, (path) => written.push(path));
+    } catch (error) {
+      failure = error instanceof Error ? error : new Error(String(error));
+    }
 
     // Sync what was written before surfacing a failure, so a partial extract
     // isn't lost from the drive.
-    const written = parseWritten(output);
     for (const filePath of written) await backfillSlug(filePath);
 
     // The extracted files are legacy; on a v2-required switchboard the sync
@@ -90,9 +73,7 @@ export const specExtract = defineCommand({
       );
     }
 
-    if (!success) {
-      throw new Error(output);
-    }
+    if (failure) throw failure;
 
     return {
       text:

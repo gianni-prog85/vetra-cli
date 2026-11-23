@@ -65,6 +65,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "parity:generation": "tsx cli/tests/generation/parity/run-parity.ts",
     "test:e2e": "playwright test --config cli/e2e/playwright.config.ts",
     "test:e2e:install": "node -e \"process.env.PLAYWRIGHT_SKIP_BROWSER_GC='1';process.argv.splice(1,0,'playwright','install','chromium');require('@playwright/test/cli')\"",
     "test:e2e:report": "playwright show-report cli/e2e/playwright-report",
@@ -79,6 +80,7 @@
     "@powerhousedao/clint": "catalog:",
     "@powerhousedao/host-core": "catalog:",
     "@powerhousedao/ph-cli": "catalog:",
+    "@powerhousedao/reactor-api": "catalog:",
     "@powerhousedao/reactor-browser": "catalog:",
     "@powerhousedao/switchboard": "catalog:",
     "document-model": "catalog:",
@@ -86,9 +88,19 @@
     "graphql-tag": "^2",
     "react": "^19",
     "react-dom": "^19",
+    "vite": "^8.0.0",
     "zod": "^4"
   },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
   "dependencies": {
+    "@graphql-codegen/add": "6.0.0",
+    "@graphql-codegen/cli": "6.1.1",
+    "@graphql-codegen/typescript": "5.0.7",
+    "@graphql-tools/merge": "9.1.7",
     "@mastra/core": "catalog:",
     "@mastra/libsql": "catalog:",
     "@mastra/mcp": "catalog:",
@@ -99,12 +111,19 @@
     "@powerhousedao/vetra": "catalog:",
     "@renown/sdk": "catalog:",
     "@toon-format/toon": "^2.2.0",
+    "change-case": "5.4.4",
     "chokidar": "^3.6.0",
-    "driver.js": "^1.6.0",
     "fflate": "^0.8.2",
+    "graphql-codegen-typescript-validation-schema": "0.18.1",
     "jsonpath-plus": "^10.4.0",
+    "load-json-file": "^7.0.1",
     "lucide-react": "^1.17.0",
-    "proper-lockfile": "^4.1.2"
+    "oxfmt": "0.68.0",
+    "proper-lockfile": "^4.1.2",
+    "read-pkg": "10.1.0",
+    "remeda": "2.33.7",
+    "ts-morph": "27.0.2",
+    "write-package": "7.2.0"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^2.0.80",
@@ -119,11 +138,13 @@
     "@powerhousedao/ph-cli": "catalog:",
     "@powerhousedao/powerhouse-vetra-packages": "catalog:",
     "@powerhousedao/reactor": "catalog:",
+    "@powerhousedao/reactor-api": "catalog:",
     "@powerhousedao/reactor-attachments": "catalog:",
     "@powerhousedao/reactor-browser": "catalog:",
     "@powerhousedao/switchboard": "catalog:",
     "@powerhousedao/vetra-cloud-package": "https://registry.vetra.io/@powerhousedao/vetra-cloud-package/-/vetra-cloud-package-0.0.75.tgz",
     "@tailwindcss/cli": "^4.1.18",
+    "@tmpl/core": "npm:@jsr/tmpl__core@^0.6.3",
     "@types/node": "catalog:",
     "@types/proper-lockfile": "^4.1.4",
     "@types/react": "catalog:",

@@ -1,0 +1,159 @@
+import type { DocumentModelDocumentTypeMetadata } from "../index.js";
+import type {
+  DocumentModelGlobalState,
+  DocumentSpecification,
+  OperationErrorSpecification,
+  OperationSpecification,
+} from "@powerhousedao/shared";
+import { camelCase, kebabCase, pascalCase } from "change-case";
+
+export function getEditorVariableNames({
+  documentModelDocumentTypeName,
+  documentModelActionTypeName,
+}: DocumentModelDocumentTypeMetadata) {
+  return {
+    documentModelDocumentTypeName,
+    documentVariableName: camelCase(documentModelDocumentTypeName),
+    actionTypeName: documentModelActionTypeName,
+    documentNameVariableName: `${documentModelDocumentTypeName}Name`,
+    dispatchFunctionName: "dispatch",
+    onClickEditHandlerName: `onClickEdit${documentModelDocumentTypeName}Name`,
+    onCancelEditHandlerName: `onClickCancelEdit${documentModelDocumentTypeName}Name`,
+    setNameActionName: "setName",
+    isEditingVariableName: "isEditing",
+    setIsEditingFunctionName: "setIsEditing",
+    onSubmitSetNameFunctionName: `onSubmitSet${documentModelDocumentTypeName}Name`,
+  };
+}
+
+export function getDocumentModelDirName(
+  documentModelState: DocumentModelGlobalState,
+  existingDirName?: string,
+) {
+  if (existingDirName) return existingDirName;
+  return kebabCase(documentModelState.name);
+}
+
+export function getLatestDocumentModelSpec({
+  specifications,
+}: DocumentModelGlobalState) {
+  return specifications[specifications.length - 1];
+}
+
+export function getDocumentModelSpecByVersionNumber(
+  { specifications }: DocumentModelGlobalState,
+  version: number,
+): DocumentSpecification {
+  const specificationByIndex = specifications[version];
+  const specificationByNumber = specifications.find(
+    (spec) => spec.version === version,
+  );
+  if (!specificationByNumber) {
+    console.error(
+      `Specification with version number ${version} does not exist in the document model specifications array`,
+    );
+    return specificationByIndex;
+  }
+  if (specificationByIndex.version !== specificationByNumber.version) {
+    console.error(
+      `Specification with version ${version} does not match specifications array at index ${version}`,
+    );
+    return specificationByIndex;
+  }
+
+  return specificationByNumber;
+}
+
+export function getLatestDocumentModelSpecVersionNumber(
+  documentModelState: DocumentModelGlobalState,
+) {
+  return getLatestDocumentModelSpec(documentModelState).version;
+}
+
+export function getDocumentModelVariableNames(documentModelName: string) {
+  const kebabCaseDocumentType = kebabCase(documentModelName);
+  const pascalCaseDocumentType = pascalCase(documentModelName);
+  const camelCaseDocumentType = camelCase(documentModelName);
+  const documentTypeVariableName = `${camelCaseDocumentType}DocumentType`;
+  const stateName = `${pascalCaseDocumentType}State`;
+  const globalStateName = `${pascalCaseDocumentType}GlobalState`;
+  const localStateName = `${pascalCaseDocumentType}LocalState`;
+  const phStateName = `${pascalCaseDocumentType}PHState`;
+  const phDocumentTypeName = `${pascalCaseDocumentType}Document`;
+  const actionTypeName = `${pascalCaseDocumentType}Action`;
+  const actionsTypeName = `${actionTypeName}s`;
+  const actionsName = camelCase(actionsTypeName);
+  const upgradeManifestName = `${camelCaseDocumentType}UpgradeManifest`;
+
+  const stateSchemaName = `${stateName}Schema`;
+  const phDocumentSchemaName = `${phDocumentTypeName}Schema`;
+  const isPhStateOfTypeFunctionName = `is${stateName}`;
+  const assertIsPhStateOfTypeFunctionName = `assertIs${stateName}`;
+  const isPhDocumentOfTypeFunctionName = `is${phDocumentTypeName}`;
+  const assertIsPhDocumentOfTypeFunctionName = `assertIs${phDocumentTypeName}`;
+  const useByIdHookName = `use${phDocumentTypeName}ById`;
+  const useSelectedHookName = `useSelected${phDocumentTypeName}`;
+  const useInSelectedDriveHookName = `use${phDocumentTypeName}sInSelectedDrive`;
+  const useInSelectedFolderHookName = `use${phDocumentTypeName}sInSelectedFolder`;
+
+  return {
+    kebabCaseDocumentType,
+    pascalCaseDocumentType,
+    camelCaseDocumentType,
+    documentTypeVariableName,
+    upgradeManifestName,
+    stateName,
+    globalStateName,
+    localStateName,
+    phStateName,
+    phDocumentTypeName,
+    actionTypeName,
+    actionsTypeName,
+    actionsName,
+    stateSchemaName,
+    phDocumentSchemaName,
+    isPhStateOfTypeFunctionName,
+    assertIsPhStateOfTypeFunctionName,
+    isPhDocumentOfTypeFunctionName,
+    assertIsPhDocumentOfTypeFunctionName,
+    useByIdHookName,
+    useSelectedHookName,
+    useInSelectedDriveHookName,
+    useInSelectedFolderHookName,
+  };
+}
+
+function makeNormalizedError(error: OperationErrorSpecification) {
+  if (!error.name) {
+    throw new Error("Error name is required");
+  }
+  const code = error.code || pascalCase(error.name);
+  return {
+    ...error,
+    code,
+  };
+}
+
+function getErrorsFromOperation(operation: OperationSpecification) {
+  const errors = operation.errors;
+  const errorCodeSet = new Set<string>();
+  const normalizedErrors: OperationErrorSpecification[] = [];
+
+  for (const error of errors) {
+    const normalizedError = makeNormalizedError(error);
+    if (!errorCodeSet.has(normalizedError.code)) {
+      errorCodeSet.add(normalizedError.code);
+      normalizedErrors.push(normalizedError);
+    } else {
+      console.warn(
+        `Warning: Duplicate error code "${error.code}" with different fields found`,
+      );
+    }
+  }
+
+  return normalizedErrors;
+}
+
+function _getErrorsFromOperations(operations: OperationSpecification[]) {
+  return operations.flatMap(getErrorsFromOperation);
+}

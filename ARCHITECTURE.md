@@ -675,6 +675,35 @@ checklist):
   `spec-preview-delete`. Mirror the `spec-*` shape; operate on the
   preview drive of the project's run.
 
+### Generation engine (`cli/src/generation/`)
+
+Copied from the Powerhouse monorepo's `packages/codegen/src` and
+`packages/vetra/codegen` at `cb9717f1de`; `@powerhousedao/codegen` is not
+imported. One file is named differently:
+`templates/boilerplate/editors/editors-list.ts` (`editors.ts` there), because
+`ph build` stubs every `editors/editors.ts` on a host.
+
+The spec-driven generation runs in the Cli's process: no `ph generate` child.
+
+- `run.ts` is the entry. `generateFromSpecFile(kind, specFile, projectDir)`
+  does what `ph generate <kind> --document <file>` does for `document-model`,
+  `editor`, `app`, `processor` and `subgraph`; `extractSpecFiles(kind | "all",
+  projectDir)` does what `ph generate <kind> --extract` does and resolves to
+  the spec files it wrote.
+- `spec-generate` calls the first once per spec, `spec-extract` the second.
+  Both hold the project's codegen lock. Processor and subgraph generation
+  still run the project's package manager for the dependencies they add.
+- `codegen/`, `file-builders/`, `name-builders/`, `templates/`, `utils/` are
+  the engine; `spec/` reads and writes the `.phd` specs (`spec/spec.ts` is the
+  barrel the spec commands and triggers import) and maps a spec to engine
+  arguments. The spec document models themselves stay in
+  `@powerhousedao/vetra`.
+- Its suites are in `cli/tests/generation/` and run in `pnpm test`.
+- `pnpm run parity:generation` (`cli/tests/generation/parity/run-parity.ts`)
+  generates one fixture project twice, with the linked monorepo's built
+  `ph-cli generate` and with the engine, and compares the two trees after
+  each kind, then the extracted specs. It exits 1 on any difference.
+
 ### Renown identity (agent authorization)
 
 **Renown is the identity/auth provider.** The user authorizes the agent with

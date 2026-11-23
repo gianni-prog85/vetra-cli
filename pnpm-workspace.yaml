@@ -1,3 +1,7 @@
+# @tmpl/core (the generation engine's templates) is published on JSR only.
+registries:
+  '@jsr': https://npm.jsr.io
+
 catalog:
   # @powerhousedao monorepo packages, at the version the monorepo's next/6.4
   # packages carry (pinned together for local-link compatibility).
@@ -10,6 +14,7 @@ catalog:
   '@powerhousedao/ph-cli': '6.4.0-next.1'
   '@powerhousedao/powerhouse-vetra-packages': '6.4.0-next.1'
   '@powerhousedao/reactor': '6.4.0-next.1'
+  '@powerhousedao/reactor-api': '6.4.0-next.1'
   '@powerhousedao/reactor-attachments': '6.4.0-next.1'
   '@powerhousedao/reactor-browser': '6.4.0-next.1'
   '@powerhousedao/shared': '6.4.0-next.1'
@@ -88,6 +93,7 @@ allowBuilds:
   '@prisma/engines': true
   aws-sdk: true
   esbuild: true
+  oxfmt: true
   prisma: true
   protobufjs: true
   sqlite3: true

@@ -2,7 +2,7 @@
  * Spec-sync trigger — Vetra-drive → filesystem mirror.
  *
  * Subscribes to spec document changes on the Studio switchboard and writes
- * each doc to disk via `@powerhousedao/vetra/codegen#saveSpec`, into the
+ * each doc to disk via `saveSpec`, into the
  * project the Cli works in: `<workdir>/specs/<subdir>/`.
  *
  * Sibling of `spec-fs-sync` (FS → drive). The loop closes via that trigger's

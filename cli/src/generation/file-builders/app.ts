@@ -1,0 +1,364 @@
+import type { CommonGenerateEditorArgs } from "../index.js";
+import { createOrUpdateManifest } from "./index.mjs";
+import path from "path";
+import {
+  appConfigFileTemplate,
+  appDriveContentsFileTemplate,
+  appEditorFileTemplate,
+  appFilesFileTemplate,
+  appFoldersFileTemplate,
+  createDocumentFileTemplate,
+  driveExplorerFileTemplate,
+  driveExplorerNavigationBreadcrumbsFileTemplate,
+  emptyStateFileTemplate,
+  folderTreeFileTemplate,
+} from "../templates/index.mjs";
+import { type Project } from "ts-morph";
+import {
+  ensureDirectoriesExist,
+  formatSourceFileWithPrettier,
+  getOrCreateDirectory,
+  getOrCreateSourceFile,
+} from "../utils/index.mjs";
+import {
+  makeEditorModuleFile,
+  makeEditorsFile,
+  makeEditorsIndexFile,
+} from "./editor-common.js";
+
+type GenerateAppArgs = CommonGenerateEditorArgs & {
+  allowedDocumentModelIds: string[];
+  isDragAndDropEnabled: boolean;
+};
+/** Generates a app with the configs for `allowedDocumentModelIds` and `isDragAndDropEnabled` */
+export async function tsMorphGenerateApp({
+  project,
+  editorDir,
+  editorName,
+  editorId,
+  allowedDocumentModelIds,
+  isDragAndDropEnabled,
+}: GenerateAppArgs) {
+  const { directory: editorsDir } = getOrCreateDirectory(project, "editors");
+  const editorsDirPath = editorsDir.getPath();
+  const { directory: documentModelsDir } = getOrCreateDirectory(
+    project,
+    "document-models",
+  );
+  const documentModelsDirPath = documentModelsDir.getPath();
+  const editorDirPath = path.join(editorsDirPath, editorDir);
+  const projectDir = editorsDir.getParentOrThrow().getPath();
+  const editorComponentsDirPath = path.join(editorDirPath, "components");
+
+  await ensureDirectoriesExist(
+    project,
+    documentModelsDirPath,
+    editorsDirPath,
+    editorDirPath,
+  );
+
+  const editorAlreadyCustomized = await makeAppComponent({
+    project,
+    editorDirPath,
+  });
+
+  // If the user already owns editor.tsx (it defines an `Editor` function), leave
+  // the rest of the standard scaffold alone — components, config.ts, and module.ts
+  // are assumed to be the user's responsibility too. Still register the editor in
+  // editors.ts/index.ts and the manifest so the package knows about it.
+  if (!editorAlreadyCustomized) {
+    await ensureDirectoriesExist(project, editorComponentsDirPath);
+
+    await makeNavigationBreadcrumbsFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeCreateDocumentFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeEmptyStateFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeFoldersFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeFolderTreeFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeFilesFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeDriveExplorerFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeDriveContentsFile({
+      project,
+      editorComponentsDirPath,
+    });
+
+    await makeAppConfigFile({
+      project,
+      allowedDocumentModelIds,
+      isDragAndDropEnabled,
+      editorDirPath,
+    });
+
+    await makeEditorModuleFile({
+      project,
+      editorName,
+      editorId,
+      editorDirPath,
+      documentModelId: "powerhouse/document-drive",
+      writtenOnce: true,
+    });
+  }
+
+  await makeEditorsFile({ project, editorsDirPath });
+  await makeEditorsIndexFile({ project, editorsDirPath });
+  await createOrUpdateManifest(
+    {
+      apps: [
+        {
+          name: editorName,
+          id: editorId,
+          documentTypes: ["powerhouse/document-drive"],
+        },
+      ],
+    },
+    projectDir,
+  );
+}
+
+type MakeAppComponentArgs = {
+  project: Project;
+  editorDirPath: string;
+};
+async function makeAppComponent({
+  project,
+  editorDirPath,
+}: MakeAppComponentArgs): Promise<boolean> {
+  const filePath = path.join(editorDirPath, "editor.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) {
+    const editorFunction = sourceFile.getFunction("Editor");
+    if (editorFunction) {
+      if (!editorFunction.isDefaultExport()) {
+        editorFunction.setIsDefaultExport(true);
+      }
+      return true;
+    }
+  }
+  const template = appEditorFileTemplate();
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+  return false;
+}
+
+type MakeAppConfigFileArgs = {
+  project: Project;
+  editorDirPath: string;
+  allowedDocumentModelIds: string[];
+  isDragAndDropEnabled: boolean;
+};
+async function makeAppConfigFile({
+  project,
+  editorDirPath,
+  allowedDocumentModelIds,
+  isDragAndDropEnabled,
+}: MakeAppConfigFileArgs) {
+  const filePath = path.join(editorDirPath, "config.ts");
+  const { sourceFile } = getOrCreateSourceFile(project, filePath);
+  const allowedDocumentTypesString = JSON.stringify(allowedDocumentModelIds);
+  const isDragAndDropEnabledString = isDragAndDropEnabled ? "true" : "false";
+
+  const template = appConfigFileTemplate({
+    isDragAndDropEnabledString,
+    allowedDocumentTypesString,
+  });
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeDriveContentsFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeDriveContentsFile({
+  project,
+  editorComponentsDirPath,
+}: MakeDriveContentsFileArgs) {
+  const filePath = path.join(editorComponentsDirPath, "DriveContents.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  const template = appDriveContentsFileTemplate();
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeNavigationBreadcrumbsFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+
+async function makeNavigationBreadcrumbsFile({
+  project,
+  editorComponentsDirPath,
+}: MakeNavigationBreadcrumbsFileArgs) {
+  const filePath = path.join(
+    editorComponentsDirPath,
+    "NavigationBreadcrumbs.tsx",
+  );
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  sourceFile.replaceWithText(driveExplorerNavigationBreadcrumbsFileTemplate());
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeFoldersFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeFoldersFile({
+  project,
+  editorComponentsDirPath,
+}: MakeFoldersFileArgs) {
+  const foldersFilePath = path.join(editorComponentsDirPath, "Folders.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    foldersFilePath,
+  );
+
+  if (alreadyExists) return;
+
+  const template = appFoldersFileTemplate();
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeFilesFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeFilesFile({
+  project,
+  editorComponentsDirPath,
+}: MakeFilesFileArgs) {
+  const filesFilePath = path.join(editorComponentsDirPath, "Files.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filesFilePath,
+  );
+
+  if (alreadyExists) return;
+
+  const template = appFilesFileTemplate();
+  sourceFile.replaceWithText(template);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeDriveExplorerFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeDriveExplorerFile({
+  project,
+  editorComponentsDirPath,
+}: MakeDriveExplorerFileArgs) {
+  const filePath = path.join(editorComponentsDirPath, "DriveExplorer.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  sourceFile.replaceWithText(driveExplorerFileTemplate);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeFolderTreeFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeFolderTreeFile({
+  project,
+  editorComponentsDirPath,
+}: MakeFolderTreeFileArgs) {
+  const filePath = path.join(editorComponentsDirPath, "FolderTree.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  sourceFile.replaceWithText(folderTreeFileTemplate);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeEmptyStateFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeEmptyStateFile({
+  project,
+  editorComponentsDirPath,
+}: MakeEmptyStateFileArgs) {
+  const filePath = path.join(editorComponentsDirPath, "EmptyState.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  sourceFile.replaceWithText(emptyStateFileTemplate);
+  await formatSourceFileWithPrettier(sourceFile);
+}
+
+type MakeCreateDocumentFileArgs = {
+  project: Project;
+  editorComponentsDirPath: string;
+};
+async function makeCreateDocumentFile({
+  project,
+  editorComponentsDirPath,
+}: MakeCreateDocumentFileArgs) {
+  const filePath = path.join(editorComponentsDirPath, "CreateDocument.tsx");
+  const { alreadyExists, sourceFile } = getOrCreateSourceFile(
+    project,
+    filePath,
+  );
+
+  if (alreadyExists) return;
+
+  sourceFile.replaceWithText(createDocumentFileTemplate);
+  await formatSourceFileWithPrettier(sourceFile);
+}

@@ -32,7 +32,7 @@ import {
   addFolder,
   driveDocumentModelModule,
 } from '@powerhousedao/shared/document-drive';
-import { specPath } from '@powerhousedao/vetra/codegen';
+import { specPath } from '../../src/generation/spec/spec.js';
 import { syncSpecsToFs } from '../../src/triggers/spec-sync.js';
 
 async function waitUntil(

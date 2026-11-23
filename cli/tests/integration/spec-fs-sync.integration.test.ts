@@ -27,7 +27,7 @@ import {
   type AppModuleDocument,
   setAppName,
 } from "@powerhousedao/vetra/document-models/app-module";
-import { saveSpec } from "@powerhousedao/vetra/codegen";
+import { saveSpec } from "../../src/generation/spec/spec.js";
 import { withSignaturePolicy } from "document-model";
 import { baseLoadFromFile } from "document-model/node";
 import {

@@ -1,0 +1,74 @@
+import type { ModuleSpecification } from "@powerhousedao/shared";
+import { ts } from "@tmpl/core";
+import { kebabCase, pascalCase } from "change-case";
+import type { DocumentModelFileMakerArgs } from "../../../file-builders/index.mjs";
+
+function makeModuleActionsTypeImport(
+  module: ModuleSpecification,
+  pascalCaseDocumentType: string,
+) {
+  const pascalCaseModuleName = pascalCase(module.name);
+  const kebabCaseModuleName = kebabCase(module.name);
+  return `import type { ${pascalCaseDocumentType}${pascalCaseModuleName}Action } from "./${kebabCaseModuleName}/actions.js";`;
+}
+function makeModuleActionsTypeImports(
+  modules: ModuleSpecification[],
+  pascalCaseDocumentType: string,
+) {
+  return modules
+    .map((module) =>
+      makeModuleActionsTypeImport(module, pascalCaseDocumentType),
+    )
+    .join("\n");
+}
+
+function makeModuleActionsTypeExport(module: ModuleSpecification) {
+  const kebabCaseModuleName = kebabCase(module.name);
+  return `export * from "./${kebabCaseModuleName}/actions.js";`;
+}
+
+function makeModuleActionsTypeExports(modules: ModuleSpecification[]) {
+  return modules.map(makeModuleActionsTypeExport).join("\n");
+}
+
+function makeModuleActionTypeName(
+  module: ModuleSpecification,
+  pascalCaseDocumentType: string,
+) {
+  const pascalCaseModuleName = pascalCase(module.name);
+  return `${pascalCaseDocumentType}${pascalCaseModuleName}Action`;
+}
+
+function makeModuleActionTypesUnion(
+  modules: ModuleSpecification[],
+  pascalCaseDocumentType: string,
+) {
+  return modules
+    .map((module) => makeModuleActionTypeName(module, pascalCaseDocumentType))
+    .join("|\n");
+}
+
+function makeDocumentActionType(
+  modules: ModuleSpecification[],
+  pascalCaseDocumentType: string,
+) {
+  const actionTypeUnion = makeModuleActionTypesUnion(
+    modules,
+    pascalCaseDocumentType,
+  );
+  return `export type ${pascalCaseDocumentType}Action = ${actionTypeUnion};`;
+}
+export const documentModelGenActionsFileTemplate = (
+  v: DocumentModelFileMakerArgs,
+) =>
+  ts`
+/**
+ * WARNING: DO NOT EDIT
+ * This file is auto-generated and updated by codegen
+ */
+${makeModuleActionsTypeImports(v.specification.modules, v.pascalCaseDocumentType)}
+
+${makeModuleActionsTypeExports(v.specification.modules)}
+
+${makeDocumentActionType(v.specification.modules, v.pascalCaseDocumentType)}
+`.raw;
