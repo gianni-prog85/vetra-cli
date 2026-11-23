@@ -19,7 +19,7 @@ const RUNNERS: Record<string, { name: string; module: string }> = {
     name: "acme-switchboard",
     module: "@powerhousedao/ph-cli/runners/switchboard",
   },
-  vetra: { name: "vetra", module: "@powerhousedao/host-core/runners/compound" },
+  dev: { name: "dev", module: "@powerhousedao/host-core/runners/compound" },
   desktop: { name: "desktop", module: "@powerhousedao/desktop/runner" },
 };
 
@@ -106,7 +106,7 @@ describe("project hosts", () => {
     expect(result.hosts.map((h) => [h.host, h.name, h.startable, h.command, h.state.kind])).toEqual([
       ["connect", "acme-connect", true, "ph run connect dev", "stopped"],
       ["switchboard", "acme-switchboard", true, "ph run switchboard dev", "stopped"],
-      ["vetra", "vetra", true, "ph run vetra dev", "stopped"],
+      ["dev", "dev", true, "ph run dev dev", "stopped"],
       ["desktop", "desktop", false, "ph run desktop", "stopped"],
     ]);
   });
@@ -149,7 +149,7 @@ describe("project hosts", () => {
   });
 
   it("reads a compound's links from its members", () => {
-    const rec = record("vetra", {
+    const rec = record("dev", {
       kind: "compound",
       members: {
         sb: {

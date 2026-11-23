@@ -14,8 +14,8 @@ export default /** @satisfies {PHHost} */ ({
     module: "@powerhousedao/ph-cli/runners/switchboard",
     // Not strict: taken, the next free port; the run record names the real one.
     port: 8093,
-    // No workflows. The inspector also keeps the Vetra codegen processor out,
-    // so nothing in the Preview rewrites the project's code.
+    // No workflows. The project is the only package loaded (no `packages`
+    // list): no Vetra model or processor, so nothing here writes code.
     plugins: [
       "@powerhousedao/switchboard/plugins/mcp",
       "@powerhousedao/switchboard/plugins/attachments",
@@ -59,10 +59,6 @@ export default /** @satisfies {PHHost} */ ({
         readModel: { url: "${userData}/.ph/vetra/preview/read-storage" },
       },
     },
-    drives: [
-      // Not `vetra` or `vetra-*`: @powerhousedao/vetra's codegen processor
-      // attaches to those.
-      { slug: "preview", name: "Vetra Preview" },
-    ],
+    drives: [{ slug: "preview", name: "Vetra Preview" }],
   },
 });

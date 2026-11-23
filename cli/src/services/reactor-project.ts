@@ -17,8 +17,7 @@ export const PREVIEW_HOST = '@powerhousedao/vetra-cli/preview';
 /** Its members the Cli reads. */
 export const PREVIEW_SWITCHBOARD_MEMBER = 'preview-switchboard';
 export const PREVIEW_CONNECT_MEMBER = 'preview-connect';
-/** The Preview drive's declared slug on the switchboard member. Not `vetra`
- * or `vetra-*`: the Vetra codegen processor attaches to those. */
+/** The Preview drive's declared slug on the switchboard member. */
 export const PREVIEW_DRIVE_SLUG = 'preview';
 
 interface SwitchboardMemberOutputs {

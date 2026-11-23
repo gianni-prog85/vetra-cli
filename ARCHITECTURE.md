@@ -120,7 +120,7 @@ A host may import a sibling host file (`connect` and `studio-signed` do).
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
 | `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` and `config` replace the host's whole sections; only `runner` key-merges), the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store, and its identity to `${userData}/.ph/vetra-signed/switchboard/`. Auth stays off. Not run by anything; see "The signed check" |
 | `preview-switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Preview switchboard: port 8093 on `127.0.0.1`, plugins `mcp`, `attachments` and `inspector` (`reportFile: "${userData}/.ph/vetra/preview/inspector.json"`), `auth` off. The project (the working directory) is its local package, loaded from source at `dev`; its config file is the package's empty one, so the project's `packages` list and registry are not read. Stores and identity under `${userData}/.ph/vetra/preview/`. Declares one drive: slug `preview`, name `Vetra Preview` |
-| `preview-connect` | `@powerhousedao/ph-cli/runners/connect` | Generic Connect over the project at `dev` (its editors from source): port 8092, a remote client of the Preview switchboard's `preview` drive, proxying its paths. Renown namespace `vetra-preview` |
+| `preview-connect` | `@powerhousedao/ph-cli/runners/connect` | Generic Connect over the project at `dev` (its editors from source): port 8092, plugins `generic` only (declared, so no default composition and no studio mode), a remote client of the Preview switchboard's `preview` drive, proxying its paths. Renown namespace `vetra-preview` |
 | `preview` | `@powerhousedao/host-core/runners/compound` | `preview-switchboard`, then `preview-connect`; default verb `dev`. The Cli's `reactor-project` service runs it in the project (see "reactor-project service"). Its members are named apart from the Studio's: both compounds run in one project |
 
 The drive slug is `studio`, not `vetra` or `vetra-*`: loading
@@ -672,11 +672,13 @@ opened. The switchboard runs no workflows plugin and has auth off (the
 service env). Its run record is
 `<project>/.ph/run/@powerhousedao/vetra-cli/preview.json`.
 
-**No code is written from the Preview.** The switchboard's dev mode would
-register `@powerhousedao/vetra`'s codegen processor, which rewrites project
-code for drives named `vetra` or `vetra-*`. The inspector plugin turns that
-registration off (`codegenProcessor: false`), and the Preview drive's slug
-is `preview`. Generation stays the Cli's (`cli/src/generation`).
+**Nothing of Vetra in the Preview.** A host loads only the packages it
+lists. `preview-switchboard` lists none, so it loads the project alone: no
+Vetra document model, no codegen processor, and no code is written from the
+Preview. `preview-connect` declares its plugins (`generic`), so the `dev`
+verb adds no default composition and no studio mode. The Studio's own
+switchboard and Connect list `@powerhousedao/vetra` themselves (see "Hosts").
+Generation stays the Cli's (`cli/src/generation`).
 
 **Inspector.** `preview-switchboard` loads
 `@powerhousedao/switchboard/plugins/inspector`. When its reactor is ready

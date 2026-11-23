@@ -21,6 +21,9 @@ export default /** @satisfies {PHHost} */ ({
     module: "@powerhousedao/ph-cli/runners/connect",
     // Not strict: taken, the next free port; the run record names the real one.
     port: 8092,
+    // Declared, so the dev verb adds nothing of its own (no studio mode): the
+    // generic drive UI and the project's editors, nothing of Vetra.
+    plugins: ["@powerhousedao/connect/plugins/generic"],
     // The browser talks to this origin only: Connect's server proxies the
     // switchboard's paths.
     proxy: {

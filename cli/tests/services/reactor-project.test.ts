@@ -85,12 +85,23 @@ describe('the package\'s preview hosts', () => {
     expect(text).not.toContain('disableLocal');
   });
 
-  it('nothing in the Preview rewrites the project: no codegen drive, the inspector keeps codegen off', async () => {
+  it('nothing of Vetra is in the Preview: no package listed, Connect declares its plugins', async () => {
+    const switchboard = await hostOf(PREVIEW_SWITCHBOARD_MEMBER);
+    const connect = await hostOf(PREVIEW_CONNECT_MEMBER);
+    // A host loads what it lists: the switchboard lists no package (the
+    // project alone), and neither host names a Vetra module.
+    expect(switchboard.config?.switchboard?.packages).toBeUndefined();
+    for (const host of [switchboard, connect]) {
+      expect(JSON.stringify(host)).not.toMatch(/@powerhousedao\/vetra(?!-cli)/);
+    }
+    // Declared, so the dev verb serves no default composition (studio mode).
+    expect(connect.runner.plugins).toEqual(['@powerhousedao/connect/plugins/generic']);
+  });
+
+  it('the switchboard declares the Preview drive and the inspector, no workflows', async () => {
     const switchboard = await hostOf(PREVIEW_SWITCHBOARD_MEMBER);
     const slugs = (switchboard.reactor?.drives ?? []).map((d) => d.slug);
     expect(slugs).toEqual([PREVIEW_DRIVE_SLUG]);
-    // @powerhousedao/vetra's codegen processor attaches to `vetra`/`vetra-*`.
-    for (const slug of slugs) expect(slug).not.toMatch(/^vetra(-|$)/);
     const inspector = (switchboard.runner.plugins ?? []).find(
       (p): p is { module: string; config: Record<string, unknown> } =>
         typeof p === 'object' && p !== null && (p as { module?: string }).module === '@powerhousedao/switchboard/plugins/inspector',
