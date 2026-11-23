@@ -12,7 +12,7 @@
  * so values can be swept during Docker repro without rebuilding the image.
  *
  * Env knobs (megabytes):
- *   VETRA_MEM_REACTOR_PROJECT_MB  reactor-project / ph run vetra (default 2048)
+ *   VETRA_MEM_REACTOR_PROJECT_MB  reactor-project / Preview run  (default 2048)
  *   VETRA_MEM_PH_BUILD_MB         ph build                     (default 2048)
  *   VETRA_MEM_CHECK_MB            tsc / eslint codegen checks   (default 1024)
  */

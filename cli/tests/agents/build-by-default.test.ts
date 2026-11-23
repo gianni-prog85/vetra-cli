@@ -90,20 +90,22 @@ describe('main agent builds by default (R18)', () => {
 });
 
 // Studio runs inside one project: the workdir is the project, Studio makes
-// no other one, and its run is opt-in.
+// no other one, and its preview is the Preview run.
 describe('the workdir is the project', () => {
-  it('workflow: no project is created, the run is opt-in', async () => {
+  it('workflow: no project is created, the preview is the Preview run', async () => {
     const text = flat(await mainInstructions());
     expect(text).toMatch(/The project is your workdir: Studio runs inside it and creates no other project/);
     expect(text).toMatch(/never hand-write a new project's files/);
-    expect(text).toMatch(/The project's run is opt-in: without `reactor-project-start` in your tools the preview is off/);
+    expect(text).toMatch(/The preview is the Preview run: the project's code on Studio's own Switchboard and Connect/);
+    expect(text).not.toMatch(/opt-in/);
     expect(text).not.toMatch(/reactor-project-init/);
   }, 60_000);
 
   it('the bootstrap skill says the same', () => {
     const preamble = flat(readFileSync(path.join(PROMPTS_DIR, 'skills-tpl', 'reactor-project-management', '.preamble.md'), 'utf-8'));
     expect(preamble).toMatch(/The project is your workdir: Studio runs inside one Reactor Package project and creates no other one/);
-    expect(preamble).toMatch(/`reactor-project-start` is in your tools only when the Studio turns the project run on/);
+    expect(preamble).toMatch(/Its preview is the Preview run: the project's code on a Switchboard, a Connect and a preview drive of Studio's own/);
+    expect(preamble).not.toMatch(/ph run vetra/);
     expect(preamble).not.toMatch(/reactor-project-init/);
   });
 });

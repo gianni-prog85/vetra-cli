@@ -19,10 +19,9 @@ import {
  * preview pane's iframe with the preview data — proving the whole loop:
  * chat → agent → tools → reactor → studio.
  *
- * Out of C1: its fixture starts with `reactor-project-init` and the preview
- * is the project run, which a Studio inside a project no longer has (no init,
- * the run opt-in, no preview pane on the Studio page). It returns with C2's
- * Preview run.
+ * Skipped: its fixture starts with `reactor-project-init`, which a Studio
+ * inside a project does not have, and the Studio page has no preview pane to
+ * show the Preview run in.
  */
 const fixture = loadFixture();
 const run = loadRun();
@@ -30,7 +29,7 @@ const studioHome = `${run.baseUrl}/d/${run.driveId}`;
 const { log } = cliPaths();
 
 /** The project's preview is up: the Cli's local API resolves the project's
- * preview drive root to `ready` (its `ph run vetra dev` record is live). */
+ * preview drive root to `ready` (the Preview run's record is live). */
 async function projectPreviewReady(): Promise<boolean> {
   try {
     const params = new URLSearchParams({ home: "1" });
@@ -132,7 +131,7 @@ async function assertNoMissingModelBanner(page: Page): Promise<void> {
 }
 
 test.describe("Vetra studio — seeded build", () => {
-  test.skip(true, "out of C1: needs reactor-project-init and the project run (C2's Preview run)");
+  test.skip(true, "needs a fixture without reactor-project-init and a preview pane on the Studio page");
   test.skip(
     !fixture.preview,
     `fixture "${fixture.name}" has no preview: boot with VETRA_FIXTURE=todo-list`,

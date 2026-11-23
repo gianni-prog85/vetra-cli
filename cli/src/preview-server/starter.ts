@@ -6,8 +6,7 @@
  * Side-effecty. Triggered by the browser on `project-stopped`; can also be
  * called by the agent (the `reactor-project-start` command is equivalent).
  * When an instance for the project is already `starting` or `ready`, we
- * return the existing instance without spawning a second one. Refused while
- * the project run is off (the service's preflight).
+ * return the existing instance without spawning a second one.
  */
 import type { ServiceManager } from "@powerhousedao/clint";
 import { projectRoot } from "../helpers/project.js";

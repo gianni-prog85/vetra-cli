@@ -1,4 +1,4 @@
-/** The recorded `.ph/run/vetra.json` of a project's `ph run vetra dev`. */
+/** The run record of a Preview run (`ph run @powerhousedao/vetra-cli/preview dev`). */
 import { readFileSync } from "node:fs";
 import { runRecordSchema, type RunRecord } from "@powerhousedao/host-core";
 import { previewEndpoints } from "../../src/services/reactor-project.js";

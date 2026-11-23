@@ -25,9 +25,9 @@ switchboard, Connect and the Cli, booted once per run the way a user runs it:
   ref (GraphQL `execute`).
 - **`studio-build.spec.ts`** — seeded (fixture `todo-list`): builds a todo-list
   and asserts the generated editor renders inside the BUILD-pane iframe. Skipped:
-  its fixture starts with `reactor-project-init` and its preview is the project
-  run, which a Studio inside a project no longer has (C1); it returns with C2's
-  Preview run.
+  its fixture starts with `reactor-project-init`, which a Studio inside a project
+  does not have, and the Studio page has no preview pane to show the Preview run
+  in.
 
 The agent is made **deterministic** without an API key: a replay `AgentProvider`
 (`cli/src/agents/replay-agent.ts`, gated by `VETRA_REPLAY_FIXTURE`) replays a

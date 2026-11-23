@@ -21,6 +21,6 @@
     "exactOptionalPropertyTypes": true,
     "types": []
   },
-  "include": ["**/*.js", "**/outputs.d.ts", "types.d.ts"],
+  "include": ["**/*.js", "**/outputs.d.ts", "types.d.ts", "preview-types.d.ts"],
   "exclude": ["**/outputs.js", "**/node_modules"]
 }

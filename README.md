@@ -190,14 +190,15 @@ processes: `--stop` stops the members in order.
 switchboard 8091. A taken port moves to the next free one; the Cli prints the
 address it got (`Vetra Studio: <url>`). The vetra local API takes an OS port;
 `<studio>/studio.config.json` names it (`previewServerUrl`).
-- **The BUILD pane says "Preview comes with the Preview run".** The project
-run is off by default: Studio starts no stack of the project's own (it would
-open the project's stores). Turn it on for a scaffolded project with
-`VETRA_PROJECT_RUN=1` (config `projectRun: true`). The preview is then the
-project's own `ph run vetra dev` (its Connect on 3001 and switchboard on 4001
-unless the project's hosts say otherwise). It needs the project's
-`hosts/vetra/host.js`, which `ph init` on Powerhouse 6.4 scaffolds; its run
-record is `<project>/.ph/run/vetra.json`.
+- **The Preview run (8092 / 8093).** Studio starts a second stack with the
+project's code (document models, editors, processors): Connect on 8092 and a
+switchboard on 8093, from the package's `preview` host. The project needs no
+host of its own. Its stores are `<project>/.ph/vetra/preview/`, apart from the
+project's own; its run record is
+`<project>/.ph/run/@powerhousedao/vetra-cli/preview.json`. The
+`preview-models` command lists the model types it has loaded.
+`VETRA_PREVIEW_RUN=0` (config `previewRun: false`) keeps it from starting with
+Studio.
 - **A build runs out of memory.** `pnpm build` and `pnpm build:connect` may
 need `NODE_OPTIONS=--max-old-space-size=4096`. Run them one at a time.
 - **Agent types but never replies / a profile is missing.** Agent profiles and

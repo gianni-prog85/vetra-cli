@@ -11,8 +11,9 @@
  *   GET  /project-package         owner.
  *   GET  /release-status          owner.
  *   POST /publish                 owner.
- *   POST /start                   owner: idempotent start of the project's run.
- *   POST /restart                 owner: stop the project's run, start it again.
+ *   GET  /preview/models          owner: what the Preview run loaded (?full=1: with states).
+ *   POST /start                   owner: idempotent start of the Preview run.
+ *   POST /restart                 owner: stop the Preview run, start it again.
  *
  * Every route acts on the project the Cli works in (the workdir): there is
  * no project to name.
@@ -37,6 +38,8 @@ import { checkReleaseStatus } from "./release-status.js";
 import { resolvePreview } from "./resolver.js";
 import { restartPreview, startPreview } from "./starter.js";
 import { createRequestAuthorizer, type RequestAuthorizer } from "./request-auth.js";
+import { previewModels } from "../helpers/preview-inspector.js";
+import { projectRoot } from "../helpers/project.js";
 import { studioPath } from "../helpers/studio-paths.js";
 import { buildSessionExport, listSessions } from "./session-export.js";
 import { streamWorkspaceExport, WORKSPACE_ZIP_FILENAME } from "./workspace-export.js";
@@ -75,8 +78,6 @@ interface PreviewServerDeps {
   getStudioUrl?: () => string | undefined;
   /** Owner gate override (tests); default `createRequestAuthorizer`. */
   authorizeRequest?: RequestAuthorizer;
-  /** The Cli config's `projectRun`: off, `/resolve` says `preview-off`. */
-  projectRun?: boolean;
   log?: {
     info: (m: string) => void;
     error: (m: string) => void;
@@ -210,9 +211,28 @@ export async function startPreviewServer(
           doc: q.get("doc") ?? "",
           drive: q.get("drive") ?? undefined,
           home: q.get("home") === "1",
-          projectRun: deps.projectRun ?? false,
         });
         writeJson(res, 200, publicResolveResult(result));
+        return;
+      }
+
+      // What the Preview run loaded (its inspector's report); `full=1` adds
+      // each version's document model state.
+      if (path === "/preview/models" && method === "GET") {
+        if (!(await requireOwner(req, res, url))) return;
+        let projectPath: string;
+        try {
+          projectPath = await projectRoot(workdir);
+        } catch {
+          writeJson(res, 404, { kind: "unknown-project", error: "unknown project" });
+          return;
+        }
+        const q = parseQuery(url);
+        writeJson(
+          res,
+          200,
+          previewModels(services, projectPath, { full: q.get("full") === "1" }),
+        );
         return;
       }
 

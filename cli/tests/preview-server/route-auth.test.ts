@@ -13,6 +13,7 @@ const OWNER_ROUTES: Array<[method: string, path: string]> = [
   ["GET", "/project-package"],
   ["GET", "/release-status"],
   ["POST", "/publish"],
+  ["GET", "/preview/models"],
   ["POST", "/start"],
   ["POST", "/restart"],
   ["GET", "/sessions"],
@@ -158,8 +159,7 @@ describe("preview-server route gate", () => {
     it("/resolve leaks no absolute path or raw error text", async () => {
       const stopped = await call("GET", "/resolve?doc=x", PROXIED);
       const s = (await stopped.json()) as Record<string, unknown>;
-      // The project run is off unless the Cli config turns it on.
-      expect(s).toEqual({ kind: "preview-off" });
+      expect(s).toEqual({ kind: "project-stopped" });
       expect(JSON.stringify(s)).not.toContain(workdir);
       // A refusal names no path either.
       expect(

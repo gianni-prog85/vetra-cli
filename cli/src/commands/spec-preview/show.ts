@@ -104,7 +104,7 @@ export const specPreviewShow = defineCommand({
     );
     if (!connectUrl) {
       throw new Error(
-        "The project's run is up but its Connect endpoint has not been captured yet. Retry shortly.",
+        "The Preview run is up but its Connect endpoint has not been captured yet. Retry shortly.",
       );
     }
 

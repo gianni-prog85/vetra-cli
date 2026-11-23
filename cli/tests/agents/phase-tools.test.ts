@@ -4,10 +4,8 @@ import {
   ADVANCED_ONLY,
   ALWAYS_ON,
   PHASE_TOOLS,
-  PROJECT_RUN_TOOLS,
   PhaseToolsProcessor,
   matchesAny,
-  type PhaseToolsOptions,
 } from '../../src/agents/phase-tools.js';
 import { runProgress } from '../../src/commands/product/progress.js';
 import { PUSH_OFF_FOR_PRODUCT, githubPush } from '../../src/commands/github/push.js';
@@ -29,15 +27,10 @@ function stepArgs(
   return { state, steps, tools: toolMap(), stepNumber: steps.length } as unknown as ProcessInputStepArgs;
 }
 
-async function visibleTools(
-  h: ProductHarness,
-  options: PhaseToolsOptions = { projectRun: true },
-): Promise<string[] | undefined> {
-  const result = await new PhaseToolsProcessor(h.ctx, undefined, options).processInputStep(stepArgs({}));
+async function visibleTools(h: ProductHarness): Promise<string[] | undefined> {
+  const result = await new PhaseToolsProcessor(h.ctx).processInputStep(stepArgs({}));
   return result?.activeTools;
 }
-
-const ON = { projectRun: true };
 
 describe('phase tool sets', () => {
   let h: ProductHarness | undefined;
@@ -109,32 +102,15 @@ describe('phase tool sets', () => {
       id: 'p',
       state: { activeChangeId: null, changes: [] },
     })) as unknown as typeof getProductDoc;
-    const result = await new PhaseToolsProcessor({}, read, ON).processInputStep(stepArgs({}));
+    const result = await new PhaseToolsProcessor({}, read).processInputStep(stepArgs({}));
     expect(result).toBeUndefined();
-  });
-
-  it('project run off (the default): no start or restart in any phase, NONE included', async () => {
-    expect(PROJECT_RUN_TOOLS.every((t) => names.includes(t))).toBe(true);
-    h = await productHarness({ product: false });
-    const none = await visibleTools(h, {});
-    expect(none).toEqual(names.filter((n) => !PROJECT_RUN_TOOLS.includes(n)));
-    expect(none).toContain('reactor-project-stop');
-    await h.kill();
-    h = await productHarness();
-    await runProgress(h.ctx, { action: 'plan', steps: [{ kind: 'PLAN' }, { kind: 'DATA' }, { kind: 'EDITORS' }] });
-    for (const step of ['PLAN', 'DATA'] as const) {
-      await runProgress(h.ctx, { action: 'start', step });
-      const tools = await visibleTools(h, { projectRun: false });
-      expect(tools).toContain('spec-create');
-      expect(tools!.filter((n) => PROJECT_RUN_TOOLS.includes(n))).toEqual([]);
-    }
   });
 
   it('an active change between steps gets its next unfinished step, never deploy (F18)', async () => {
     h = await productHarness();
     await runProgress(h.ctx, { action: 'plan', steps: [{ kind: 'PLAN' }, { kind: 'DATA' }, { kind: 'EDITORS' }] });
-    // Not started: the plan step's tools, bootstrap included (the project's
-    // run is started first, in PLAN, when it is on).
+    // Not started: the plan step's tools, bootstrap included (the Preview
+    // run is started first, in PLAN).
     const tools = await visibleTools(h);
     expect(tools).toContain('spec-create');
     expect(tools).toContain('spec-extract');
@@ -202,7 +178,7 @@ describe('phase tool sets', () => {
     const read = (async () => {
       throw new Error('reactor down');
     }) as unknown as typeof getProductDoc;
-    const result = await new PhaseToolsProcessor({ log: { warn } }, read, ON).processInputStep(stepArgs({}));
+    const result = await new PhaseToolsProcessor({ log: { warn } }, read).processInputStep(stepArgs({}));
     expect(result).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('reactor down'));
   });

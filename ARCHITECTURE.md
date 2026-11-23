@@ -42,9 +42,9 @@ of the open work.
                 │                         │
                 ▼                         ▼
        ┌──────────────────┐  ┌─────────────────────┐
-       │ Connect          │  │ reactor-project(s)  │
-       │ (static SPA      │  │ per-chat-session    │
-       │ serving this     │  │ ph run vetra dev:   │
+       │ Connect          │  │ reactor-project:    │
+       │ (static SPA      │  │ the Preview run     │
+       │ serving this     │  │ (hosts/preview):    │
        │ package's        │  │ Switchboard +       │
        │ editors)         │  │ Connect with Vite   │
        │ Drive editor =   │  │ HMR. Preview docs   │
@@ -105,7 +105,7 @@ Internally:
 
 ## Hosts
 
-Five host files under `hosts/` (shipped in the package, `files`). Each
+Eight host files under `hosts/` (shipped in the package, `files`). Each
 host's `name` is its folder name: `ph run <host> --stop` finds the run
 record by the word typed. None imports `outputs.js` or
 `powerhouse.config.json`; cross-host values are literal `$output` tokens, so
@@ -119,6 +119,9 @@ A host may import a sibling host file (`connect` and `studio-signed` do).
 | `cli` | `@powerhousedao/clint/cli-runner` | This package's `./cli`, with one remote backend on the switchboard's `drives.studio.url`. `ph run cli build` compiles skills and agent profiles |
 | `studio` | `@powerhousedao/host-core/runners/compound` | `switchboard`, `connect`, `cli`; default verb `serve` (the built Studio). The tokens order the start: switchboard, then Connect, each in its own process; the Cli last, in the compound's process, on the terminal. Its end ends the stack |
 | `studio-signed` | `@powerhousedao/host-core/runners/compound` | The same three members for a local check of signing: the `switchboard` and `connect` members restate their hosts' `reactor` with `createSignaturePolicy: "v2-required"` (a member's `reactor` and `config` replace the host's whole sections; only `runner` key-merges), the switchboard's stores move to `${userData}/.ph/vetra-signed/{reactor-storage,read-storage}`, so legacy and v2 documents never share a store, and its identity to `${userData}/.ph/vetra-signed/switchboard/`. Auth stays off. Not run by anything; see "The signed check" |
+| `preview-switchboard` | `@powerhousedao/ph-cli/runners/switchboard` | The Preview switchboard: port 8093 on `127.0.0.1`, plugins `mcp`, `attachments` and `inspector` (`reportFile: "${userData}/.ph/vetra/preview/inspector.json"`), `auth` off. The project (the working directory) is its local package, loaded from source at `dev`; its config file is the package's empty one, so the project's `packages` list and registry are not read. Stores and identity under `${userData}/.ph/vetra/preview/`. Declares one drive: slug `preview`, name `Vetra Preview` |
+| `preview-connect` | `@powerhousedao/ph-cli/runners/connect` | Generic Connect over the project at `dev` (its editors from source): port 8092, a remote client of the Preview switchboard's `preview` drive, proxying its paths. Renown namespace `vetra-preview` |
+| `preview` | `@powerhousedao/host-core/runners/compound` | `preview-switchboard`, then `preview-connect`; default verb `dev`. The Cli's `reactor-project` service runs it in the project (see "reactor-project service"). Its members are named apart from the Studio's: both compounds run in one project |
 
 The drive slug is `studio`, not `vetra` or `vetra-*`: loading
 `@powerhousedao/vetra` registers its codegen processor, which attaches to
@@ -368,10 +371,13 @@ its workdir: no route takes a project. A workdir that is no Reactor Package
 answers `unknown-project`.
 
 - `GET /resolve?doc=<id-or-slug>` (or `drive=`, `home=1`) — read-only.
-  Returns the live preview URL in the project's run or a state code
-  (`no-target`, `unknown-project`, `project-stopped`, `preview-off` (the
-  project run is off, see "reactor-project service"), `starting`, `ready`).
+  Returns the live preview URL in the Preview run or a state code
+  (`no-target`, `unknown-project`, `project-stopped`, `starting`, `ready`).
   The editor calls this on every relevant state change.
+- `GET /preview/models` (`?full=1`) — owner, read-only. What the Preview run
+  has loaded, from its inspector's report (see "reactor-project service"):
+  `not-running`, `starting`, or `ready` with the model types, their versions
+  and, with `full`, each version's document model state.
 - `GET /project-package` — read-only. Returns the project's package
   identity (`{ kind: "ok", name, version }`) read from
   `<workdir>/package.json`, or `unknown-project` / `no-package`. The
@@ -620,35 +626,55 @@ Settings (`settings/`, with `github/`, `budget/`, `deploy/` and
 
 ### reactor-project service
 
-The project's own `ph run vetra dev` (`services/reactor-project.ts`, a
-clint host service): the compound the 6.4 scaffold writes to
-`hosts/vetra`, its `vetra-switchboard` and `vetra-studio` members each in
-their own process, Vite HMR for editors.
+The **Preview run** (`services/reactor-project.ts`, a clint host service):
+the project's code (document models, editors, processors) on a stack this
+package supplies, `ph run @powerhousedao/vetra-cli/preview dev` in the
+project. `hosts/preview` is a compound of `preview-switchboard` (8093) and
+`preview-connect` (8092, Vite HMR for editors), both in the run's one process.
+The project is the working directory, so it is the switchboard's local
+package and Connect's dev source; it needs no host of its own, and its
+`powerhouse.config.json` `packages` list is not loaded. It does need its own
+`ph-cli` and `@powerhousedao/connect` installed (the service's preflight).
 
-**Opt-in.** The run opens the project's own stores (on Sektar: its
-business drives, workflows and Portle), so it is off unless the Cli config
-says `projectRun: true` (env `VETRA_PROJECT_RUN=1`). While off, the
-service's first preflight refuses every start (agent, BUILD pane, restart),
-the agent sees no `reactor-project-start` or `-restart` in any phase
-(`PROJECT_RUN_TOOLS` in `agents/phase-tools.ts`), and `/resolve` answers
-`preview-off` where it would say `project-stopped`, so the BUILD pane shows
-"Preview comes with the Preview run" and starts nothing. A scaffolded
-project can turn it on; C2's Preview host replaces it.
+**Apart from the project's data.** Every store the Preview opens is under
+`<project>/.ph/vetra/preview/` (reactor store, read model, attachments, the
+switchboard's identity); the project's own stores and hosts are never
+opened. The switchboard runs no workflows plugin and has auth off (the
+service env). Its run record is
+`<project>/.ph/run/@powerhousedao/vetra-cli/preview.json`.
 
-When on, it is spawned by the agent via the
-`reactor-project-start` tool or the BUILD pane's `POST /start`, in the
-project (the Cli's workdir), with the project as its data
-dir: its stores and `.ph/run/vetra.json` are the project's own. Ready once
-that record is live; stopped through its stdin (the compound shuts its
-members down; its tree is killed only after 30 s). Ports are the
-project's host data. A project without `hosts/vetra/host.js` cannot
-preview (until C2 supplies a Preview host).
+**No code is written from the Preview.** The switchboard's dev mode would
+register `@powerhousedao/vetra`'s codegen processor, which rewrites project
+code for drives named `vetra` or `vetra-*`. The inspector plugin turns that
+registration off (`codegenProcessor: false`), and the Preview drive's slug
+is `preview`. Generation stays the Cli's (`cli/src/generation`).
+
+**Inspector.** `preview-switchboard` loads
+`@powerhousedao/switchboard/plugins/inspector`. When its reactor is ready
+and after every package reload it writes the loaded document model modules
+(type, name, version and the `documentModel` state, per package) to
+`<project>/.ph/vetra/preview/inspector.json`, a counter in `sequence`, and
+removes the file when it stops. A file fits the rest of the host model (run
+records, `studio.config.json`): the Cli needs no connection to the Preview
+and no credential, and a reader started later sees the last report. The Cli
+reads it in `helpers/preview-inspector.ts` and trusts it only while the
+service instance is ready (a hard kill leaves the file). It is exposed as
+the `preview-models` command (the agent's tool, always on) and
+`GET /preview/models`.
+
+It starts with the Cli (`triggers/preview-run.ts`, not awaited) unless the
+config says `previewRun: false` (env `VETRA_PREVIEW_RUN=0`), and on request
+through the `reactor-project-start` tool or `POST /start`; every start is
+idempotent. Ready once the run record is live; stopped through its stdin
+(the compound shuts its members down; its tree is killed only after 30 s),
+by the service manager when the Cli ends. Ports are the hosts' data; a
+taken port moves to the next free one.
 
 The service's endpoints come from the record (`previewEndpoints`):
 `vetra-studio` = the Connect member's `endpoints.connect`,
 `vetra-switchboard` = the switchboard member's `endpoints.graphql`,
-`mcp-server`, `vetra-drive-url`, and the **preview drive** (declared slug
-`vetra-preview`, a project-hashed id) as `vetra-preview-drive-url` and
+`mcp-server`, and the **preview drive** (declared slug
+`preview`, a generated id) as `vetra-preview-drive-url` and
 `vetra-preview-drive-id`. Preview documents (instances of in-progress
 document models) live in this drive. The agent's `spec-preview-*` tools
 target it by default. The editor composes iframe URLs as deep links into
@@ -665,9 +691,9 @@ Tool surface for MVP (see `HANDOFF.md` for the implementation
 checklist):
 
 - **Existing project lifecycle:** `reactor-project-start`,
-  `reactor-project-stop`, `reactor-project-ps` (the project run is opt-in;
-  no init and no project list: the workdir is the project, and no command
-  takes a `project`).
+  `reactor-project-stop`, `reactor-project-ps`, `preview-models` (the
+  Preview run; no init and no project list: the workdir is the project, and
+  no command takes a `project`).
 - **Existing spec lifecycle:** `spec-create`, `spec-get`, `spec-list`,
   `spec-update`, `spec-delete`, `spec-extract`, `spec-generate`.
 - **Preview document lifecycle (planned):** `spec-preview-create`,
@@ -811,14 +837,17 @@ in the drive (the product document, chat sessions) use
   `teardown()` closes it on daemon shutdown, `poll()` returns null
   (no work items — the trigger is purely a lifetime host for the
   server).
+- `previewRunTrigger` — starts the Preview run at Cli start (see
+  "reactor-project service"); no work items.
 
 ### Services
 
-- `reactor-project` — the project's `ph run vetra dev` for the preview
-  surface (see "reactor-project service"). Persistent state at
+- `reactor-project` — the Preview run (see "reactor-project service").
+  Persistent state at
   `~/.ph/vetra/services/reactor-project/<instance>.json` (clint's user
   store; read by `reactor-project-ps` and projected over the local API); the
-  run's own record is `<project>/.ph/run/vetra.json`.
+  run's own record is
+  `<project>/.ph/run/@powerhousedao/vetra-cli/preview.json`.
 
 ## Boot sequence
 
@@ -850,14 +879,13 @@ the Cli runner (`runCli`):
 The stack ends when the Cli ends, on Ctrl-C, or on
 `ph run studio --stop`, which stops the members in reverse order.
 
-`reactor-project` instances stay dormant until the agent starts one
-via the `reactor-project-start` tool.
+`previewRunTrigger` starts the `reactor-project` instance of the workdir
+without waiting for it.
 
 ### Auto-start of reactor-project
 
-Only with the project run on (`projectRun`; off, `/resolve` says
-`preview-off` and nothing starts). The editor pre-empts manual lifecycle
-calls for the BUILD pane. When
+The Cli starts the Preview run at its own start. A page that shows the
+preview also recovers a stopped one. When
 `/resolve` returns `project-stopped` for a session's target, the
 browser-side `useResolvedPreview` hook fires `POST /start` once
 without any user click. SSE drives the resulting state
@@ -890,7 +918,7 @@ What happens when the agent previews an in-progress document model.
   spec-create / spec-update
     ├─→ specs/*.phd  (filesystem, codegen source of truth)
     │       │ also feeds reactor-project tree (project source)
-    │       ↓ (ph run vetra dev, Vite HMR)
+    │       ↓ (the Preview run, Vite HMR)
     │   reactor-project picks up new document model (codegen)
     └─→ Studio drive  (direct, synchronous when the reactor is attached;
                           specFsSyncTrigger is the fallback for

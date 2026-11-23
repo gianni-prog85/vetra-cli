@@ -1,8 +1,9 @@
 /**
  * Helpers for interacting with the preview drive of a running reactor-project.
  *
- * A reactor-project is the project's own `ph run vetra dev`; its switchboard
- * member serves the preview drive (declared slug `vetra-preview`). The
+ * A reactor-project is the Preview run (the package's `preview` host in the
+ * project); its switchboard member serves the preview drive (declared slug
+ * `preview`). The
  * service reads the drive's id and URL, and the members' URLs, from the run
  * record (`services/reactor-project.ts` `previewEndpoints`).
  *
@@ -51,14 +52,14 @@ export function resolvePreviewEndpoint(
   );
   if (!live) {
     throw new Error(
-      "The project's run is not running: start it with `reactor-project-start` (only while the Studio's project run is on; otherwise the preview comes with the Preview run).",
+      "The Preview run is not running: start it with `reactor-project-start`.",
     );
   }
   const switchboardUrl = live.endpoints?.["vetra-switchboard"];
   const driveId = previewDriveIdOf(live);
   if (!switchboardUrl || !driveId) {
     throw new Error(
-      "The project's run is starting up — its run record is not live yet. Retry shortly.",
+      "The Preview run is starting up — its run record is not live yet. Retry shortly.",
     );
   }
   return {

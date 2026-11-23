@@ -55,7 +55,6 @@ describe("preview-server resolver (the workdir is the project)", () => {
       services: makeServices([]),
       workdir: workspace,
       doc: "doc-1",
-      projectRun: true,
     });
     expect(result.kind).toBe("unknown-project");
     const unknown = result as Extract<typeof result, { kind: "unknown-project" }>;
@@ -65,31 +64,14 @@ describe("preview-server resolver (the workdir is the project)", () => {
   it("returns project-stopped when no instance runs the project", async () => {
     const services = makeServices([{ workdir: "/some/other/path", status: "ready" }]);
     expect(
-      await resolvePreview({ services, workdir, doc: "doc-1", projectRun: true }),
+      await resolvePreview({ services, workdir, doc: "doc-1" }),
     ).toEqual({ kind: "project-stopped", projectPath });
   });
 
   it("returns project-stopped when the project's instance has stopped/failed", async () => {
     const services = makeServices([{ workdir: projectPath, status: "stopped" }]);
-    const result = await resolvePreview({ services, workdir, doc: "doc-1", projectRun: true });
+    const result = await resolvePreview({ services, workdir, doc: "doc-1" });
     expect(result.kind).toBe("project-stopped");
-  });
-
-  it("project run off (the default): preview-off, never project-stopped", async () => {
-    for (const instances of [[], [{ workdir: projectPath, status: "stopped" as const }]]) {
-      expect(
-        await resolvePreview({ services: makeServices(instances), workdir, doc: "doc-1" }),
-      ).toEqual({ kind: "preview-off" });
-    }
-    expect(
-      await resolvePreview({
-        services: makeServices([]),
-        workdir,
-        doc: "",
-        home: true,
-        projectRun: false,
-      }),
-    ).toEqual({ kind: "preview-off" });
   });
 
   it("returns starting, with no drive yet, while the run record is not live", async () => {
@@ -150,7 +132,6 @@ describe("preview-server resolver (the workdir is the project)", () => {
         workdir,
         doc: "",
         home: true,
-        projectRun: true,
       }),
     ).toEqual({ kind: "project-stopped", projectPath });
   });

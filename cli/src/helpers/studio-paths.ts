@@ -29,6 +29,8 @@ export const STUDIO_FILES = {
   productDriveMarker: path.join(STUDIO_DIR, "product-drive.json"),
   /** The path the first version of an adopted product took. */
   upgradeRecord: path.join(STUDIO_DIR, "upgrade-existing.json"),
+  /** What the Preview run loaded; its switchboard's inspector writes it. */
+  previewInspector: path.join(STUDIO_DIR, "preview", "inspector.json"),
   /** Files extracted from chat messages for the agent. */
   downloads: path.join(STUDIO_DIR, "downloads"),
 } as const;

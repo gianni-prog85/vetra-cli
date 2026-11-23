@@ -16,15 +16,15 @@ describe("OpenRouter config", () => {
     expect(configSchema.parse({ llmAllowDataCollection: "false" }).llmAllowDataCollection).toBe(false);
   });
 
-  it("keeps the project run off unless VETRA_PROJECT_RUN turns it on", () => {
-    expect(configSchema.parse({}).projectRun).toBe(false);
-    for (const on of ["1", "true", "TRUE", " yes "]) {
-      expect(configSchema.parse({ projectRun: on }).projectRun).toBe(true);
+  it("starts the Preview run with Studio unless VETRA_PREVIEW_RUN turns it off", () => {
+    expect(configSchema.parse({}).previewRun).toBe(true);
+    for (const on of ["1", "true", "", "yes"]) {
+      expect(configSchema.parse({ previewRun: on }).previewRun).toBe(true);
     }
-    for (const off of ["0", "false", "", "no"]) {
-      expect(configSchema.parse({ projectRun: off }).projectRun).toBe(false);
+    for (const off of ["0", "false", "FALSE", " no ", "off"]) {
+      expect(configSchema.parse({ previewRun: off }).previewRun).toBe(false);
     }
-    expect(configSchema.parse({ projectRun: true }).projectRun).toBe(true);
+    expect(configSchema.parse({ previewRun: false }).previewRun).toBe(false);
   });
 
   it("declares openrouterApiKey as a secret", () => {

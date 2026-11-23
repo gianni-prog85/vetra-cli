@@ -25,6 +25,7 @@ import { reactorProject } from './services/reactor-project.js';
 import { specSyncTrigger } from './triggers/spec-sync.js';
 import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
+import { previewRunTrigger } from './triggers/preview-run.js';
 import { genGuard } from './lifecycle/gen-guard.js';
 import { shellGuard } from './lifecycle/shell-guard.js';
 import { tsCheck } from './lifecycle/ts-check.js';
@@ -80,6 +81,7 @@ export const cli = defineCli({
     specSyncTrigger,
     specFsSyncTrigger,
     previewServerTrigger,
+    previewRunTrigger,
     studioUrlTrigger,
     productSupervisorTrigger,
     productRequestsTrigger,
@@ -198,14 +200,14 @@ export const cli = defineCli({
       const ep = event.endpoints ?? {};
       log.info(
         `✓ ${event.name} is ready` +
-          (ep['vetra-studio'] ? ` — Vetra Studio at ${ep['vetra-studio']}` : ''),
+          (ep['vetra-studio'] ? ` — Preview at ${ep['vetra-studio']}` : ''),
       );
     },
     'service:failed': (event, log) => {
       log.error(`✗ ${event.name} failed: ${event.error}`);
       if (event.id === 'reactor-project' && /exited .*before writing its run record/.test(event.error ?? '')) {
         log.info(
-          "  Hint: the project's vetra host stopped while starting; reactor-project-logs shows why.",
+          "  Hint: the Preview run stopped while starting; reactor-project-logs shows why.",
         );
       }
       if (/max instances/.test(event.error ?? '')) {

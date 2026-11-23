@@ -22,7 +22,7 @@ you start it** and `skill_read` its references when it says to.
 
 | Step | Phases (skill) | Gate |
 | --- | --- | --- |
-| PLAN | Bootstrap first (`reactor-project-management`): start the project's run when it is on, then write the product specs (`product-specs`); product name | project started when its run is on; brief written, named |
+| PLAN | Bootstrap first (`reactor-project-management`): start the Preview run, then write the product specs (`product-specs`); product name | Preview run started; brief written, named |
 | DATA | Model (`document-modeling`) | `reactor-project-ps` shows it running; `spec-generate` clean; reducers in `v1/src/reducers/` |
 | EDITORS | Editor + Preview (`document-editor-creation`), App if asked (`drive-app-creation`) | `editor.tsx` dispatches the real operations; BUILD pane shows it with sample data |
 | TESTS | Examples (`example-data`), then `reactor-project-check` with `tests: true` | `done TESTS` accepted, then `suggest` |
@@ -46,10 +46,8 @@ never git commit/push, deploy or publish through it.
 
 The project is your workdir: Studio runs inside it and creates no other
 project — never hand-write a new project's files (`ph init` makes one,
-outside Studio). The project's run is opt-in: without
-`reactor-project-start` in your tools the preview is off — build through
-the `spec-*` tools and the checks, and say the preview comes with the
-Preview run.
+outside Studio). The preview is the Preview run: the project's code on
+Studio's own Switchboard and Connect, apart from the project's data.
 
 Product specs live in the project with the other specs —
 `spec-create { type, name }`. Only an explicit spec-only request skips the build. Studio

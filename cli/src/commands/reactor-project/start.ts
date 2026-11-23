@@ -11,14 +11,13 @@ import { projectRoot } from "../../helpers/project.js";
  *
  * The system prompt promises this behaviour ("idempotent and a no-op when
  * already running"): a start the Studio's preview pane makes and the agent's
- * explicit one never race into a stop/start dance. It starts the project the
- * Cli works in (the workdir); ports and reloads are the project's host data
- * (`hosts/vetra`). Refused while the project run is off (the service's
- * preflight).
+ * explicit one never race into a stop/start dance. It starts the Preview run
+ * of the project the Cli works in (the workdir); ports and reloads are the
+ * package's host data (`hosts/preview`).
  */
 export const reactorProjectStart = defineCommand({
   id: "reactor-project-start",
-  description: "Start the project's run (idempotent; only when the project run is on)",
+  description: "Start the Preview run of the project (idempotent)",
   inputSchema: z.object({}),
   execute: async (_input, context) => {
     const services = context.services;

@@ -27,8 +27,6 @@ export async function resolvePreview(args: {
   drive?: string;
   /** No doc or drive: the preview drive's root (see the module comment). */
   home?: boolean;
-  /** The Cli config's `projectRun`; off: a project that isn't up is `preview-off`. */
-  projectRun?: boolean;
 }): Promise<ResolveResult> {
   if (!args.drive && !args.doc && !args.home) return { kind: "no-target" };
 
@@ -46,10 +44,7 @@ export async function resolvePreview(args: {
     .list("reactor-project")
     .find((i) => i.workdir === projectPath);
 
-  const stopped = (): ResolveResult =>
-    args.projectRun
-      ? { kind: "project-stopped", projectPath }
-      : { kind: "preview-off" };
+  const stopped = (): ResolveResult => ({ kind: "project-stopped", projectPath });
   if (!instance) return stopped();
   // The preview drive's id comes with the run record, once it is live.
   const defaultDriveId = previewDriveIdOf(instance);

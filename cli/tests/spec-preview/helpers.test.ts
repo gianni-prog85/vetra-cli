@@ -32,13 +32,13 @@ describe("resolvePreviewEndpoint", () => {
     );
   });
 
-  it("throws with a start-hint when the project's run is not live", () => {
+  it("throws with a start-hint when the Preview run is not live", () => {
     const services = makeServices([
       { status: "stopped", workdir: PROJECT_PATH },
       { status: "ready", workdir: "/other/path" },
     ]);
     expect(() => resolvePreviewEndpoint(services, PROJECT_PATH)).toThrow(
-      /project's run is not running: start it with `reactor-project-start` \(only while the Studio's project run is on/,
+      /The Preview run is not running: start it with `reactor-project-start`\./,
     );
   });
 

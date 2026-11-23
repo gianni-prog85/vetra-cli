@@ -19,8 +19,6 @@ export type ResolveResult =
   | { kind: "no-target" }
   | UnknownProject
   | { kind: "project-stopped"; projectPath: string }
-  /** Not running, and the project run is off (`projectRun`): no start. */
-  | { kind: "preview-off" }
   /** `driveId`: absent until the run record names the preview drive. */
   | { kind: "starting"; projectPath: string; driveId?: string }
   | {

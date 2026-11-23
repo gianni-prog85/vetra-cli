@@ -63,12 +63,8 @@ function tableRows(): Map<StepKind, string> {
   return rows;
 }
 
-// The workflow's bootstrap starts the project: it reads for a Studio whose
-// project run is on (`projectRun`).
-const PROJECT_RUN_ON = { projectRun: true };
-
 function hidden(tools: string[], step: StepKind): string[] {
-  const visible = selectTools(tools, [step], PROJECT_RUN_ON);
+  const visible = selectTools(tools, [step]);
   return tools.filter((t) => !visible.includes(t));
 }
 
@@ -85,7 +81,7 @@ describe('workflow and step tool sets agree (M0)', () => {
     expect(tools.length > 0).toBe(step !== 'LIVE');
     expect({ step, skills, hidden: hidden(tools, step) }).toEqual({ step, skills, hidden: [] });
     // Real tool names, so the NONE set (every tool) has them too.
-    expect(selectTools(tools, null, PROJECT_RUN_ON)).toEqual(tools);
+    expect(selectTools(tools, null)).toEqual(tools);
   });
 
   it('bootstrap is reachable in PLAN, the step a build starts in', () => {
@@ -93,9 +89,11 @@ describe('workflow and step tool sets agree (M0)', () => {
     expect(namedSkills(row)).toEqual(expect.arrayContaining(['reactor-project-management', 'product-specs']));
     const bootstrap = /The project is your workdir[^]*?\n\n/.exec(WORKFLOW)?.[0] ?? '';
     const tools = namedTools(bootstrap);
-    expect(tools).toEqual(expect.arrayContaining(['reactor-project-start']));
     expect(tools).not.toContain('reactor-project-init');
     expect(hidden(tools, 'PLAN')).toEqual([]);
+    const skillTools = namedTools(skillText('reactor-project-management'));
+    expect(skillTools).toEqual(expect.arrayContaining(['reactor-project-start', 'preview-models']));
+    expect(hidden(skillTools, 'PLAN')).toEqual([]);
   });
 
   it('every tool the workflow names anywhere is a real tool in some step', () => {

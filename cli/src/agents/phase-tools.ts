@@ -11,8 +11,6 @@
  *   they stay hidden for the whole of a build or change.
  * - The product document can't be read → every tool (logged); a failed read
  *   never breaks the turn.
- * - In every phase, `reactor-project-start` and `-restart` only while the Cli
- *   config turns the project run on (`projectRun`).
  *
  * Patterns are anchored globs; only `*` is special.
  */
@@ -34,6 +32,7 @@ export const ALWAYS_ON: readonly string[] = [
   // Read-only project status: every phase's gate is checked with these.
   'reactor-project-ps',
   'reactor-project-logs',
+  'preview-models',
   // Reading what the customer attached to the message.
   'attachment-stat',
   'attachment-get',
@@ -53,7 +52,7 @@ export const PROJECT_MCP = 'reactor-project-mcp__*';
 const ATTACHMENTS = ['attachment-preprocess', 'attachment-upload'];
 
 export const PHASE_TOOLS: Record<StepKind | 'NONE', readonly string[]> = {
-  // Bootstrap first (start the project's run when it is on), then product
+  // Bootstrap first (start the Preview run), then product
   // specs (and naming the product). Studio creates no project: the workdir
   // is the project.
   PLAN: [
@@ -64,7 +63,7 @@ export const PHASE_TOOLS: Record<StepKind | 'NONE', readonly string[]> = {
     'reactor-project-stop',
     'reactor-project-restart',
   ],
-  // Bootstrap + Model: project run, spec-driven model, hand-written reducers.
+  // Bootstrap + Model: Preview run, spec-driven model, hand-written reducers.
   DATA: [
     ...SPEC_BUILD,
     'spec-preview-*',
@@ -123,17 +122,6 @@ export const ADVANCED_ONLY: readonly string[] = [
   'mastra_workspace_kill_process',
 ];
 
-/**
- * Tools that start the project's own run: hidden in every phase, NONE
- * included, unless the Cli config turns the project run on (`projectRun`).
- */
-export const PROJECT_RUN_TOOLS: readonly string[] = ['reactor-project-start', 'reactor-project-restart'];
-
-export interface PhaseToolsOptions {
-  /** The Cli config's `projectRun`; off hides {@link PROJECT_RUN_TOOLS}. */
-  projectRun?: boolean;
-}
-
 /** Step statuses that mean the step is finished. */
 const FINISHED = new Set(['DONE', 'LIVE']);
 
@@ -172,15 +160,9 @@ export function phasePatterns(phases: StepKind[] | null): readonly string[] {
 }
 
 /** The names among `toolNames` the agent sees for `phases`. */
-export function selectTools(
-  toolNames: readonly string[],
-  phases: StepKind[] | null,
-  { projectRun = false }: PhaseToolsOptions = {},
-): string[] {
+export function selectTools(toolNames: readonly string[], phases: StepKind[] | null): string[] {
   const patterns = phasePatterns(phases);
-  return toolNames.filter(
-    (n) => matchesAny(n, patterns) && (projectRun || !PROJECT_RUN_TOOLS.includes(n)),
-  );
+  return toolNames.filter((n) => matchesAny(n, patterns));
 }
 
 interface ToolCallLike {
@@ -234,7 +216,6 @@ export class PhaseToolsProcessor implements Processor<'phase-tools'> {
   constructor(
     private readonly ctx: ProductContext,
     private readonly readProduct: typeof getProductDoc = getProductDoc,
-    private readonly options: PhaseToolsOptions = {},
   ) {}
 
   private async resolvePhases(): Promise<StepKind[] | null> {
@@ -259,9 +240,9 @@ export class PhaseToolsProcessor implements Processor<'phase-tools'> {
       state[CACHE_KEY] = phases;
     }
     const phases = state[CACHE_KEY] as StepKind[] | null;
-    if (!tools || (!phases && this.options.projectRun)) return undefined;
+    if (!phases || !tools) return undefined;
     const visible = args.activeTools ?? Object.keys(tools);
-    return { activeTools: selectTools(visible, phases, this.options) };
+    return { activeTools: selectTools(visible, phases) };
   }
 }
 

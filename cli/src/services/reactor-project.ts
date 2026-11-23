@@ -1,23 +1,25 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { checkWorkdir, type EndpointType } from '@powerhousedao/clint';
 import type { RunRecord } from '@powerhousedao/host-core';
 import { defineService } from '../framework.js';
 import { reactorProjectNodeOptions } from '../helpers/node-memory.js';
 
-// Readiness wait for the project's `ph run vetra dev`; env-overridable for
-// slow runners where a cold Vite start exceeds the default. A fresh Studio's
-// first start pre-bundles the project (measured ~2–4 min on staging), so one
-// attempt gets 300 s.
+// Readiness wait for the Preview run; env-overridable for slow runners where
+// a cold Vite start exceeds the default. A first start pre-bundles the
+// project (measured ~2–4 min on staging), so one attempt gets 300 s.
 const READINESS_TIMEOUT_MS =
   Number(process.env.VETRA_REACTOR_READINESS_TIMEOUT_MS) || 300_000;
 
-/** The project's compound the preview runs, and its members the Cli reads. */
-export const PREVIEW_HOST = 'vetra';
-export const PREVIEW_SWITCHBOARD_MEMBER = 'vetra-switchboard';
-export const PREVIEW_CONNECT_MEMBER = 'vetra-studio';
-/** The preview drive's declared slug on the switchboard member. */
-export const PREVIEW_DRIVE_SLUG = 'vetra-preview';
+/** The package's compound the Preview runs (`hosts/preview`), by reference. */
+export const PREVIEW_HOST = '@powerhousedao/vetra-cli/preview';
+/** Its members the Cli reads. */
+export const PREVIEW_SWITCHBOARD_MEMBER = 'preview-switchboard';
+export const PREVIEW_CONNECT_MEMBER = 'preview-connect';
+/** The Preview drive's declared slug on the switchboard member. Not `vetra`
+ * or `vetra-*`: the Vetra codegen processor attaches to those. */
+export const PREVIEW_DRIVE_SLUG = 'preview';
 
 interface SwitchboardMemberOutputs {
   endpoints?: { graphql?: string; mcp?: string };
@@ -29,12 +31,10 @@ interface ConnectMemberOutputs {
 }
 
 /**
- * The preview's endpoints from the project's `.ph/run/vetra.json`, under the
- * names the Studio reads: `vetra-studio` (the project's Connect),
- * `vetra-switchboard` (its GraphQL), `mcp-server`, the Vetra and preview
- * drives' URLs and the preview drive's id. Throws naming what the record
- * lacks: a project whose vetra host names its members otherwise cannot
- * preview yet.
+ * The Preview's endpoints from its run record, under the names the Studio
+ * reads: `vetra-studio` (the Preview Connect), `vetra-switchboard` (its
+ * GraphQL), `mcp-server`, and the Preview drive's URL and id. Throws naming
+ * what the record lacks.
  */
 export function previewEndpoints(
   record: RunRecord,
@@ -49,7 +49,7 @@ export function previewEndpoints(
   if (!switchboard || !connect) {
     const names = Object.keys(members);
     throw new Error(
-      `the project's ${PREVIEW_HOST} host has no "${PREVIEW_SWITCHBOARD_MEMBER}" and "${PREVIEW_CONNECT_MEMBER}" members (it has ${names.length > 0 ? names.map((n) => `"${n}"`).join(', ') : 'none'})`,
+      `the Preview run has no "${PREVIEW_SWITCHBOARD_MEMBER}" and "${PREVIEW_CONNECT_MEMBER}" members (it has ${names.length > 0 ? names.map((n) => `"${n}"`).join(', ') : 'none'})`,
     );
   }
   const studioUrl = connect.endpoints?.connect;
@@ -61,12 +61,10 @@ export function previewEndpoints(
     throw new Error(`"${PREVIEW_SWITCHBOARD_MEMBER}" serves no "${PREVIEW_DRIVE_SLUG}" drive`);
   }
   const mcp = switchboard.endpoints?.mcp;
-  const vetraDrive = switchboard.drives?.vetra?.url;
   return {
     'vetra-studio': { url: studioUrl, type: 'website' },
     'vetra-switchboard': { url: graphql, type: 'api-graphql' },
     ...(mcp ? { 'mcp-server': { url: mcp, type: 'api-mcp' } } : {}),
-    ...(vetraDrive ? { 'vetra-drive-url': { url: vetraDrive, type: 'other' } } : {}),
     'vetra-preview-drive-url': { url: preview.url, type: 'other' },
     'vetra-preview-drive-id': { url: preview.id, type: 'other' },
   };
@@ -79,22 +77,18 @@ function isProjectFolder(p: string): boolean {
   );
 }
 
-/** The refusal while the project run is off (`projectRun`, the default). */
-export const PROJECT_RUN_OFF = 'The project run is off';
-export const PROJECT_RUN_OFF_HINT =
-  "Studio starts no stack of the project's own unless asked: set projectRun: true (env VETRA_PROJECT_RUN=1) for a scaffolded project. The package's Preview run (C2) replaces it";
-
 /**
- * The builder's project run: `ph run vetra dev` in the project, its stores
- * and run record the project's own (`.ph/`). Ready once `.ph/run/vetra.json`
- * is live; stopped through its stdin. Opt-in (`projectRun`): the run opens the
- * project's business stores, so no start path (agent, BUILD pane, restart)
- * gets past the first preflight while it is off.
+ * The Preview run: the package's `preview` host (`ph run
+ * @powerhousedao/vetra-cli/preview dev`) in the project. It loads the
+ * project's code on a switchboard and a Connect of the Studio's own, with
+ * stores under `.ph/vetra/preview/`; the project needs no host for it and its
+ * business stores stay closed. Ready once the run record is live; stopped
+ * through its stdin.
  */
 export const reactorProject = defineService({
   id: 'reactor-project',
-  name: 'Reactor Project',
-  description: "The project's Vetra host (ph run vetra dev) for previews",
+  name: 'Preview run',
+  description: "The Preview run: the project's code on the Studio's Preview host",
   run: { host: PREVIEW_HOST, verb: 'dev' },
   endpoints: previewEndpoints,
   env: () => ({
@@ -110,19 +104,10 @@ export const reactorProject = defineService({
   }),
   readiness: { timeout: READINESS_TIMEOUT_MS },
   preflight: [
-    ({ config }) =>
-      config.projectRun
-        ? { ok: true }
-        : { ok: false, message: PROJECT_RUN_OFF, hint: PROJECT_RUN_OFF_HINT },
     checkWorkdir(
       isProjectFolder,
       'Not a Reactor Package project',
       'Run Studio inside a Reactor Package project; ph init creates one',
-    ),
-    checkWorkdir(
-      (cwd) => fs.existsSync(path.join(cwd, 'hosts', PREVIEW_HOST, 'host.js')),
-      `The project has no ${PREVIEW_HOST} host (hosts/${PREVIEW_HOST}/host.js)`,
-      'Projects scaffolded by ph init on Powerhouse 6.4 have it; an older project cannot preview yet',
     ),
     checkWorkdir(
       (cwd) =>
@@ -131,6 +116,21 @@ export const reactorProject = defineService({
         ),
       "The project's ph-cli is not installed",
       'Install the project: pnpm install in its folder',
+    ),
+    // The Preview's Connect serves the project's editors from its own install.
+    checkWorkdir(
+      (cwd) => {
+        try {
+          createRequire(path.join(cwd, 'package.json')).resolve(
+            '@powerhousedao/connect/package.json',
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      'The project has no @powerhousedao/connect installed',
+      'Add @powerhousedao/connect to the project, as ph init does, and install it',
     ),
   ],
 });

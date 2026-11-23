@@ -281,8 +281,6 @@ export type ResolveResult =
   /** The Studio's workdir is no Reactor Package project. */
   | { kind: "unknown-project"; error: string }
   | { kind: "project-stopped" }
-  /** The project run is off in this Studio: nothing starts it. */
-  | { kind: "preview-off" }
   | { kind: "starting"; driveId?: string }
   | {
       kind: "ready";

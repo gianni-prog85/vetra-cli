@@ -53,11 +53,11 @@ export const configSchema = z.object({
     .preprocess((v) => (typeof v === 'string' ? v === 'true' : v), z.boolean())
     .default(false)
     .describe('Allow OpenRouter providers that may collect prompt data (env VETRA_LLM_ALLOW_DATA_COLLECTION); default deny'),
-  projectRun: z
-    .preprocess((v) => (typeof v === 'string' ? /^(1|true|yes)$/i.test(v.trim()) : v), z.boolean())
-    .default(false)
+  previewRun: z
+    .preprocess((v) => (typeof v === 'string' ? !/^(0|false|no|off)$/i.test(v.trim()) : v), z.boolean())
+    .default(true)
     .describe(
-      "Let Studio run the project's own vetra host (ph run vetra dev) for the BUILD preview (env VETRA_PROJECT_RUN=1). Off by default: it opens the project's stores; the package's Preview run (C2) replaces it",
+      "Start the Preview run (the project's code on the package's preview host) with Studio (env VETRA_PREVIEW_RUN=0 turns it off; it can still be started by hand)",
     ),
 });
 
