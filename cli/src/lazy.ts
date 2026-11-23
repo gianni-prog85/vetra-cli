@@ -5,7 +5,7 @@
  * `import()`, so the bundler splits the implementation out.
  */
 import type { z } from 'zod';
-import type { CommandContext, Trigger } from '@powerhousedao/clint';
+import type { CommandContext, CommandNeeds, Trigger } from '@powerhousedao/clint';
 import {
   defineCommand,
   defineTrigger,
@@ -19,6 +19,13 @@ export interface CommandMeta<TInput extends z.ZodType = z.ZodType> {
   description: string;
   inputSchema: TInput;
   outputSchema?: z.ZodType;
+  /**
+   * `"reactor"`: the command runs in the Studio that runs for its project,
+   * with that Studio's reactor and services (clint's `Command.needs`).
+   */
+  needs?: CommandNeeds;
+  /** Whether the command reads piped input, for this input (`Command.stdin`). */
+  stdin?: boolean | ((input: Record<string, unknown>) => boolean);
 }
 
 /** The command `meta` describes; `load` imports the module that runs it. */

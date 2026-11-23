@@ -492,6 +492,29 @@ describe("resolveActionsInput", () => {
     );
   });
 
+  it("reads what was piped to the caller, and a file from the caller's folder", async () => {
+    const piped = [{ type: "SET_MODEL_NAME", input: { name: "piped" } }];
+    expect(
+      await resolveActionsInput(
+        {},
+        { readStdin: () => Promise.resolve(JSON.stringify(piped)) },
+      ),
+    ).toEqual(piped);
+    writeFileSync(join(workdir, "rel.json"), JSON.stringify(piped));
+    expect(
+      await resolveActionsInput(
+        { from: "rel.json" },
+        { caller: { cwd: workdir } },
+      ),
+    ).toEqual(piped);
+  });
+
+  it("rejects when nothing was piped and no option gives the actions", async () => {
+    await expect(
+      resolveActionsInput({}, { readStdin: () => Promise.resolve(undefined) }),
+    ).rejects.toThrow(/No actions provided/);
+  });
+
   it("rejects inline non-array payloads", async () => {
     await expect(
       resolveActionsInput({ actions: { type: "X" } }),

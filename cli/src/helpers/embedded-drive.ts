@@ -5,7 +5,8 @@
  * only where the Cli serves. `context.folders` marks that (startup wires it
  * when a personal drive exists, a one-shot run never has it), so a one-shot
  * run does not attach for it. `requireSpecDrive` is for the `spec-*`
- * commands, which have no other store: it always resolves the reactor.
+ * commands, which have no other store: it always resolves the reactor of
+ * the process the command runs in.
  *
  * The Studio drive has role 'personal', so `personalDriveId` is set;
  * `driveId` is the fallback.
@@ -42,9 +43,9 @@ export async function getEmbeddedDrive(
 
 /**
  * The Studio drive the `spec-*` commands read and write. Specifications live
- * in the drive only, so a one-shot run attaches too (to the project's running
- * Studio, or `VETRA_SWITCHBOARD_URL`) and a run with no drive to reach is
- * refused.
+ * in the drive only, so these commands run in the project's running Studio
+ * (`needs` in their meta); a run with `VETRA_SWITCHBOARD_URL` or `--local`
+ * attaches itself, and one with no drive to reach is refused.
  */
 export async function requireSpecDrive(
   ctx: Pick<RunningReactorCtx, "reactor">,

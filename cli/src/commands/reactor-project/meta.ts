@@ -102,6 +102,8 @@ requires auth and the agent isn't authorized, the result is reported as
 };
 
 export const previewModelsMeta = {
+  // The Preview run is a service of the running Studio: the command runs there.
+  needs: "reactor" as const,
   id: "preview-models",
   description:
     "List the document model types (and versions) the Preview run has loaded from the project, as its inspector reports them",

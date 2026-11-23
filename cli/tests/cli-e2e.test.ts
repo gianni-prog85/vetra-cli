@@ -81,7 +81,7 @@ describe("vetra spec-* (e2e)", () => {
   );
 
   it(
-    "with no drive to reach, says where specifications live and writes no specs/ folder",
+    "with no Studio running, says how to start one and writes no specs/ folder",
     async () => {
       const workdir = mkdtempSync(join(tmpdir(), "vetra-e2e-"));
       writeFileSync(join(workdir, "powerhouse.config.json"), "{}\n");
@@ -93,10 +93,17 @@ describe("vetra spec-* (e2e)", () => {
           ["spec-get", "--name", "E2E"],
         ]) {
           const r = await run({ workdir }, ...args);
-          expect(r.code).not.toBe(0);
-          expect(r.stderr).toMatch(/Specifications are kept in the Studio drive/);
-          expect(r.stderr).toMatch(/VETRA_SWITCHBOARD_URL/);
+          expect(r.code).toBe(1);
+          expect(r.stderr).toMatch(
+            new RegExp(`vetra ${args[0]} runs in a running vetra, and none runs for`),
+          );
+          expect(r.stderr).toMatch(/Start it with `ph vetra`/);
         }
+        // In this process, with no drive to reach.
+        const local = await run({ workdir }, "--local", "spec-list");
+        expect(local.code).not.toBe(0);
+        expect(local.stderr).toMatch(/Specifications are kept in the Studio drive/);
+        expect(local.stderr).toMatch(/VETRA_SWITCHBOARD_URL/);
         expect(existsSync(join(workdir, "specs"))).toBe(false);
       } finally {
         rmSync(workdir, { recursive: true, force: true });
@@ -144,7 +151,7 @@ describe("vetra spec-* (e2e)", () => {
   it(
     "required flag missing fails non-zero",
     async () => {
-      const { code, stderr } = await run({}, "spec-get");
+      const { code, stderr } = await run({}, "--local", "spec-get");
       expect(code).not.toBe(0);
       expect(stderr).toMatch(/name/);
     },

@@ -51,7 +51,14 @@ const actionsFromSchema = z
     "Path to a JSON file containing the actions array. Use for human CLI workflows.",
   );
 
+/**
+ * The commands that read or write the Studio drive run in the Studio that
+ * runs for the project, with its reactor (`needs` in clint's `Command`).
+ */
+const inStudio = { needs: "reactor" } as const;
+
 export const specListMeta = {
+  ...inStudio,
   id: "spec-list",
   description:
     "List the project's spec documents (product and project specs, in the Studio drive). Filter with --category or --type.",
@@ -72,6 +79,7 @@ export const specListMeta = {
 };
 
 export const specGetMeta = {
+  ...inStudio,
   id: "spec-get",
   description:
     "Read a spec. Pass --filter (or --latest) for data; otherwise returns summary + help.",
@@ -105,6 +113,7 @@ export const specGetMeta = {
 };
 
 export const specCreateMeta = {
+  ...inStudio,
   id: "spec-create",
   description:
     "Create a new spec document in the Studio drive (product and project specs alike).",
@@ -128,8 +137,12 @@ export const specCreateMeta = {
 };
 
 export const specUpdateMeta = {
+  ...inStudio,
   id: "spec-update",
   description: "Apply actions to a spec via the document model's reducer.",
+  // Piped actions are read when neither option gives them.
+  stdin: (input: Record<string, unknown>) =>
+    input.actions === undefined && !input.from,
   inputSchema: z.object({
     name: z
       .string()
@@ -143,6 +156,7 @@ export const specUpdateMeta = {
 };
 
 export const specDeleteMeta = {
+  ...inStudio,
   id: "spec-delete",
   description: "Delete a spec document by name.",
   inputSchema: z.object({
@@ -156,6 +170,7 @@ export const specDeleteMeta = {
 };
 
 export const specExtractMeta = {
+  ...inStudio,
   id: "spec-extract",
   description:
     "Extract specs by reverse-engineering existing package source into the Studio drive.",
@@ -170,6 +185,7 @@ export const specExtractMeta = {
 };
 
 export const specGenerateMeta = {
+  ...inStudio,
   id: "spec-generate",
   description:
     "Generate source code from one or all specs in the project (document models, editors, apps, processors, subgraphs).",

@@ -32,10 +32,10 @@ export const specPreviewUpdate = defineCommand({
     const driveId = input.drive ?? defaultDriveId;
     const token = await getPreviewAuthToken(context.workdir, context.config);
     const row = await findPreviewByName(switchboardUrl, driveId, input.name, token);
-    const actions = await resolveActionsInput({
-      actions: input.actions,
-      from: input.from,
-    });
+    const actions = await resolveActionsInput(
+      { actions: input.actions, from: input.from },
+      context,
+    );
 
     // The reactor applies preview mutations through the same reducer as the
     // local path but skips its duplicate-type guard. For document-model edits

@@ -25,10 +25,10 @@ export const specUpdate = defineCommand({
     });
     const { actions, minted } = normalizeSpecActions(
       copy,
-      await resolveActionsInput({
-        actions: input.actions,
-        from: input.from,
-      }),
+      await resolveActionsInput(
+        { actions: input.actions, from: input.from },
+        context,
+      ),
     );
     let built: Record<string, unknown>[];
     try {

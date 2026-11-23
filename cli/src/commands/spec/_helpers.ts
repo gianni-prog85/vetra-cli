@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
 import { z } from "zod";
 import { unknownValueError } from "../../helpers/cli-errors.js";
@@ -58,24 +59,32 @@ export function slugify(name: string): string {
  * Errors fast if none of those apply. We deliberately do not accept a literal
  * "-" for stdin: under a TTY it hangs forever waiting for EOF, and under
  * piping the auto-detection already kicks in.
+ *
+ * `context` is the command's: its `readStdin` gives what was piped to the
+ * caller, and `from` is relative to the caller's folder, also when the
+ * command runs in the running Studio for a caller in another process.
  */
-export async function resolveActionsInput(opts: {
-  actions?: unknown;
-  from?: string;
-}): Promise<ActionInput[]> {
+export async function resolveActionsInput(
+  opts: { actions?: unknown; from?: string },
+  context: {
+    readStdin?: () => Promise<string | undefined>;
+    caller?: { cwd: string };
+  } = {},
+): Promise<ActionInput[]> {
   let parsed: unknown;
   if (opts.actions !== undefined) {
     parsed = opts.actions;
   } else if (opts.from) {
-    const raw = await readFile(opts.from, "utf8");
-    parsed = parseJson(raw);
-  } else if (!process.stdin.isTTY) {
-    const raw = await readStdinAll();
-    parsed = parseJson(raw);
+    const file = resolvePath(context.caller?.cwd ?? process.cwd(), opts.from);
+    parsed = parseJson(await readFile(file, "utf8"));
   } else {
-    throw new Error(
-      "No actions provided. Pass actions inline, --from <file>, or pipe JSON to stdin.",
-    );
+    const raw = await (context.readStdin ?? readStdinAll)();
+    if (raw === undefined) {
+      throw new Error(
+        "No actions provided. Pass actions inline, --from <file>, or pipe JSON to stdin.",
+      );
+    }
+    parsed = parseJson(raw);
   }
   if (!Array.isArray(parsed)) {
     throw new Error("Actions input must be a JSON array of action objects.");
@@ -91,7 +100,8 @@ function parseJson(raw: string): unknown {
   }
 }
 
-async function readStdinAll(): Promise<string> {
+async function readStdinAll(): Promise<string | undefined> {
+  if (process.stdin.isTTY) return undefined;
   process.stdin.setEncoding("utf8");
   let data = "";
   for await (const chunk of process.stdin) {

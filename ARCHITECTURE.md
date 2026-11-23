@@ -73,19 +73,37 @@ The Cli runs three ways, all through clint's Cli runner (`runCli`):
 - the `vetra` bin (`bin/vetra.mjs`) over the built `./cli`;
 - `pnpm dev` (`tsx cli/src/main.ts --workdir ../vetra-test`) from source.
 
-The bin and `pnpm dev` take the drive address from `studioDriveUrl`
-(`cli/src/running-studio.ts`): `VETRA_SWITCHBOARD_URL`
-(`<switchboard>/d/<slug>`) when set, else, for a run with a command, the
-`studio` drive of the Studio that runs for the command's project. That
-Studio is found through its run record (`findRunningInstance` of
+A command of the bin or `pnpm dev` that needs the reactor or the agent is a
+thin client of the Studio that runs for its project (`studioRun` in
+`cli/src/running-studio.ts`, clint's `RunOptions.forward`). The command says
+so in its meta (`needs: "reactor"`: the `spec-*` commands that use the
+drive, `preview-models`, clint's `attachment-*`); a skill command and a bare
+prompt need the agent without saying so. The calling process sends the
+command (id, parsed input, working folder, caller's folder, terminal and
+colour, OS user and pid, piped input where the command declares `stdin`)
+over the Studio's control channel; the Studio's Cli validates the input
+against the command's schema again, runs it with its own reactor, agent and
+services, streams stdout and stderr back as they are written, and answers
+with the exit code. Ctrl-C in the caller, or a caller that goes away,
+aborts the command's `context.signal`. The caller builds no reactor and no
+agent, and loads none of their packages.
+
+That Studio is found through its run record (`findRunningInstance` of
 `@powerhousedao/host-core/instance`, which reads records and loads no
 runner): the instance is the Studio host plus the data folder
 (`PH_USER_DATA_DIR`, else the folder `--workdir` or the current folder
-names), so a `vetra spec-list` in a project reaches that project's Studio,
-on whatever port it took. With neither, commands that need no reactor still
-run, and anything that asks for the reactor fails with the message in
-`configureReactor.create`, which names `ph vetra`. The shell (no command)
-attaches by the variable only. Agent conversation logs live under
+names), so a `vetra spec-list` in a project reaches that project's Studio.
+The record holds the channel's address and token and is readable by its
+owner only. With no Studio the command is refused with a message that names
+`ph vetra`; with a Studio of another control protocol, with one that names
+both protocols. Commands that need neither run in the calling process.
+
+The calling process attaches to a drive itself in these cases only:
+`VETRA_SWITCHBOARD_URL` (`<switchboard>/d/<slug>`) is set (cloud Studio,
+scripts); `--local` precedes the command (the `studio` drive of the
+project's running Studio); the shell (`-i` with a running Studio, else the
+variable only); `vetra-agent-run`, which drives an agent of its own
+(`STANDALONE_COMMANDS`). Agent conversation logs live under
 `<workdir>/.ph/vetra/logs/<agent>/`.
 
 Internally:
@@ -285,8 +303,12 @@ the lifecycle hooks. Everything else loads on first use, through literal
 built bin in a child process with an import-recording hook and fails when
 `--help`, `--version`, a command's `--help` or `config --list` loads Mastra,
 the reactor client, Renown, clint-common, the vetra models, `document-model`
-or another heavy package. A new command needs a meta entry and a
-`lazyCommand` line in its group's `index.ts`.
+or another heavy package. The same holds, under a module budget, for the
+calling side of a command the running Studio runs (`spec-list` against a
+control channel the test answers) and for its refusal with no Studio. A new
+command needs a meta entry and a `lazyCommand` line in its group's
+`index.ts`, and `needs: "reactor"` in the meta when it uses the reactor or
+the Studio's services.
 
 ### Reactor (remote attach)
 
@@ -942,12 +964,16 @@ loop sets them up, and run as part of it.
 The `spec-*` commands (`spec-list`, `spec-get`, `spec-create`,
 `spec-update`, `spec-extract`, `spec-generate`, `spec-delete`) read and
 write the Home drive and nothing else: `helpers/embedded-drive.ts` →
-`requireSpecDrive(ctx)` always resolves the reactor (a one-shot run
-attaches to the project's running Studio, or through
-`VETRA_SWITCHBOARD_URL`) and refuses a run with no drive to reach.
-`preview-models` in a one-shot run holds no service instance: it trusts the
-inspector's report while the Preview's run record is live
-(`previewModels` in `helpers/preview-inspector.ts`). The node and relationship writes are in
+`requireSpecDrive(ctx)` always resolves the reactor of the process the
+command runs in and refuses a run with no drive to reach. Typed in a second
+terminal they run in the project's running Studio (see the top of this
+document); with `VETRA_SWITCHBOARD_URL` or `--local` the calling process
+attaches itself. `spec-update` reads its actions through
+`context.readStdin` and resolves `--from` against the caller's folder, so
+both work from the caller's terminal.
+`preview-models` runs in the Studio too; in a process that holds no service
+instance (`--local`) it trusts the inspector's report while the Preview's
+run record is live (`previewModels` in `helpers/preview-inspector.ts`). The node and relationship writes are in
 `helpers/spec-drive-sync.ts` (one drive write at a time per process).
 `getEmbeddedDrive(ctx)` is for optional writes: it gates on `ctx.folders`
 (wired once the reactor is attached with a personal drive, absent in

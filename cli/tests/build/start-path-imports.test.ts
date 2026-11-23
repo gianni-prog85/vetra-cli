@@ -1,15 +1,19 @@
 /**
- * The start path stays light: help, version, a command's help and a command
- * that needs neither agent nor reactor load none of the heavy packages. Each
- * case runs the Cli in a child process with a hook that records its imports.
+ * The start path stays light: help, version, a command's help, a command
+ * that needs neither agent nor reactor, and the sending side of a command the
+ * running Studio runs load none of the heavy packages. Each case runs the Cli
+ * in a child process with a hook that records its imports.
  * The source entry always runs; the built bin runs when `dist/` is there.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterAll, describe, expect, it } from "vitest";
+import { serveCommands, type CommandRequest } from "@powerhousedao/clint";
+import { writeRunRecord } from "@powerhousedao/host-core";
+import { openControlChannel, type ControlChannel } from "@powerhousedao/host-core/control-channel";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
@@ -35,6 +39,9 @@ const HEAVY: [name: string, pattern: RegExp][] = [
 /** Ceiling for packages not named above; `--help` loads 269 modules from source, 258 built. */
 const MAX_MODULES = 450;
 
+/** Ceiling for the process that sends a command to the running Studio; it loads 261 built. */
+const MAX_FORWARDED_MODULES = 350;
+
 function heavyImports(urls: string[]): string[] {
   return urls
     .map((url) => (url.startsWith(`${ROOT_URL}/`) && !url.includes("/node_modules/") ? `own:${url.slice(ROOT_URL.length)}` : url))
@@ -46,12 +53,17 @@ afterAll(() => rmSync(workdir, { recursive: true, force: true }));
 
 let run = 0;
 
-async function recordImports(entry: string[], args: string[]): Promise<{ code: number; output: string; urls: string[] }> {
+async function recordImports(
+  entry: string[],
+  args: string[],
+  dir: string = workdir,
+): Promise<{ code: number; output: string; urls: string[] }> {
   const out = join(workdir, `imports-${run++}.txt`);
   const env: NodeJS.ProcessEnv = { ...process.env, RECORD_IMPORTS_OUT: out };
-  // No switchboard to attach to.
+  // No switchboard to attach to, and the run record is the folder's own.
   delete env.VETRA_SWITCHBOARD_URL;
-  const child = spawn(process.execPath, ["--import", HOOK, ...entry, "--workdir", workdir, ...args], {
+  delete env.PH_USER_DATA_DIR;
+  const child = spawn(process.execPath, ["--import", HOOK, ...entry, "--workdir", dir, ...args], {
     cwd: ROOT,
     env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -126,4 +138,75 @@ describe.each([
     },
     60_000,
   );
+
+  // A command that needs the reactor runs in the project's running Studio:
+  // the process that was started for it sends it there and loads none of it.
+  describe("a command the running Studio runs", () => {
+    let project: string;
+    let channel: ControlChannel;
+    let received: CommandRequest[];
+
+    beforeAll(async () => {
+      project = mkdtempSync(join(tmpdir(), "vetra-forwarded-"));
+      writeFileSync(join(project, "package.json"), JSON.stringify({ name: "forwarded" }));
+      writeFileSync(join(project, "powerhouse.config.json"), "{}");
+      received = [];
+      channel = await openControlChannel();
+      // The Studio's side of the channel, with no Studio behind it.
+      serveCommands(channel, { name: "vetra", version: "0.0.0", workdir: project }, (command) => {
+        received.push(command.request);
+        command.stdout(`the Studio ran ${command.request.command}\n`);
+        return Promise.resolve(0);
+      });
+      writeRunRecord(project, {
+        version: 2,
+        host: "studio",
+        package: "@powerhousedao/vetra-cli",
+        projectName: "forwarded",
+        kind: "compound",
+        verb: "serve",
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        members: {},
+        extra: { control: channel.record },
+      });
+    });
+
+    afterAll(async () => {
+      await channel.close();
+      rmSync(project, { recursive: true, force: true });
+    });
+
+    it.skipIf(skip)(
+      "is sent there, and the sender loads no heavy package",
+      async () => {
+        const { code, output, urls } = await recordImports(entry, ["spec-list", "--category", "product"], project);
+        expect(output).toMatch(/the Studio ran spec-list/);
+        expect(code).toBe(0);
+        expect(received.at(-1)).toMatchObject({
+          cli: "vetra",
+          command: "spec-list",
+          input: { category: "product" },
+          caller: { pid: expect.any(Number) as number },
+        });
+        expect(heavyImports(urls)).toEqual([]);
+        expect(urls.length).toBeGreaterThan(20);
+        expect(urls.length).toBeLessThan(MAX_FORWARDED_MODULES);
+      },
+      60_000,
+    );
+
+    it.skipIf(skip)(
+      "is refused with no Studio, and builds no reactor of its own",
+      async () => {
+        const { code, output, urls } = await recordImports(entry, ["spec-list"]);
+        expect(output).toMatch(/vetra spec-list runs in a running vetra, and none runs for/);
+        expect(output).toMatch(/Start it with `ph vetra`/);
+        expect(code).toBe(1);
+        expect(heavyImports(urls)).toEqual([]);
+        expect(urls.length).toBeLessThan(MAX_FORWARDED_MODULES);
+      },
+      60_000,
+    );
+  });
 });
