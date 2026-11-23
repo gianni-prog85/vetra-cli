@@ -112,6 +112,8 @@ export const ADVANCED_ONLY: readonly string[] = [
   'reactor-project-publish',
   'reactor-project-publish-status',
   'reactor-project-manage',
+  // The project's own hosts run on the project's own stores.
+  'project-host*',
   'vetra-agent-run',
   'config',
   'cli-docs',

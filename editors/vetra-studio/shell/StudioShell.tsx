@@ -39,6 +39,7 @@ import {
   type OpenPanels,
   type PanelId,
 } from "./panels.js";
+import { PreviewHosts } from "./PreviewHosts.js";
 import { usePreviewHome } from "./usePreviewHome.js";
 import { useProjectPackage } from "./useProjectPackage.js";
 import { useStudioState } from "./useStudioState.js";
@@ -49,7 +50,6 @@ export const TEST_STOPPED = "The Preview is not running.";
 export const TEST_UNAVAILABLE = "Test is not available for this project.";
 export const TEST_FAILED = "The Preview failed to start.";
 export const TEST_FRAME_TITLE = "Test: the project on the Preview drive";
-export const PREVIEW_NOT_AVAILABLE = "Preview is not available yet.";
 const LABS_LINK = "Open in Vetra Labs ↗";
 
 export type StudioShellProps = {
@@ -382,11 +382,7 @@ function TestPreview() {
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        {mode === "test" ? (
-          <TestFrame />
-        ) : (
-          <Notice>{PREVIEW_NOT_AVAILABLE}</Notice>
-        )}
+        {mode === "test" ? <TestFrame /> : <PreviewHosts />}
       </div>
     </div>
   );

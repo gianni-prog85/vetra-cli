@@ -17,9 +17,9 @@ import {
 } from "../test-utils/studioFixtures.js";
 import { LABS_SCREENS } from "./labsScreens.js";
 import { PANELS_STORAGE_KEY } from "./panels.js";
+import { HOSTS_NONE } from "./PreviewHosts.js";
 import {
   ALL_CLOSED,
-  PREVIEW_NOT_AVAILABLE,
   StudioShell,
   TEST_FAILED,
   TEST_STARTING,
@@ -55,6 +55,15 @@ const hoisted = vi.hoisted(
 
 vi.mock("./usePreviewHome.js", () => ({
   usePreviewHome: () => hoisted.home,
+}));
+vi.mock("./useProjectHosts.js", () => ({
+  useProjectHosts: () => ({
+    view: { kind: "none", projectPath: "/p", reason: "no hosts/ folder" },
+    pending: undefined,
+    actionError: undefined,
+    start: () => {},
+    stop: () => {},
+  }),
 }));
 
 vi.mock("@powerhousedao/vetra/editors/vetra-explorer", () => ({
@@ -241,7 +250,7 @@ describe("StudioShell", () => {
     expect(openPanels(container)).toEqual(["agent"]);
   });
 
-  it("Test shows the Preview Connect in a frame once it is ready; Preview is not available yet", () => {
+  it("Test shows the Preview Connect in a frame once it is ready; Preview shows the project's hosts", () => {
     // No address happy-dom would load.
     hoisted.home = { kind: "ready", url: "about:blank#preview-1" };
     const container = shell();
@@ -252,7 +261,7 @@ describe("StudioShell", () => {
     click(
       test?.querySelector('[aria-label="Test or Preview"] button:last-child'),
     );
-    expect(test?.textContent).toContain(PREVIEW_NOT_AVAILABLE);
+    expect(test?.textContent).toContain(HOSTS_NONE);
     expect(test?.querySelector("iframe")).toBeNull();
   });
 

@@ -15,6 +15,9 @@
  *   GET  /preview/status          owner: the Preview run's state, with the reason it is not there.
  *   POST /start                   owner: idempotent start of the Preview run.
  *   POST /restart                 owner: stop the Preview run, start it again.
+ *   GET  /hosts                   owner: the project's own hosts and which run.
+ *   POST /hosts/start?host=       owner: start one (`ph run <host> dev`); answers once under way.
+ *   POST /hosts/stop?host=        owner: ask one to stop; answers when it has.
  *
  * Every route acts on the project the Cli works in (the workdir): there is
  * no project to name.
@@ -43,6 +46,8 @@ import { createRequestAuthorizer, type RequestAuthorizer } from "./request-auth.
 import { previewModels } from "../helpers/preview-inspector.js";
 import { projectRoot } from "../helpers/project.js";
 import { studioPath } from "../helpers/studio-paths.js";
+import { localProjectHosts, type ProjectHostsApi } from "../project-hosts/control.js";
+import { projectHosts, type ProjectHosts } from "../project-hosts/manager.js";
 import { buildSessionExport, listSessions } from "./session-export.js";
 import { streamWorkspaceExport, WORKSPACE_ZIP_FILENAME } from "./workspace-export.js";
 import type { EmbeddedDrive } from "../helpers/embedded-drive.js";
@@ -80,6 +85,8 @@ interface PreviewServerDeps {
   getStudioUrl?: () => string | undefined;
   /** Owner gate override (tests); default `createRequestAuthorizer`. */
   authorizeRequest?: RequestAuthorizer;
+  /** The project's hosts (tests); default this process's. */
+  projectHosts?: ProjectHosts;
   log?: {
     info: (m: string) => void;
     error: (m: string) => void;
@@ -176,6 +183,24 @@ export async function startPreviewServer(
     if (check.ok) return true;
     writeJson(res, check.status, { error: check.error });
     return false;
+  }
+
+  const hostsManager = deps.projectHosts ?? projectHosts();
+  // The project's hosts, or the refusal when the workdir is no project.
+  async function hostsApi(): Promise<
+    | { api: ProjectHostsApi; manager: ProjectHosts; projectPath: string }
+    | { kind: "unknown-project"; error: string }
+  > {
+    try {
+      const projectPath = await projectRoot(workdir);
+      return {
+        api: localProjectHosts(hostsManager, projectPath),
+        manager: hostsManager,
+        projectPath,
+      };
+    } catch {
+      return { kind: "unknown-project", error: "unknown project" };
+    }
   }
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -307,6 +332,50 @@ export async function startPreviewServer(
             : result.kind === "failed"
               ? 500
               : 202;
+        writeJson(res, status, result);
+        return;
+      }
+
+      // The project's own hosts (Preview mode): the texts name paths, and a
+      // start or stop acts on the project's stack: owner only.
+      if (path === "/hosts" && method === "GET") {
+        if (!(await requireOwner(req, res, url))) return;
+        const hosts = await hostsApi();
+        if ("kind" in hosts) {
+          writeJson(res, 404, hosts);
+          return;
+        }
+        writeJson(res, 200, await hosts.api.list());
+        return;
+      }
+
+      if ((path === "/hosts/start" || path === "/hosts/stop") && method === "POST") {
+        if (!(await requireOwner(req, res, url))) return;
+        const host = parseQuery(url).get("host");
+        if (!host) {
+          writeJson(res, 400, { kind: "refused", error: "Name the host: ?host=" });
+          return;
+        }
+        const hosts = await hostsApi();
+        if ("kind" in hosts) {
+          writeJson(res, 404, hosts);
+          return;
+        }
+        // A start answers once it is under way; the list says how it went.
+        const result =
+          path === "/hosts/start"
+            ? (await hosts.manager.start(hosts.projectPath, host)).result
+            : await hosts.api.stop(host);
+        const status =
+          result.kind === "unknown-host"
+            ? 404
+            : result.kind === "refused"
+              ? 409
+              : result.kind === "failed"
+                ? 500
+                : path === "/hosts/start"
+                  ? 202
+                  : 200;
         writeJson(res, status, result);
         return;
       }

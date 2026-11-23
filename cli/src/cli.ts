@@ -20,6 +20,7 @@ import { specPreviewCommands } from './commands/spec-preview/index.js';
 import { deployCommands } from './commands/deploy/index.js';
 import { authCommands } from './commands/auth/index.js';
 import { reactorProjectCommands } from './commands/reactor-project/index.js';
+import { projectHostCommands } from './commands/project-hosts/index.js';
 import { productCommands } from './commands/product/index.js';
 import { reactorProject } from './services/reactor-project.js';
 import { specSyncTrigger } from './triggers/spec-sync.js';
@@ -64,6 +65,7 @@ export const cli = defineCli({
     ...deployCommands,
     ...authCommands,
     ...reactorProjectCommands,
+    ...projectHostCommands,
     ...productCommands,
     ...createAttachmentCommands(),
     agentRun,

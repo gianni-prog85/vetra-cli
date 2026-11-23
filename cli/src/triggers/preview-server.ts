@@ -15,7 +15,11 @@
  * trigger never emits work items; it exists purely for its setup-lifetime
  * side effects. `teardown()` removes the file and closes the server.
  */
+import { processControlChannel } from "@powerhousedao/host-core";
 import { defineTrigger } from "../framework.js";
+import { projectRoot } from "../helpers/project.js";
+import { localProjectHosts, serveProjectHosts } from "../project-hosts/control.js";
+import { projectHosts } from "../project-hosts/manager.js";
 import {
   DEFAULT_PREVIEW_SERVER_PORT,
   PREVIEW_SERVER_HOST,
@@ -115,6 +119,17 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
       return;
     }
 
+    // A command in a second terminal reaches the hosts this Cli started.
+    const channel = processControlChannel();
+    try {
+      const projectPath = await projectRoot(workdir);
+      if (channel) {
+        serveProjectHosts(channel, localProjectHosts(projectHosts(), projectPath));
+      }
+    } catch {
+      // No project in the workdir: no hosts to serve.
+    }
+
     // Tell the tab where the local API is, through the Studio's Connect.
     const previewServerUrl = `http://${PREVIEW_SERVER_HOST}:${handle.port}`;
     const file = studioConfigPath();
@@ -144,6 +159,8 @@ export const previewServerTrigger = defineTrigger<TriggerState>({
     ctx.state.studioConfig = undefined;
     await ctx.state.handle?.stop();
     ctx.state.handle = undefined;
+    // The project hosts started here stop with the Studio.
+    await projectHosts().stopAll();
   },
 
   async poll() {

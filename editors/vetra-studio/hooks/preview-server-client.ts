@@ -473,6 +473,96 @@ export async function fetchStart(
   return body;
 }
 
+export interface ProjectHostLink {
+  name: string;
+  url: string;
+}
+
+/** One of the project's own hosts, as `GET /hosts` words it. */
+export type ProjectHostState =
+  | { kind: "stopped" }
+  | { kind: "starting" }
+  | { kind: "stopping" }
+  | {
+      kind: "running";
+      pid: number;
+      startedAt: string;
+      verb: string;
+      links: ProjectHostLink[];
+      webUrl?: string;
+      startedHere: boolean;
+    }
+  | { kind: "failed"; reason: string; logFile?: string };
+
+export interface ProjectHost {
+  host: string;
+  name: string;
+  runner: string;
+  /** False: it runs in a terminal, with `command`. */
+  startable: boolean;
+  command: string;
+  state: ProjectHostState;
+}
+
+export type ProjectHostsResult =
+  | { kind: "ok"; projectPath: string; hosts: ProjectHost[] }
+  | { kind: "none"; projectPath: string; reason: string }
+  | { kind: "unknown-project"; error: string }
+  /** The caller is not the Studio's owner. */
+  | { kind: "refused"; error: string };
+
+/** The project's own hosts and which of them run. */
+export async function fetchProjectHosts(
+  args: { signal?: AbortSignal } = {},
+): Promise<ProjectHostsResult> {
+  const { base } = await previewBase();
+  const res = await fetch(`${base}/hosts`, {
+    headers: await ownerHeaders(),
+    signal: args.signal,
+  });
+  if (isRefused(res.status)) return { kind: "refused", error: OWNER_REQUIRED };
+  const body = (await res
+    .json()
+    .catch(() => null)) as ProjectHostsResult | null;
+  if (!body?.kind) {
+    throw new Error(`preview-server /hosts: ${res.status} ${res.statusText}`);
+  }
+  return body;
+}
+
+export type ProjectHostActionResult =
+  | { kind: "ok"; host: ProjectHost }
+  | {
+      kind: "failed" | "refused" | "unknown-host" | "unknown-project";
+      error: string;
+    };
+
+/** Starts (`ph run <host> dev`) or stops one of the project's hosts. A start
+ * answers once it is under way; the list says how it went. */
+export async function fetchProjectHostAction(
+  action: "start" | "stop",
+  host: string,
+  args: { signal?: AbortSignal } = {},
+): Promise<ProjectHostActionResult> {
+  const { base } = await previewBase();
+  const res = await fetch(
+    `${base}/hosts/${action}?host=${encodeURIComponent(host)}`,
+    { method: "POST", headers: await ownerHeaders(), signal: args.signal },
+  );
+  const body = (await res
+    .json()
+    .catch(() => null)) as ProjectHostActionResult | null;
+  if (!body?.kind) {
+    return {
+      kind: "failed",
+      error: isRefused(res.status)
+        ? OWNER_REQUIRED
+        : `preview-server /hosts/${action}: ${res.status} ${res.statusText}`,
+    };
+  }
+  return body;
+}
+
 export const RESTART_REFUSED = "Couldn't restart the preview.";
 
 /**

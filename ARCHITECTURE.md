@@ -384,6 +384,12 @@ answers `unknown-project`.
   would be refused (the workdir is no project, or the first failing
   preflight check of the `reactor-project` service, run here without
   starting anything), or `failed` with the run's error.
+- `GET /hosts`, `POST /hosts/start?host=`, `POST /hosts/stop?host=` — owner.
+  The project's own hosts (see "Project hosts"): the list with each host's
+  state, a start (202 once it is under way; the state is read from the
+  list) and a stop (answers when the host has stopped). 404 for a host the
+  project does not have, 409 for one the Studio does not start, 500 with
+  the reason for a stop that did not happen.
 - `GET /project-package` — read-only. Returns the project's package
   identity (`{ kind: "ok", name, version }`) read from
   `<workdir>/package.json`, or `unknown-project` / `no-package`. The
@@ -455,7 +461,7 @@ answers `unknown-project`.
 `createRequestAuthorizer`). Public routes: `/healthz`, `/version`,
 `/resolve` (no absolute `projectPath`, no raw error text), `/events` (event
 types only — failure text is not forwarded) and `/export/status`. Every other route (`/project-package`, `/release-status`,
-`/publish`, `/preview/*`, `/start`, `/restart`, `/sessions*`, `/export`, `/auth/*`) is
+`/publish`, `/preview/*`, `/start`, `/restart`, `/hosts*`, `/sessions*`, `/export`, `/auth/*`) is
 owner-only and checks **the request**, never the daemon's own Renown
 sign-in. It passes when the request carries:
 
@@ -610,8 +616,13 @@ stay above it) and has:
   starting, not running, not available (with the reason and hint) or
   failed (with the error). It starts nothing: the `preview-run` trigger
   does. A document created there lives in the Preview's stores
-  (`.ph/vetra/preview/`). Preview (the project's own host) is a "not
-  available yet" state.
+  (`.ph/vetra/preview/`). Preview is the project's own hosts
+  (`shell/PreviewHosts.tsx`, `shell/useProjectHosts.ts` over `GET /hosts`,
+  read again every 5 s and every 1.5 s while one starts or stops): a chip
+  per host, Start or Stop for the chosen one, its status, the links its run
+  record gives and a frame on its web address when it has one. A host the
+  Studio does not start shows its `ph run` command instead (see "Project
+  hosts").
 - **Agent**: the chat pane (`ChatPane.tsx`): sessions list, a new session,
   the conversation.
 
@@ -717,6 +728,40 @@ this drive's editor route.
 
 There is one project per Studio, the Cli's workdir: a chat session never
 names or switches projects.
+
+### Project hosts
+
+The project's **own** hosts (`cli/src/project-hosts/manager.ts`): the
+folders of `<project>/hosts/`, found with host-core's `probeHostsFolder`
+and `loadHost`, the discovery `ph run` uses. They are not the Preview run
+and not this package's hosts: they run the project's stack on the
+project's own stores (`dataDir` is the project).
+
+- **State** comes from the run record (`probeRun` under the host file's
+  `name`): `stopped`, `starting`, `stopping`, `running` (pid, the record's
+  endpoints as links, the first `connect` endpoint as the web address) or
+  `failed` with the reason. A host a terminal started shows as running
+  too. No output is read.
+- **Start** is `ph run <host> dev` through `spawnHost`, with the Cli's
+  environment passed on, its output in
+  `<project>/.ph/services/hosts/<host>/<host>.<time>.log`. Only hosts on
+  the ph-cli `connect` or `switchboard` runner or the compound runner are
+  started; any other (a desktop shell, a Cli) is listed with its command
+  and refused. Nothing checks ports or orders hosts: a host that needs
+  another fails with that host's own message.
+- **Stop** is the end of the child's stdin for a host started here (its
+  tree is ended only after 60 s, and the stop then says so), and
+  `stopRun` (the run record's stop channel) for one started elsewhere,
+  which is asked and never ended. Hosts started here stop with the Cli
+  (the `preview-server` trigger's teardown).
+
+Three commands carry it (`cli/src/commands/project-hosts`):
+`project-hosts`, `project-host-start`, `project-host-stop`. In the running
+Cli they act on its manager; from a second terminal they go over the Cli's
+control channel (`project-hosts/control.ts`, methods `project-hosts.*`,
+served from the `preview-server` trigger); with no running Cli the list
+and a stop still work from the run records, and a start is refused, since
+the host would end with the command.
 
 ### Agent
 
