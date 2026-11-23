@@ -378,6 +378,12 @@ answers `unknown-project`.
   has loaded, from its inspector's report (see "reactor-project service"):
   `not-running`, `starting`, or `ready` with the model types, their versions
   and, with `full`, each version's document model state.
+- `GET /preview/status` — owner, read-only (`preview-server/status.ts`). The
+  Preview run's state in words the Studio shows: `ready`, `starting`,
+  `stopped`, `unavailable` with the `reason` and `hint` of a start that
+  would be refused (the workdir is no project, or the first failing
+  preflight check of the `reactor-project` service, run here without
+  starting anything), or `failed` with the run's error.
 - `GET /project-package` — read-only. Returns the project's package
   identity (`{ kind: "ok", name, version }`) read from
   `<workdir>/package.json`, or `unknown-project` / `no-package`. The
@@ -449,7 +455,7 @@ answers `unknown-project`.
 `createRequestAuthorizer`). Public routes: `/healthz`, `/version`,
 `/resolve` (no absolute `projectPath`, no raw error text), `/events` (event
 types only — failure text is not forwarded) and `/export/status`. Every other route (`/project-package`, `/release-status`,
-`/publish`, `/start`, `/restart`, `/sessions*`, `/export`, `/auth/*`) is
+`/publish`, `/preview/*`, `/start`, `/restart`, `/sessions*`, `/export`, `/auth/*`) is
 owner-only and checks **the request**, never the daemon's own Renown
 sign-in. It passes when the request carries:
 
@@ -597,7 +603,15 @@ stay above it) and has:
   can write it. Build and Deploy rows open placeholder pages showing the
   matching Vetra Labs screenshot (`shell/labsScreens.ts` names them;
   Connect serves them, see "Hosts").
-- **Test / Preview**: a "not available yet" state for both.
+- **Test / Preview**: Test is the Preview Connect on its `preview` drive in
+  a frame (`shell/usePreviewHome.ts`: `/resolve?home=1` for the address,
+  `/preview/status` for the reason when there is none, read again on the
+  run's events and every 5 s). Until the run is ready the panel says it is
+  starting, not running, not available (with the reason and hint) or
+  failed (with the error). It starts nothing: the `preview-run` trigger
+  does. A document created there lives in the Preview's stores
+  (`.ph/vetra/preview/`). Preview (the project's own host) is a "not
+  available yet" state.
 - **Agent**: the chat pane (`ChatPane.tsx`): sessions list, a new session,
   the conversation.
 
@@ -951,8 +965,8 @@ What happens when the agent previews an in-progress document model.
     → returns { documentId, driveId }
 ```
 
-The Studio page does not show the preview yet: its Test / Preview panel is
-a "not available yet" state.
+The Studio page shows the Preview Connect's drive root in its Test panel
+(see "The Studio page"); it does not follow a session's document.
 
 The chain has no package boundary: specs are generated directly into
 the reactor-project's source tree, the dev-mode Switchboard registers
@@ -972,6 +986,8 @@ The Cli runs no proxy. What the browser reaches, all on this machine:
   is that spec document's editor only, `<connect>/d/<drive>?embed=1` the
   explorer without the bar, and `<connect>/d/<drive>?embed=1&panel=test`
   the Test / Preview page.
+- **Test frame** — the Preview Connect on 8092 directly, at the address
+  `/resolve?home=1` gives (`http://localhost:8092/d/<preview drive>?embed=1`).
 - **The Labs screenshots** — `<connect>/vetra-labs/<page>.jpg`.
 - **The local API** — `http://127.0.0.1:<OS port>` directly, the address
   `<connect>/studio.config.json` names.

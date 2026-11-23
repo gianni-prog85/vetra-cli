@@ -21,8 +21,12 @@ import {
   ALL_CLOSED,
   PREVIEW_NOT_AVAILABLE,
   StudioShell,
-  TEST_NOT_AVAILABLE,
+  TEST_FAILED,
+  TEST_STARTING,
+  TEST_STOPPED,
+  TEST_UNAVAILABLE,
 } from "./StudioShell.js";
+import type { PreviewHome } from "./usePreviewHome.js";
 
 type ExplorerProps = {
   packageName?: string;
@@ -35,10 +39,22 @@ type ExplorerProps = {
   children?: ReactNode;
 };
 
-const hoisted = vi.hoisted(() => ({
-  documents: undefined as PHDocument[] | undefined,
-  explorer: undefined as ExplorerProps | undefined,
-  added: [] as string[][],
+const hoisted = vi.hoisted(
+  (): {
+    documents: PHDocument[] | undefined;
+    explorer: ExplorerProps | undefined;
+    added: string[][];
+    home: PreviewHome;
+  } => ({
+    documents: undefined,
+    explorer: undefined,
+    added: [],
+    home: { kind: "starting" },
+  }),
+);
+
+vi.mock("./usePreviewHome.js", () => ({
+  usePreviewHome: () => hoisted.home,
 }));
 
 vi.mock("@powerhousedao/vetra/editors/vetra-explorer", () => ({
@@ -117,6 +133,7 @@ beforeEach(() => {
   hoisted.documents = [chatDoc(SESSION_ID, 1)];
   hoisted.explorer = undefined;
   hoisted.added = [];
+  hoisted.home = { kind: "starting" };
   window.localStorage.clear();
   window.history.replaceState({}, "", "/d/studio");
 });
@@ -224,16 +241,65 @@ describe("StudioShell", () => {
     expect(openPanels(container)).toEqual(["agent"]);
   });
 
-  it("Test / Preview says it is not available yet, for both", () => {
+  it("Test shows the Preview Connect in a frame once it is ready; Preview is not available yet", () => {
+    // No address happy-dom would load.
+    hoisted.home = { kind: "ready", url: "about:blank#preview-1" };
     const container = shell();
     click(toggle(container, "test"));
     const test = panel(container, "test");
-    expect(test?.textContent).toContain(TEST_NOT_AVAILABLE);
+    const frame = test?.querySelector("iframe[data-test-frame]");
+    expect(frame?.getAttribute("src")).toBe("about:blank#preview-1");
     click(
       test?.querySelector('[aria-label="Test or Preview"] button:last-child'),
     );
     expect(test?.textContent).toContain(PREVIEW_NOT_AVAILABLE);
-    expect(test?.textContent).not.toContain(TEST_NOT_AVAILABLE);
+    expect(test?.querySelector("iframe")).toBeNull();
+  });
+
+  it("Test says the Preview is starting, or not running, without a frame", () => {
+    const container = shell();
+    click(toggle(container, "test"));
+    const test = panel(container, "test");
+    expect(test?.textContent).toContain(TEST_STARTING);
+    expect(test?.querySelector("iframe")).toBeNull();
+  });
+
+  it("Test says so when the Preview is not running", () => {
+    hoisted.home = { kind: "stopped" };
+    const container = shell();
+    click(toggle(container, "test"));
+    expect(panel(container, "test")?.textContent).toContain(TEST_STOPPED);
+  });
+
+  it("Test gives the reason it is not available, with the hint", () => {
+    hoisted.home = {
+      kind: "unavailable",
+      reason: "The project has no @powerhousedao/connect installed",
+      hint: "Add @powerhousedao/connect to the project",
+    };
+    const container = shell();
+    click(toggle(container, "test"));
+    const state = panel(container, "test")?.querySelector(
+      '[data-test-state="unavailable"]',
+    );
+    expect(state?.textContent).toContain(TEST_UNAVAILABLE);
+    expect(state?.textContent).toContain(
+      "The project has no @powerhousedao/connect installed",
+    );
+    expect(state?.textContent).toContain(
+      "Add @powerhousedao/connect to the project",
+    );
+  });
+
+  it("Test gives a failed start's error", () => {
+    hoisted.home = { kind: "failed", error: "Readiness timed out" };
+    const container = shell();
+    click(toggle(container, "test"));
+    const failure = panel(container, "test")?.querySelector(
+      '[data-test-state="failed"]',
+    );
+    expect(failure?.textContent).toContain(TEST_FAILED);
+    expect(failure?.textContent).toContain("Readiness timed out");
   });
 
   it("Specs and Test link to a tab of their own; Agent has none", () => {
@@ -301,6 +367,6 @@ describe("StudioShell", () => {
     const container = shell();
     expect(container.querySelector("header")).toBeNull();
     expect(container.querySelector("[data-panel]")).toBeNull();
-    expect(container.textContent).toContain(TEST_NOT_AVAILABLE);
+    expect(container.textContent).toContain(TEST_STARTING);
   });
 });

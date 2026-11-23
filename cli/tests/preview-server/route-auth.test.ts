@@ -14,6 +14,7 @@ const OWNER_ROUTES: Array<[method: string, path: string]> = [
   ["GET", "/release-status"],
   ["POST", "/publish"],
   ["GET", "/preview/models"],
+  ["GET", "/preview/status"],
   ["POST", "/start"],
   ["POST", "/restart"],
   ["GET", "/sessions"],

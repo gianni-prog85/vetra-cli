@@ -7,8 +7,8 @@ switchboard, Connect and the Cli, booted once per run the way a user runs it:
 - **`studio-boot.spec.ts`** — the stack is up: Connect serves the Studio drive and
   the page is the Studio page (the top bar with the fixture project's name and
   version, the Specs and Agent panels, the explorer's four stages), not an idea
-  screen; the panels close and open from the bar and Test / Preview says it is
-  not available yet; a Build row opens its placeholder page with the Labs
+  screen; the panels close and open from the bar and Test says why it has no
+  Preview (the fixture project has no Connect installed); a Build row opens its placeholder page with the Labs
   screenshot Connect serves; Test opens in a tab of its own; Connect serves
   `studio.config.json` naming the Cli's local API.
 - **`studio-chat.spec.ts`** — the chat round trip (fixture `chat-spec`, the
@@ -147,6 +147,33 @@ When a replay step errors, the agent stops and logs `[replay] … ERROR` to
 `.cache/studio.log`; `studio-build.spec.ts` and `studio-chat.spec.ts` tail that
 file while they wait and throw on the first error line, so a broken build fails in
 seconds rather than waiting out the timeout.
+
+## Preview check of a real project (on request)
+
+`preview-editors/` is a suite of its own, not part of `pnpm test:e2e`. It
+starts the Studio in an installed project that has this package (the
+project's own `ph-cli run @powerhousedao/vetra-cli/studio serve`), waits for
+the Preview run, and checks that the Test panel shows the Preview Connect
+and that each document type of the project's own packages gets a document
+created on the Preview drive through that Connect, with its editor rendered
+(no "No editor available" or error screen, not empty). The documents stay
+in the project's `.ph/vetra/preview/` stores.
+
+```sh
+VETRA_PREVIEW_PROJECT=<project path> pnpm run test:e2e:preview
+```
+
+- `VETRA_PREVIEW_TYPES` — document types, comma separated (default: all of
+  the project's own).
+- `VETRA_PREVIEW_SHOTS`, `VETRA_PREVIEW_SHOT_PREFIX` — where the page
+  screenshots go (default `test-results/preview-editors/`): one per type,
+  `test-panel-1600.png`, and `preview-editors.json` with each result.
+- `VETRA_E2E_STUDIO_URL` — the `Vetra Studio:` address of a Studio already
+  running in that project: attach, and leave it running.
+
+Ports 8090 to 8093 must be free (the suite refuses to start otherwise). It
+stops what it started with `serve --stop`; the stack's output is in
+`.cache/preview-editors-studio.log`.
 
 ## CI
 

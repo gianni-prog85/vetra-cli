@@ -12,6 +12,7 @@
  *   GET  /release-status          owner.
  *   POST /publish                 owner.
  *   GET  /preview/models          owner: what the Preview run loaded (?full=1: with states).
+ *   GET  /preview/status          owner: the Preview run's state, with the reason it is not there.
  *   POST /start                   owner: idempotent start of the Preview run.
  *   POST /restart                 owner: stop the Preview run, start it again.
  *
@@ -37,6 +38,7 @@ import { publishProjectForDeploy } from "./publish-project.js";
 import { checkReleaseStatus } from "./release-status.js";
 import { resolvePreview } from "./resolver.js";
 import { restartPreview, startPreview } from "./starter.js";
+import { previewStatus } from "./status.js";
 import { createRequestAuthorizer, type RequestAuthorizer } from "./request-auth.js";
 import { previewModels } from "../helpers/preview-inspector.js";
 import { projectRoot } from "../helpers/project.js";
@@ -233,6 +235,13 @@ export async function startPreviewServer(
           200,
           previewModels(services, projectPath, { full: q.get("full") === "1" }),
         );
+        return;
+      }
+
+      // Why the Preview is or is not there; the texts name paths: owner only.
+      if (path === "/preview/status" && method === "GET") {
+        if (!(await requireOwner(req, res, url))) return;
+        writeJson(res, 200, await previewStatus({ services, workdir }));
         return;
       }
 

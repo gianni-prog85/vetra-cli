@@ -329,6 +329,33 @@ export async function fetchResolve(args: {
   return result;
 }
 
+/** The Preview run's state as `GET /preview/status` words it. */
+export type PreviewStatus =
+  | { kind: "ready" }
+  | { kind: "starting" }
+  | { kind: "stopped" }
+  /** A start would be refused: no project, or a preflight check fails. */
+  | { kind: "unavailable"; reason: string; hint?: string }
+  | { kind: "failed"; error: string };
+
+/** Why the Preview is or is not there; undefined when the caller is refused. */
+export async function fetchPreviewStatus(
+  args: { signal?: AbortSignal } = {},
+): Promise<PreviewStatus | undefined> {
+  const { base } = await previewBase();
+  const res = await fetch(`${base}/preview/status`, {
+    headers: await ownerHeaders(),
+    signal: args.signal,
+  });
+  if (isRefused(res.status)) return undefined;
+  if (!res.ok) {
+    throw new Error(
+      `preview-server /preview/status: ${res.status} ${res.statusText}`,
+    );
+  }
+  return (await res.json()) as PreviewStatus;
+}
+
 export type ProjectPackageResult =
   | { kind: "ok"; name: string; version: string }
   | { kind: "unknown-project"; error: string }

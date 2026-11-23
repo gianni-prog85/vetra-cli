@@ -67,6 +67,7 @@
     "test:coverage": "vitest run --coverage",
     "parity:generation": "tsx cli/tests/generation/parity/run-parity.ts",
     "test:e2e": "playwright test --config cli/e2e/playwright.config.ts",
+    "test:e2e:preview": "playwright test --config cli/e2e/preview-editors/playwright.config.ts",
     "test:e2e:install": "node -e \"process.env.PLAYWRIGHT_SKIP_BROWSER_GC='1';process.argv.splice(1,0,'playwright','install','chromium');require('@playwright/test/cli')\"",
     "test:e2e:report": "playwright show-report cli/e2e/playwright-report",
     "lint": "eslint --config eslint.config.js --cache --cache-strategy content",

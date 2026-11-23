@@ -68,7 +68,7 @@ test.describe("Vetra studio — boot", () => {
     }
   });
 
-  test("panels close and open from the bar; Test is not available yet", async ({
+  test("panels close and open from the bar; Test shows the Preview or why it is not there", async ({
     page,
   }) => {
     await page.goto(studioHome, { waitUntil: "domcontentloaded" });
@@ -77,7 +77,22 @@ test.describe("Vetra studio — boot", () => {
     const studio = studioPage(page);
     await expect(studio.bar).toBeVisible({ timeout: 60_000 });
     await studio.toggle("test").click();
-    await expect(studio.test).toContainText("Test is not available yet.");
+    if (booted) {
+      // The fixture project has no Connect installed: the Preview run's
+      // preflight refuses it, and the panel says why.
+      const state = studio.test.locator('[data-test-state="unavailable"]');
+      await expect(state).toContainText(
+        "Test is not available for this project.",
+        { timeout: 30_000 },
+      );
+      await expect(state).toContainText(
+        "The project has no @powerhousedao/connect installed",
+      );
+    } else {
+      await expect(
+        studio.test.locator("[data-test-state], iframe[data-test-frame]"),
+      ).toHaveCount(1, { timeout: 30_000 });
+    }
 
     await studio.toggle("specs").click();
     await studio.toggle("test").click();
@@ -165,9 +180,11 @@ test.describe("Vetra studio — boot", () => {
     await page.goto(`${studioHome}?embed=1&panel=test`, {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.getByText("Test is not available yet.")).toBeVisible({
-      timeout: 60_000,
-    });
+    await expect(
+      page.locator(
+        '[data-own-tab="test"] [data-test-state], [data-own-tab="test"] iframe[data-test-frame]',
+      ),
+    ).toHaveCount(1, { timeout: 60_000 });
     await expect(studioPage(page).bar).toHaveCount(0);
   });
 

@@ -1,7 +1,7 @@
 /**
  * The Studio page: a top bar over up to three panels. Specs is the explorer
- * of the specification drive, Test / Preview is not available yet, Agent is
- * the chat. Specs and Test also open in a tab of their own, without the bar;
+ * of the specification drive, Test is the Preview Connect in a frame (Preview
+ * is not available yet), Agent is the chat. Specs and Test also open in a tab of their own, without the bar;
  * there a spec document is its editor only.
  */
 import type { DocumentDispatch } from "@powerhousedao/reactor-browser";
@@ -39,11 +39,16 @@ import {
   type OpenPanels,
   type PanelId,
 } from "./panels.js";
+import { usePreviewHome } from "./usePreviewHome.js";
 import { useProjectPackage } from "./useProjectPackage.js";
 import { useStudioState } from "./useStudioState.js";
 
 export const ALL_CLOSED = "All panels are closed";
-export const TEST_NOT_AVAILABLE = "Test is not available yet.";
+export const TEST_STARTING = "The Preview is starting…";
+export const TEST_STOPPED = "The Preview is not running.";
+export const TEST_UNAVAILABLE = "Test is not available for this project.";
+export const TEST_FAILED = "The Preview failed to start.";
+export const TEST_FRAME_TITLE = "Test: the project on the Preview drive";
 export const PREVIEW_NOT_AVAILABLE = "Preview is not available yet.";
 const LABS_LINK = "Open in Vetra Labs ↗";
 
@@ -350,7 +355,7 @@ function Panel({
   );
 }
 
-/** Test (a plain Connect on the project) and Preview (the project's host). */
+/** Test (the Preview Connect on the project) and Preview (the project's host). */
 function TestPreview() {
   const [mode, setMode] = useState<"test" | "preview">("test");
   return (
@@ -377,10 +382,51 @@ function TestPreview() {
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        <Notice>
-          {mode === "test" ? TEST_NOT_AVAILABLE : PREVIEW_NOT_AVAILABLE}
-        </Notice>
+        {mode === "test" ? (
+          <TestFrame />
+        ) : (
+          <Notice>{PREVIEW_NOT_AVAILABLE}</Notice>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** The Preview Connect on its `preview` drive, or why it is not there. */
+function TestFrame() {
+  const home = usePreviewHome();
+  if (home.kind === "ready") {
+    return (
+      <iframe
+        data-test-frame
+        title={TEST_FRAME_TITLE}
+        src={home.url}
+        className="h-full w-full border-0 bg-background"
+      />
+    );
+  }
+  if (home.kind === "unavailable" || home.kind === "failed") {
+    const detail = home.kind === "unavailable" ? home.reason : home.error;
+    return (
+      <div
+        data-test-state={home.kind}
+        className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground"
+      >
+        <p className="font-medium text-foreground">
+          {home.kind === "unavailable" ? TEST_UNAVAILABLE : TEST_FAILED}
+        </p>
+        <p className="max-w-xl whitespace-pre-wrap break-words">{detail}</p>
+        {home.kind === "unavailable" && home.hint ? (
+          <p className="max-w-xl whitespace-pre-wrap break-words">
+            {home.hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div data-test-state={home.kind} className="h-full">
+      <Notice>{home.kind === "stopped" ? TEST_STOPPED : TEST_STARTING}</Notice>
     </div>
   );
 }
