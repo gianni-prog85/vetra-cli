@@ -59,8 +59,7 @@ export const BREAKING_REASON_PREFIX = "this change would break data your users a
 export const COMPAT_UNCHECKED_REASON = "we couldn't check that this change keeps your users' data safe";
 /**
  * Id prefix of the agent messages the Studio writes into a conversation (not
- * the customer's words; the story hides them — vetra-app storyModel
- * `STUDIO_NOTE_ID_PREFIX`).
+ * the customer's words).
  */
 export const STUDIO_NOTE_ID_PREFIX = "studio-note-";
 /** What the agent is told when a launch is blocked. */

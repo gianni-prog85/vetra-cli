@@ -10,7 +10,8 @@ import {
   WorkBreakdownStructureV1,
 } from '@powerhousedao/vetra/document-models';
 
-export const documentModels = [
+// Annotated: the modules' own types have no importable name for a declaration.
+export const documentModels: readonly unknown[] = [
   AudienceSheetV1,
   BrandSheetV1,
   FeatureV1,

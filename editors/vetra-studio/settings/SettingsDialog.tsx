@@ -16,7 +16,6 @@ import { StudioBudgetMeter } from "../budget/BudgetMeter.js";
 import { DeploySection } from "../DeploySection.js";
 import { GithubStatusLine } from "../github/GithubStatusLine.js";
 import type { StartProductDrive } from "../idea/startProduct.js";
-import { ANYONE_WITH_THE_LINK } from "../live/liveCopy.js";
 import { VersionBadge } from "../VersionBadge.js";
 import { WorkspaceExportButton } from "../WorkspaceExportButton.js";
 
@@ -28,6 +27,8 @@ function otherModalOpen(own: HTMLElement | null): boolean {
     ),
   ).some((el) => el !== own);
 }
+
+const ANYONE_WITH_THE_LINK = "Anyone with the link can sign in and use it.";
 
 /** Who may open the live product (spec §6.7). */
 const ACCESS_CHOICES: { access: ProductAccess; label: string }[] = [

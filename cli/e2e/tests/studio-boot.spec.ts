@@ -17,6 +17,23 @@ const run = loadRun();
 /** Booted (not attached): the fixture project's name and version show. */
 const booted = Boolean(readRunFile()?.tmp);
 const studioHome = `${run.baseUrl}/d/${run.driveId}`;
+/** What the new-document dialog offers per explorer stage. */
+const STAGE_TYPES = [
+  {
+    name: "Ideate",
+    types: ["Problem", "Audience", "Brand", "Feature", "Work breakdown"],
+  },
+  {
+    name: "Specify",
+    types: [
+      "Document model",
+      "Document editor",
+      "App",
+      "Subgraph",
+      "Processor",
+    ],
+  },
+];
 
 test.describe("Vetra studio — boot", () => {
   test("the stack serves the Studio page", async ({ page }) => {
@@ -85,11 +102,67 @@ test.describe("Vetra studio — boot", () => {
     await expect(screen).toBeVisible();
     // Connect serves the picture, and the browser decodes it.
     await expect
-      .poll(() =>
-        screen.evaluate((img: HTMLImageElement) => img.naturalWidth),
-      )
+      .poll(() => screen.evaluate((img: HTMLImageElement) => img.naturalWidth))
       .toBeGreaterThan(0);
   });
+
+  for (const stage of STAGE_TYPES) {
+    test(`+ on ${stage.name} lists only its own document types`, async ({
+      page,
+    }) => {
+      await page.goto(studioHome, { waitUntil: "domcontentloaded" });
+      await dismissCookieBanner(page);
+
+      const studio = studioPage(page);
+      await expect(studio.tree).toBeVisible({ timeout: 60_000 });
+      await studio.tree
+        .getByRole("button", { name: `New ${stage.name} document` })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.locator("#document-type").click();
+      await expect(
+        dialog.locator("#document-type + div p.capitalize"),
+      ).toHaveText(stage.types);
+    });
+
+    // The explorer's dialog throws while it closes ("Cannot read properties
+    // of undefined (reading 'toLowerCase')"): the document is created, the
+    // page shows Connect's error screen.
+    test.fixme(`a document created from + on ${stage.name} opens in its editor`, async ({
+      page,
+    }) => {
+      await page.goto(studioHome, { waitUntil: "domcontentloaded" });
+      await dismissCookieBanner(page);
+
+      const studio = studioPage(page);
+      await expect(studio.tree).toBeVisible({ timeout: 60_000 });
+      await studio.tree
+        .getByRole("button", { name: `New ${stage.name} document` })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.locator("#document-type").click();
+      await dialog
+        .locator("#document-type + div p.capitalize")
+        .getByText(stage.types[0], { exact: true })
+        .click();
+      const name = `E2E ${stage.name} ${Date.now()}`;
+      await dialog.getByPlaceholder("Document name").fill(name);
+      await dialog.getByRole("button", { name: "Create", exact: true }).click();
+
+      const row = studio.tree.locator('[data-row="document"]', {
+        hasText: name,
+      });
+      await expect(row).toHaveAttribute("aria-current", "true", {
+        timeout: 60_000,
+      });
+      await expect(studio.specs.locator("[data-explorer-empty]")).toHaveCount(
+        0,
+      );
+      await expect(studio.specs.getByText(name).nth(1)).toBeVisible({
+        timeout: 60_000,
+      });
+    });
+  }
 
   test("Test opens in a tab of its own, without the bar", async ({ page }) => {
     await page.goto(`${studioHome}?embed=1&panel=test`, {

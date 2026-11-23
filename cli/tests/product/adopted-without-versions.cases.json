@@ -1,5 +1,5 @@
 {
-  "about": "Shared cases for adoptedWithoutVersions: vetra-app editors/vetra-studio/shell/firstVersion.ts and vetra-cli src/product/upgrade-existing.ts each run them (firstVersion.test.ts, vetra-cli tests/product/adopted-without-versions.test.ts). Change both implementations together.",
+  "about": "Cases for adoptedWithoutVersions (cli/src/product/upgrade-existing.ts), run by adopted-without-versions.test.ts.",
   "cases": [
     {
       "name": "adopted, no version yet",

@@ -345,11 +345,8 @@ function logLive(ctx: UpgradeContext, live: LiveFinding): void {
 }
 
 /**
- * True for a product with work from before versions and no version yet. Same
- * rule as the Studio's `adoptedWithoutVersions`
- * (editors/vetra-studio/shell/firstVersion.ts, not importable here without the
- * editor bundle): change both together. Both run the cases in
- * editors/vetra-studio/shell/adoptedWithoutVersions.cases.json.
+ * True for a product with work from before versions and no version yet. The
+ * cases are in tests/product/adopted-without-versions.cases.json.
  */
 export function adoptedWithoutVersions(state: StudioProductState): boolean {
   return (

@@ -610,6 +610,14 @@ The shell also subscribes via `fetch` to the vetra local API for the
 project's package identity, and the chat pane via `useDocument` to the
 drive and the selected chat session.
 
+Beside `shell/`, the directory holds only what the shell reaches: the chat
+pane and its tool renderers, the account menu's sign-in (`idea/`,
+`hooks/useAgentAuth.ts`), the publish permission modal (`permission/`) and
+Settings (`settings/`, with `github/`, `budget/`, `deploy/` and
+`change/startChange.ts` behind it). The product flow has no page here
+(no build, story, live or versions view); its Cli side (`cli/src/product`,
+`cli/src/launch`) is unchanged.
+
 ### reactor-project service
 
 The project's own `ph run vetra dev` (`services/reactor-project.ts`, a
@@ -666,17 +674,6 @@ checklist):
   `spec-preview-get`, `spec-preview-list`, `spec-preview-update`,
   `spec-preview-delete`. Mirror the `spec-*` shape; operate on the
   preview drive of the project's run.
-- **Workflow tools (planned):** `start_workflow({ scaffold, input? })`,
-  `set_step_content({ instanceId, step, payload })`,
-  `complete_step({ instanceId, step })`,
-  `promote_workflow({ instanceId })`,
-  `complete_workflow({ instanceId, status })`.
-
-Workflow scaffolds are React components in `editors/vetra-studio/`. The default
-scaffold's step ids are `'ideate' | 'specify' | 'build' | 'deploy'`.
-BUILD step payload shape: `{ projectId, documentId, title? }`. The
-scaffold resolves the iframe URL from the editor's project-state
-subscription; the agent does not construct Connect URLs.
 
 ### Renown identity (agent authorization)
 
@@ -874,21 +871,10 @@ What happens when the agent previews an in-progress document model.
   spec-preview-create({ projectId, specSlug })
     → reactor-project Switchboard GraphQL mutation
     → returns { documentId, driveId }
-    │
-    ▼
-  set_step_content({ instanceId, step: 'build',
-                     payload: { projectId, documentId, title } })
-    → recorded in chat session as a tool call
-    │
-    ▼
-  Drive editor scaffold's BUILD card observes the tool call,
-  reads the reactor-project's Connect URL from local API state,
-  sets <iframe src> to a deep link into the preview drive
-    │
-    ▼
-  User watches the editor render live as the agent iterates;
-  Vite HMR re-renders on each codegen pass.
 ```
+
+The Studio page does not show the preview yet: its Test / Preview panel is
+a "not available yet" state.
 
 The chain has no package boundary: specs are generated directly into
 the reactor-project's source tree, the dev-mode Switchboard registers
@@ -918,29 +904,6 @@ The Cli runs no proxy. What the browser reaches, all on this machine:
 
 One public origin (a cloud Studio, or a remote browser) needs a proxy in
 front of these: C2/C4 (a Preview host with fixed ports) or Labs.
-
-## Workflow scaffolds
-
-A workflow scaffold is a React component in `editors/vetra-studio/` that owns the
-right-pane layout for a class of agent task. Scaffolds:
-
-- Declare the step ids they accept (`'ideate' | 'specify' | 'build' |
-  'deploy'` for the default scaffold).
-- Define per-step payload shapes.
-- Render whatever UI fits the task. The default scaffold is a vertical
-  timeline of step cards; future scaffolds can be single full-bleed
-  iframes, side-by-side comparisons, etc.
-
-Workflow instances live in vetra's in-memory registry. Each chat
-session can have multiple instances; one is `primary` and renders in
-the right pane. Non-primary instances surface as a small indicator
-(badge / status strip).
-
-The agent dispatches workflows via `start_workflow({ scaffold,
-input? })` and mutates them via the other workflow tools. For MVP,
-workflows have no engine — they're declarative state that the agent
-maintains. V2 will plug Mastra workflow runners into the same
-registry without changing the agent or editor surfaces.
 
 ## Filesystem layout
 
@@ -1004,11 +967,6 @@ project keeps its own `ph login` identity (`.keypair.json`, `.renown.json`).
 
 These are limitations of the current direction; not bugs.
 
-- **Workflow registry is in-memory.** vetra restart drops all
-  active workflows; the editor reconnects to a fresh registry. For
-  MVP this is fine. Persistence (and the resumable-vs-abandonable
-  question that comes with it) is V2.
-
 - **The product layer keeps the cloud workspace layout.** Launch,
   versions, rollback and the upgrade of older Studios read the project
   folders of a cloud Studio's workspace (immediate subfolders with a
@@ -1034,17 +992,14 @@ These are limitations of the current direction; not bugs.
   `GraphQLReactorClient` lacks would fail at run time, not in the type
   check; the Cli, the spec sync and clint's folder operations use only
   calls both clients have. No product starts in a Studio inside a project
-  (no idea screen); a drive that holds one from before still shows the build
-  page, and one whose story starts with work from before versions still
-  launches through `ensureProductTarget` (`product/upgrade-existing.ts`).
+  (no idea screen) and the page shows none; one whose story starts with work
+  from before versions still launches through `ensureProductTarget` (`product/upgrade-existing.ts`).
   That layer commits, tags and deletes files in the workdir, so it must not
   run on an existing repository until git managed by Studio is designed. The attach carries the switchboard's
   attachment service: the chat watch reads a message's file through its
   conversation (`documentId`), which the switchboard admits by the reference
   it indexes from the message's `AttachmentRef` field
-  (`cli/e2e/tests/studio-chat.spec.ts` runs it). The build page's message
-  box sends text only; files reach a conversation from the chat-session
-  editor or the API.
+  (`cli/e2e/tests/studio-chat.spec.ts` runs it).
 
 - **Hosts.** The package's form (`ph run @powerhousedao/vetra-cli/studio`
   from another project) reads the package's own build, config file,
