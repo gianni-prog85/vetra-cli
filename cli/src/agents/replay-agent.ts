@@ -30,7 +30,7 @@ interface ReplayFixture {
 
 /** Workspace file tools aren't ph-clint commands (Mastra provides them on the
  * agent's workspace), so the replay performs the equivalent fs write/read
- * directly — the chokidar watcher + Vite HMR react to it identically. */
+ * directly — the Preview reloads the changed source identically. */
 const WORKSPACE_WRITE = 'mastra_workspace_write_file';
 const WORKSPACE_READ = 'mastra_workspace_read_file';
 

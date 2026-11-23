@@ -26,5 +26,5 @@ by `spec-generate` — never hand-edit it; fix the spec instead.
 A failed `spec-update` action echoes the input schema and a fix-it hint —
 re-issue the corrected call. Do not call
 `reactor-project-restart` after a spec change, a regenerated file, or a
-reducer/editor edit: the watcher + Vite HMR pick those up. Restart only
-when `reactor-project-logs` shows the watcher missed the edit.
+reducer/editor edit: the Preview reloads changed source itself. Restart
+only when `reactor-project-logs` shows no reload after the edit.
