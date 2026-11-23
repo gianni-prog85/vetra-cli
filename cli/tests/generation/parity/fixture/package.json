@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "peerDependencies": {
-    "document-model": "6.4.0-next.1"
+    "document-model": "6.4.0-next.2"
   },
   "devDependencies": {
-    "document-model": "6.4.0-next.1"
+    "document-model": "6.4.0-next.2"
   }
 }
