@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import {
@@ -7,33 +6,11 @@ import {
   getPreviewDocument,
   resolvePreviewEndpoint,
 } from "../../helpers/reactor-project-preview.js";
-import { formatSchema, renderProjected } from "../spec/_helpers.js";
+import { renderProjected } from "../spec/_helpers.js";
+import { specPreviewGetMeta } from "./meta.js";
 
 export const specPreviewGet = defineCommand({
-  id: "spec-preview-get",
-  description:
-    "Read a document from the reactor-project's preview drive. Pass --filter for projection.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Preview document to read — accepts display name, slug, or id (see spec-preview-list).",
-      ),
-    full: z
-      .boolean()
-      .default(false)
-      .describe(
-        "Return the full state value (token-heavy). Default returns a summary plus header info.",
-      ),
-    filter: z
-      .string()
-      .optional()
-      .describe(
-        "JSONPath (RFC 9535) projection. Default scope: $.global (state.global). With --full, scope is the whole state.",
-      ),
-    format: formatSchema.optional(),
-  }),
+  ...specPreviewGetMeta,
   execute: async (input, context) => {
     const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId } = resolvePreviewEndpoint(

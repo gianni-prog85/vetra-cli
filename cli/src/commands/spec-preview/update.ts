@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import {
@@ -17,50 +16,13 @@ import {
   newDuplicateTypeDefinitions,
 } from "../spec/registry.js";
 import {
-  actionInputSchema,
   enrichActionValidationError,
   resolveActionsInput,
 } from "../spec/_helpers.js";
+import { specPreviewUpdateMeta } from "./meta.js";
 
 export const specPreviewUpdate = defineCommand({
-  id: "spec-preview-update",
-  description:
-    "Apply actions to a preview document through the document model's reducer.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Preview document to update — accepts display name, slug, or id (see spec-preview-list).",
-      ),
-    drive: z
-      .string()
-      .optional()
-      .describe(
-        "Target drive id. When omitted, uses the project's default preview drive.",
-      ),
-    actions: z
-      .preprocess((v) => {
-        /* Tool/MCP callers pass a real array; shell users pass `--actions
-         * '[...]'`, which arrives as a JSON-encoded string. Accept both. */
-        if (typeof v !== "string") return v;
-        try {
-          return JSON.parse(v) as unknown;
-        } catch {
-          return v;
-        }
-      }, z.array(actionInputSchema))
-      .optional()
-      .describe(
-        "Inline JSON array of actions. Preferred for agent tool calls — no filesystem detour needed.",
-      ),
-    from: z
-      .string()
-      .optional()
-      .describe(
-        "Path to a JSON file containing the actions array. Use for human CLI workflows.",
-      ),
-  }),
+  ...specPreviewUpdateMeta,
   execute: async (input, context) => {
     const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId: defaultDriveId } = resolvePreviewEndpoint(

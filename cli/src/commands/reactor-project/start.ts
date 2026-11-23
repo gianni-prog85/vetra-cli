@@ -1,6 +1,6 @@
-import { z } from "zod";
 import { formatStatus, ServiceStartRefused } from "@powerhousedao/clint";
 import { defineCommand } from "../../framework.js";
+import { reactorProjectStartMeta } from "./meta.js";
 import { projectRoot } from "../../helpers/project.js";
 
 /**
@@ -16,9 +16,7 @@ import { projectRoot } from "../../helpers/project.js";
  * package's host data (`hosts/preview`).
  */
 export const reactorProjectStart = defineCommand({
-  id: "reactor-project-start",
-  description: "Start the Preview run of the project (idempotent)",
-  inputSchema: z.object({}),
+  ...reactorProjectStartMeta,
   execute: async (_input, context) => {
     const services = context.services;
     if (!services) throw new Error("No services configured");

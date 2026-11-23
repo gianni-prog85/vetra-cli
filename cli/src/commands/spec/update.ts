@@ -1,48 +1,17 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import {
-  actionInputSchema,
   enrichActionValidationError,
   normalizeSpecActions,
   resolveActionsInput,
 } from "./_helpers.js";
 import { serialized } from "../../helpers/spec-drive-sync.js";
 import { contentOperationCount, findSpec } from "./drive-specs.js";
+import { specUpdateMeta } from "./meta.js";
 import { applySpecActions, createSpecDocument } from "./registry.js";
 
 export const specUpdate = defineCommand({
-  id: "spec-update",
-  description: "Apply actions to a spec via the document model's reducer.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Spec to update — accepts display name, slug, or id (see spec-list).",
-      ),
-    actions: z
-      .preprocess((v) => {
-        /* Tool/MCP callers pass a real array; shell users pass `--actions
-         * '[...]'`, which arrives as a JSON-encoded string. Accept both. */
-        if (typeof v !== "string") return v;
-        try {
-          return JSON.parse(v) as unknown;
-        } catch {
-          return v;
-        }
-      }, z.array(actionInputSchema))
-      .optional()
-      .describe(
-        "Inline JSON array of actions. Preferred for agent tool calls — no filesystem detour needed.",
-      ),
-    from: z
-      .string()
-      .optional()
-      .describe(
-        "Path to a JSON file containing the actions array. Use for human CLI workflows.",
-      ),
-  }),
+  ...specUpdateMeta,
   execute: async (input, context) => {
     await projectRoot(context.workdir);
     const { drive, doc: held } = await findSpec(context, input.name);

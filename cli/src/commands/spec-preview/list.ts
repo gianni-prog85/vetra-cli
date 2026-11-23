@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import {
@@ -7,19 +6,10 @@ import {
   resolvePreviewEndpoint,
 } from "../../helpers/reactor-project-preview.js";
 import { formatColumns } from "../spec/_helpers.js";
+import { specPreviewListMeta } from "./meta.js";
 
 export const specPreviewList = defineCommand({
-  id: "spec-preview-list",
-  description:
-    "List documents in the running reactor-project's preview drive.",
-  inputSchema: z.object({
-    type: z
-      .string()
-      .optional()
-      .describe(
-        'Filter to one document type, e.g. "powerhouse/document-editor". Omit to list every preview document.',
-      ),
-  }),
+  ...specPreviewListMeta,
   execute: async (input, context) => {
     const base = await projectRoot(context.workdir);
     const { switchboardUrl, driveId } = resolvePreviewEndpoint(

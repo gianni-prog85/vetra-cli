@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
+import { deployEnvironmentListMeta } from "./meta.js";
 import { CLOUD_BASE_DOMAIN } from "../../../../cloud-client/index.js";
 import { listEnvironmentsWithStudioFlag } from "../../cloud/environments-write.js";
 
@@ -16,28 +16,7 @@ function domainOf(e: {
 }
 
 export const deployEnvironmentList = defineCommand({
-  id: "deploy-environment-list",
-  description:
-    "List all Vetra Cloud environments (name, domain, status, id, isStudio), including Studio hosts. Requires Renown authorization.",
-  inputSchema: z.object({
-    scope: z
-      .enum(["MINE", "ALL"])
-      .default("MINE")
-      .describe(
-        'Which environments to list: "MINE" (default, your own) or "ALL".',
-      ),
-    status: z
-      .string()
-      .optional()
-      .describe('Filter by status, e.g. "READY", "DEPLOYING", "DRAFT".'),
-  }),
-  outputSchema: z.array(z.object({
-    name: z.string(),
-    domain: z.string().nullable(),
-    status: z.string(),
-    id: z.string(),
-    isStudio: z.boolean().describe('Whether the environment is a Vetra Studio host'),
-  })),
+  ...deployEnvironmentListMeta,
   execute: async (input, { workdir, config }) => {
     let items = await listEnvironmentsWithStudioFlag(
       { workdir, config },

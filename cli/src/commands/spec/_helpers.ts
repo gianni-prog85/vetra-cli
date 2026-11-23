@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
 import { z } from "zod";
 import { unknownValueError } from "../../helpers/cli-errors.js";
+import { actionInputSchema, formatSchema } from "./meta.js";
 import { suggestNames } from "../../helpers/suggestions.js";
 import { applyJsonPath, encodeValue, type OutputFormat } from "./projection.js";
 import {
@@ -16,31 +17,7 @@ import {
 import { getSpecSchema, listSpecTypes } from "./registry.js";
 
 export { suggestNames };
-
-
-export const formatSchema = z
-  .enum(["json", "toon"])
-  .describe(
-    'Output encoding. "json" (default) is universal; "toon" (Token-Oriented Object Notation) is ~40% smaller — prefer it when the projected result is still large.',
-  );
-
-export const actionInputSchema = z.object({
-  type: z
-    .string()
-    .describe(
-      "LITERAL action name from `spec-schema --type <doc-type>` for the spec being updated. Do not invent, shorten, or extrapolate by pattern — names are per doc-type and usually include the doc-type prefix (e.g. `SET_SUBGRAPH_NAME`, not `SET_NAME`; `RELEASE_NEW_VERSION`, not `ADD_SPECIFICATION`).",
-    ),
-  input: z
-    .unknown()
-    .optional()
-    .describe(
-      "Action payload. Shape comes from the action's input schema in `spec-schema`.",
-    ),
-  scope: z
-    .string()
-    .optional()
-    .describe('Action scope. Defaults to "global"; rarely needs overriding.'),
-});
+export { actionInputSchema, formatSchema };
 
 export type ActionInput = z.infer<typeof actionInputSchema>;
 

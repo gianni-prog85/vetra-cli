@@ -1,11 +1,7 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { requireOption, unknownValueError } from "../../helpers/cli-errors.js";
-import {
-  assertKnownDocumentType,
-  formatSchema,
-  renderProjected,
-} from "./_helpers.js";
+import { assertKnownDocumentType, renderProjected } from "./_helpers.js";
+import { specSchemaMeta } from "./meta.js";
 import { getSpecSchema, listSpecTypes } from "./registry.js";
 
 /* `--action` and `--state` always read from `specifications.at(-1)` (the
@@ -229,40 +225,7 @@ function pickSampleNames(latest: LatestSpec | undefined): {
 }
 
 export const specSchema = defineCommand({
-  id: "spec-schema",
-  description:
-    "Read a doc-model schema. Pass --action, --state, or --filter for data; otherwise returns summary + help.",
-  inputSchema: z.object({
-    type: z
-      .string()
-      .default("")
-      .describe('Document model type, e.g. "powerhouse/document-editor".'),
-    full: z
-      .boolean()
-      .default(false)
-      .describe(
-        "Return the full schema (token-heavy). Default returns a summary + help.",
-      ),
-    filter: z
-      .string()
-      .optional()
-      .describe(
-        "JSONPath (RFC 9535) projection. Mutually exclusive with --action / --state.",
-      ),
-    action: z
-      .string()
-      .optional()
-      .describe(
-        'Shortcut: return only the GraphQL input type for the named operation (e.g. "SET_MODEL_NAME"), followed by the values of every enum it uses. Several comma-separated names ("ADD_MODULE,ADD_OPERATION") return them all in one call. Implies --type when only one type has the action(s). Mutually exclusive with --filter / --state.',
-      ),
-    state: z
-      .boolean()
-      .default(false)
-      .describe(
-        "Shortcut: return only the GraphQL schema for the doc's global state. Mutually exclusive with --filter / --action.",
-      ),
-    format: formatSchema.optional(),
-  }),
+  ...specSchemaMeta,
   execute: async (input) => {
     const shortcuts = [
       input.filter ? "--filter" : null,

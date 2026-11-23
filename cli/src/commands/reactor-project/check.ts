@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
+import { reactorProjectCheckMeta } from "./meta.js";
 import {
   checkResultsFromOutcome,
   runChecks,
@@ -48,34 +48,8 @@ export async function examplesRequired(
 
 export const UNREADABLE_PRODUCT_NOTE = "couldn't read the product — examples not required this time";
 
-const inputSchema = z.object({
-  scope: z
-    .enum(["all", "module"])
-    .optional()
-    .describe(
-      "Which files to report on. 'all' (default) covers the whole project; 'module' covers the spec-authored trees (document-models/editors/apps/processors/subgraphs).",
-    ),
-  skipLint: z
-    .boolean()
-    .optional()
-    .describe("Skip the eslint pass. Defaults to false."),
-  skipTypecheck: z
-    .boolean()
-    .optional()
-    .describe("Skip the tsc pass. Defaults to false."),
-  tests: z
-    .boolean()
-    .optional()
-    .describe(
-      "Also run the project's reducer tests and the preview smoke check (package builds; every editor/app module loads in the running preview; the example documents in seed/*.json fit the document models). Needed before finishing the Tests step. Defaults to false.",
-    ),
-});
-
 export const reactorProjectCheck = defineCommand({
-  id: "reactor-project-check",
-  description:
-    "Run TypeScript and ESLint over the Reactor project (the workdir) and report any diagnostics. Useful after hand-editing generated code or to verify the project compiles cleanly.",
-  inputSchema,
+  ...reactorProjectCheckMeta,
   execute: async (
     { scope, skipLint, skipTypecheck, tests },
     context,

@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
 import { resolveRegistryUrl } from '../../cloud/registry-url.js';
 import { defineCommand } from '../../framework.js';
+import { reactorProjectPublishStatusMeta } from './meta.js';
 import { getRegistryToken } from '../../auth/renown.js';
 import { resolveCloudConfig } from '../../cloud/config.js';
 import { fetchPackument } from '../../cloud/registry-packument.js';
@@ -53,32 +53,8 @@ async function checkPublish(
   };
 }
 
-const inputSchema = z.object({
-  version: z
-    .string()
-    .optional()
-    .describe(
-      "Version to check. Defaults to the project's package.json version. Pass a specific version to check whether that exact release is published.",
-    ),
-  registry: z
-    .url()
-    .optional()
-    .describe(
-      'Registry URL to query (flag > PH_REGISTRY_URL env > config.registryUrl > default). Pass the environment\'s package registry so the check matches where the env installs from.',
-    ),
-});
-
 export const reactorProjectPublishStatus = defineCommand({
-  id: 'reactor-project-publish-status',
-  description: `Check whether a Reactor package's name@version is already published to the registry.
-
-Reports published / not-published / unknown for the version, plus the latest
-published version, so the deploy flow can decide whether to reuse the last
-publish or publish new changes. Reads the registry with the agent's Renown
-token (the same identity \`reactor-project-publish\` uses); if the registry
-requires auth and the agent isn't authorized, the result is reported as
-"unknown" rather than guessed.`,
-  inputSchema,
+  ...reactorProjectPublishStatusMeta,
   execute: async ({ version, registry }, { workdir, config }) => {
     const projectPath = await projectRoot(workdir);
     const packageJsonPath = path.join(projectPath, 'package.json');

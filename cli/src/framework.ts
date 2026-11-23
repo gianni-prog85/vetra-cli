@@ -1,19 +1,18 @@
 /**
  * Per-CLI typed framework binding: the config and secrets schemas, the
- * document `registry`, and the typed factories (`defineCommand`,
+ * document `Registry` type, and the typed factories (`defineCommand`,
  * `defineTrigger`, ...) built from both.
  */
 import { z } from 'zod';
-import { createTypes, defineRegistry } from '@powerhousedao/clint';
-import { ChatSession } from '@powerhousedao/clint-common/document-models/chat-session';
+import { createTypes, type InferRegistry } from '@powerhousedao/clint';
+import type { ChatSession } from '@powerhousedao/clint-common/document-models/chat-session';
 import { DEFAULT_PH_VERSION } from './constants.js';
 
-/** Typed document registry of the document models the CLI's triggers read. */
-export const registry = defineRegistry([
-  ChatSession,
-] as const);
-
-export type Registry = typeof registry;
+/**
+ * Document models the CLI's triggers read. A type only: the factories take
+ * no registry value, so no document model loads with this module.
+ */
+export type Registry = InferRegistry<readonly [typeof ChatSession]>;
 
 /** Fallback chain when VETRA_MODEL_FALLBACKS is unset or blank (a model is never its own fallback). */
 export const DEFAULT_MODEL_FALLBACKS = ['deepseek/deepseek-v4.1-flash', 'google/gemini-3.1-flash-lite'] as const;
@@ -81,7 +80,6 @@ export const {
   defineTrigger,
   defineService,
   createDocumentChangeTrigger,
-} = createTypes({
+} = createTypes<typeof fullConfigSchema, Registry>({
   configSchema: fullConfigSchema,
-  registry,
 });

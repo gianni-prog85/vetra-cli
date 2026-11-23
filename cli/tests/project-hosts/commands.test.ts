@@ -12,7 +12,7 @@ import {
   projectHostStart,
   projectHostStop,
   projectHostsList,
-} from "../../src/commands/project-hosts/index.js";
+} from "../../src/commands/project-hosts/commands.js";
 import {
   remoteProjectHosts,
   serveProjectHosts,

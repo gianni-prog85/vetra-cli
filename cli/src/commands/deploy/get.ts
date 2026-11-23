@@ -1,6 +1,5 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
-import { formatSchema, renderProjected } from "../spec/_helpers.js";
+import { renderProjected } from "../spec/_helpers.js";
 import { requireOption, unknownValueError } from "../../helpers/cli-errors.js";
 import {
   findMyEnvironment,
@@ -12,30 +11,10 @@ import {
   describeEnvironmentState,
   describeEnvironmentSummary,
 } from "./_helpers.js";
+import { deployEnvironmentGetMeta } from "./meta.js";
 
 export const deployEnvironmentGet = defineCommand({
-  id: "deploy-environment-get",
-  description:
-    "Show a Vetra Cloud deployment environment's details — status, services, and installed packages with their versions (live data; requires Renown authorization — check with whoami). Read $.packages to see which package@version is installed when deciding whether a deploy is needed.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Environment to read — accepts id, name, or subdomain (see deploy-environment-list).",
-      ),
-    full: z
-      .boolean()
-      .default(false)
-      .describe("Return the full environment object as JSON."),
-    filter: z
-      .string()
-      .optional()
-      .describe(
-        "JSONPath (RFC 9535) projection over the environment object, e.g. $.status.",
-      ),
-    format: formatSchema.optional(),
-  }),
+  ...deployEnvironmentGetMeta,
   execute: async (input, { workdir, config }) => {
     requireOption(
       input.name,

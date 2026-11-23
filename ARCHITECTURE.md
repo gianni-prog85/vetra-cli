@@ -246,6 +246,31 @@ is needed: a switchboard without a keypair generates one at
 
 ## Components, in detail
 
+### Start path
+
+`cli/src/cli.ts` imports only what `--help` prints: each command group's
+`commands/<group>/meta.ts` (id, description, input schema; zod only) and
+the lifecycle hooks. Everything else loads on first use, through literal
+`import()`s the bundler splits into chunks:
+
+- a command's implementation at its first run (`lazyCommand` in
+  `cli/src/lazy.ts`; the command file spreads its meta into `defineCommand`,
+  so the two cannot drift);
+- every trigger when the routine sets it up (`lazyTrigger`);
+- Mastra and the agent definitions (`agents/agent.ts`) at the first chat or
+  agent run (`cli.configureAgent`);
+- the document models (this package's, `@powerhousedao/vetra`'s,
+  clint-common's) and the Renown identity when a command attaches
+  (`remote` in `cli.configureReactor`);
+- the product model inside the check recorder, with the first recorded run.
+
+`cli/tests/build/start-path-imports.test.ts` runs the source entry and the
+built bin in a child process with an import-recording hook and fails when
+`--help`, `--version`, a command's `--help` or `config --list` loads Mastra,
+the reactor client, Renown, clint-common, the vetra models, `document-model`
+or another heavy package. A new command needs a meta entry and a
+`lazyCommand` line in its group's `index.ts`.
+
 ### Reactor (remote attach)
 
 `cli.configureReactor` in `cli/src/cli.ts` declares `remote` as a function
@@ -876,7 +901,8 @@ delegates the user's wallet to that `did:key`.
 
 ### Triggers
 
-Registered in `cli.ts`. Run as part of clint's routine loop.
+Registered in `cli.ts` by id (`lazyTrigger`), loaded when clint's routine
+loop sets them up, and run as part of it.
 
 - `chatSessionWatchTrigger` (clint-common) — watches chat-session
   documents for new user messages and forwards them to the agent.
@@ -1056,6 +1082,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │   ├── main.ts            ← `pnpm dev` entry (runCli)
 │   │   ├── cli.ts             ← defineCli + configureReactor (remote)
 │   │   ├── framework.ts       ← config + secrets schemas, document registry
+│   │   ├── lazy.ts            ← lazyCommand / lazyTrigger (start path)
 │   │   ├── constants.ts       ← default PH version
 │   │   ├── agents/agent.ts    ← Mastra agent factory
 │   │   ├── preview-server/    ← vetra local API (resolve/start/events)

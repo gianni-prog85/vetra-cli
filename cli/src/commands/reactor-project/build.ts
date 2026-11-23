@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
 import { createProcessManager } from '@powerhousedao/clint';
 import { defineCommand } from '../../framework.js';
+import { reactorProjectBuildMeta } from './meta.js';
 import { projectRoot } from '../../helpers/project.js';
 import { formatProcessFailure } from '../../helpers/cli-errors.js';
 import { phBuildNodeOptions } from '../../helpers/node-memory.js';
@@ -32,17 +32,8 @@ export async function runBuild(
   return { success, output };
 }
 
-const inputSchema = z.object({
-  log: z
-    .boolean()
-    .optional()
-    .describe('Whether to log build output to the console. Defaults to false.'),
-});
-
 export const reactorProjectBuild = defineCommand({
-  id: 'reactor-project-build',
-  description: 'Build the Reactor package project (runs ph build in the workdir)',
-  inputSchema,
+  ...reactorProjectBuildMeta,
   execute: async (_input, { workdir, runProcess }) => {
     const projectPath = await projectRoot(workdir);
 

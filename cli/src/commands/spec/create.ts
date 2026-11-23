@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { requireOption } from "../../helpers/cli-errors.js";
 import { assertProjectInstalled, projectRoot } from "../../helpers/project.js";
@@ -13,28 +12,10 @@ import {
   listSpecTypes,
 } from "./registry.js";
 import { actionReference } from "./schema.js";
+import { specCreateMeta } from "./meta.js";
 
 export const specCreate = defineCommand({
-  id: "spec-create",
-  description:
-    "Create a new spec document in the Studio drive (product and project specs alike).",
-  inputSchema: z.object({
-    type: z
-      .string()
-      .default("")
-      .describe('Document model type, e.g. "powerhouse/document-editor".'),
-    name: z
-      .string()
-      .describe(
-        "Human-readable display name. Used as the doc's header.name and (kebab-cased) as its slug.",
-      ),
-    dryRun: z
-      .boolean()
-      .default(false)
-      .describe(
-        "If set, create the doc in-memory only — don't add it to the drive.",
-      ),
-  }),
+  ...specCreateMeta,
   execute: async (input, context) => {
     const { workdir } = context;
     requireOption(input.type, "type", `Valid types: ${listSpecTypes().join(", ")}`);

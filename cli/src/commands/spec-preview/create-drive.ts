@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import {
@@ -8,24 +7,10 @@ import {
   resolveAppEditorId,
   resolvePreviewEndpoint,
 } from "../../helpers/reactor-project-preview.js";
+import { specPreviewCreateDriveMeta } from "./meta.js";
 
 export const specPreviewCreateDrive = defineCommand({
-  id: "spec-preview-create-drive",
-  description:
-    "Create a preview drive bound to a drive app. The drive's preferredEditor is set to the app's editor config.id so Connect renders the app when the drive is opened. Idempotent: reuses an existing preview drive already bound to this app.",
-  inputSchema: z.object({
-    app: z
-      .string()
-      .describe(
-        "App spec display name or editor id. Used to resolve the preferredEditor value from powerhouse.manifest.json apps[].",
-      ),
-    name: z
-      .string()
-      .optional()
-      .describe(
-        'Display name for the preview drive. Defaults to "<App> Preview".',
-      ),
-  }),
+  ...specPreviewCreateDriveMeta,
   execute: async (input, context) => {
     const base = await projectRoot(context.workdir);
     const { switchboardUrl } = resolvePreviewEndpoint(context.services, base);

@@ -1,18 +1,11 @@
-import { z } from 'zod';
 import { defineCommand } from '../../framework.js';
 import { authedGit, GH_TOKEN_ENV, resolveRepoRemote, shq } from '../../helpers/github.js';
+import { githubPullMeta } from './meta.js';
 
 const BRANCH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
-const inputSchema = z.object({
-  branch: z.string().default('main').describe('Remote branch to pull'),
-});
-
 export const githubPull = defineCommand({
-  id: 'github-pull',
-  description:
-    'Fast-forward the workspace with the latest changes from the GitHub repo connected to this studio environment.',
-  inputSchema,
+  ...githubPullMeta,
   execute: async ({ branch }, { workdir, config, runProcess }) => {
     if (!BRANCH_PATTERN.test(branch)) {
       throw new Error(`Invalid branch name "${branch}".`);

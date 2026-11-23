@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import { runChecks } from "../../helpers/project-checks.js";
@@ -12,31 +11,10 @@ import {
   resolvePreviewEndpoint,
   setDrivePreferredEditor,
 } from "../../helpers/reactor-project-preview.js";
+import { specPreviewShowMeta } from "./meta.js";
 
 export const specPreviewShow = defineCommand({
-  id: "spec-preview-show",
-  description:
-    "Resolve the preview iframe URL for a document or drive in the reactor-project. Use this to point the user's BUILD-card iframe at a specific document or drive root. For documents, the URL embeds the preview drive id and document slug. For drives (use --drive), it points at the drive root so Connect renders the drive's app. Both include `?embed=1` so Connect renders without its outer chrome.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Preview document to show — accepts display name, slug, or id (see spec-preview-list). Ignored when --drive is set.",
-      ),
-    drive: z
-      .string()
-      .optional()
-      .describe(
-        "Drive id to show. When set, resolves a drive-root URL (renders the drive's app) instead of a document URL.",
-      ),
-    app: z
-      .string()
-      .optional()
-      .describe(
-        "App spec display name or editor id (only with --drive). Re-binds the drive's preferredEditor before showing — REQUIRED after populating the drive, because adding documents wipes the binding. Resolved from powerhouse.manifest.json apps[].",
-      ),
-  }),
+  ...specPreviewShowMeta,
   execute: async (input, context) => {
     const base = await projectRoot(context.workdir);
 

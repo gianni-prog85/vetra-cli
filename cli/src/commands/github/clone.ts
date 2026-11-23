@@ -1,14 +1,9 @@
-import { z } from 'zod';
 import { defineCommand } from '../../framework.js';
 import { authedGit, GH_TOKEN_ENV, resolveRepoRemote, shq } from '../../helpers/github.js';
-
-const inputSchema = z.object({});
+import { githubCloneMeta } from './meta.js';
 
 export const githubClone = defineCommand({
-  id: 'github-clone',
-  description:
-    'Clone the GitHub repo connected to this studio environment into the workspace, for a fresh (non-persisted) environment.',
-  inputSchema,
+  ...githubCloneMeta,
   execute: async (_input, { workdir, config, runProcess }) => {
     const { token, repoFullName, cleanUrl } = await resolveRepoRemote({ workdir, config });
     const git = authedGit();

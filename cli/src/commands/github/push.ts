@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { defineCommand } from '../../framework.js';
+import { githubPushMeta } from './meta.js';
 import {
   authedGit,
   fetchBotUserId,
@@ -16,19 +16,8 @@ export const PUSH_OFF_FOR_PRODUCT =
 
 const BRANCH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
-const inputSchema = z.object({
-  branch: z.string().default('main').describe('Remote branch to push to'),
-  message: z
-    .string()
-    .default('Update from Vetra Studio')
-    .describe('Commit message for the pushed changes'),
-});
-
 export const githubPush = defineCommand({
-  id: 'github-push',
-  description:
-    'Commit the workspace and push it to the GitHub repo connected to this studio environment, as the Vetra bot.',
-  inputSchema,
+  ...githubPushMeta,
   execute: async ({ branch, message }, ctx) => {
     const { workdir, config, runProcess } = ctx;
     if (await getProductDoc(ctx)) {

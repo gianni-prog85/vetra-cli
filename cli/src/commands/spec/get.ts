@@ -1,9 +1,9 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
-import { formatSchema, renderProjected } from "./_helpers.js";
+import { renderProjected } from "./_helpers.js";
 import { contentOperationCount, findSpec } from "./drive-specs.js";
+import { specGetMeta } from "./meta.js";
 
 /* Narrow a doc's state down to its latest specification entry. Only doc-model
  * specs have a versioned `specifications` array on state.global; for other doc
@@ -55,36 +55,7 @@ function buildHelp(documentType: string, name: string): string {
 }
 
 export const specGet = defineCommand({
-  id: "spec-get",
-  description:
-    "Read a spec. Pass --filter (or --latest) for data; otherwise returns summary + help.",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Spec to read — accepts display name, slug, or id (see spec-list).",
-      ),
-    full: z
-      .boolean()
-      .default(false)
-      .describe(
-        "Return the full state value (token-heavy). Default returns a summary + help.",
-      ),
-    latest: z
-      .boolean()
-      .default(false)
-      .describe(
-        "For doc-model specs: scope the value (and --filter) to `state.global.specifications.at(-1)` instead of `state.global`. With --latest, the modules/state shortcuts become `$.modules[*]`, `$.state.global`, etc.",
-      ),
-    filter: z
-      .string()
-      .optional()
-      .describe(
-        "JSONPath (RFC 9535) projection. Without --latest, applied to the doc's state (default scope: $.global). With --latest, applied to the latest specification.",
-      ),
-    format: formatSchema.optional(),
-  }),
+  ...specGetMeta,
   execute: async (input, context) => {
     await projectRoot(context.workdir);
     const { drive, doc } = await findSpec(context, input.name);

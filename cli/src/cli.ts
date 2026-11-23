@@ -8,11 +8,7 @@ import { z } from 'zod';
 import path from 'node:path';
 import { CLI_NAME, CLI_VERSION, CLI_ROOT } from './config.js';
 import { configSchema, secretsSchema } from './framework.js';
-import { StudioProductV1 } from 'document-models';
-import { documentModels as vetraModels } from '@powerhousedao/vetra';
-import { documentModels as extModels } from '@powerhousedao/clint-common';
-import { createAgent } from './agents/agent.js';
-import { createChatSessionWatchTrigger } from '@powerhousedao/clint-common/chat';
+import { lazyTrigger } from './lazy.js';
 import { STUDIO_FILES } from './helpers/studio-paths.js';
 import { agentRun } from './commands/agent-run.js';
 import { specCommands } from './commands/spec/index.js';
@@ -23,32 +19,27 @@ import { reactorProjectCommands } from './commands/reactor-project/index.js';
 import { projectHostCommands } from './commands/project-hosts/index.js';
 import { productCommands } from './commands/product/index.js';
 import { reactorProject } from './services/reactor-project.js';
-import { driveLayoutTrigger } from './triggers/drive-layout.js';
-import { previewServerTrigger } from './triggers/preview-server.js';
-import { previewRunTrigger } from './triggers/preview-run.js';
-import { runtimeSpecSyncTrigger } from './triggers/runtime-spec-sync.js';
 import { genGuard } from './lifecycle/gen-guard.js';
 import { shellGuard } from './lifecycle/shell-guard.js';
 import { tsCheck } from './lifecycle/ts-check.js';
 import { serializableToolErrors } from './lifecycle/tool-errors.js';
 import { agentRequiredInputs } from './lifecycle/agent-required-inputs.js';
 import { checkRecorder } from './lifecycle/check-recorder.js';
-import { studioUrlTrigger } from './triggers/studio-url.js';
-import { productSupervisorTrigger } from './product/supervisor.js';
-import { productRequestsTrigger } from './triggers/product-requests.js';
-import { liveHealthTrigger } from './triggers/live-health.js';
 // @clint:end imports
 import { createAttachmentCommands } from '@powerhousedao/clint/powerhouse';
 import { githubCommands } from './commands/github/index.js';
-import { studioIdentity } from './auth/studio-identity.js';
 
 // Every model the reactor client reduces and signs with, each once: the
 // package's own, @powerhousedao/vetra's spec documents, clint-common's.
-const studioDocumentModels = [
-  StudioProductV1,
-  ...vetraModels,
-  ...extModels,
-];
+// Loaded when a command attaches.
+async function studioDocumentModels() {
+  const [{ StudioProductV1 }, vetra, common] = await Promise.all([
+    import('document-models'),
+    import('@powerhousedao/vetra'),
+    import('@powerhousedao/clint-common'),
+  ]);
+  return [StudioProductV1, ...vetra.documentModels, ...common.documentModels];
+}
 
 export const cli = defineCli({
   name: CLI_NAME,
@@ -77,17 +68,22 @@ export const cli = defineCli({
   // @clint:end services
 
   // @clint:begin triggers
+  // Each loads when the routine sets it up (lazy.ts).
   triggers: [
     // Files from chat messages go to the Cli's folder, not the project's tree.
-    createChatSessionWatchTrigger({ downloadsDir: STUDIO_FILES.downloads }),
-    driveLayoutTrigger,
-    previewServerTrigger,
-    previewRunTrigger,
-    runtimeSpecSyncTrigger,
-    studioUrlTrigger,
-    productSupervisorTrigger,
-    productRequestsTrigger,
-    liveHealthTrigger,
+    lazyTrigger('chat-session-watch', async () =>
+      (await import('@powerhousedao/clint-common/chat')).createChatSessionWatchTrigger({
+        downloadsDir: STUDIO_FILES.downloads,
+      }),
+    ),
+    lazyTrigger('drive-layout', async () => (await import('./triggers/drive-layout.js')).driveLayoutTrigger),
+    lazyTrigger('preview-server', async () => (await import('./triggers/preview-server.js')).previewServerTrigger),
+    lazyTrigger('preview-run', async () => (await import('./triggers/preview-run.js')).previewRunTrigger),
+    lazyTrigger('runtime-spec-sync', async () => (await import('./triggers/runtime-spec-sync.js')).runtimeSpecSyncTrigger),
+    lazyTrigger('studio-url', async () => (await import('./triggers/studio-url.js')).studioUrlTrigger),
+    lazyTrigger('product-supervisor', async () => (await import('./product/supervisor.js')).productSupervisorTrigger),
+    lazyTrigger('product-requests', async () => (await import('./triggers/product-requests.js')).productRequestsTrigger),
+    lazyTrigger('live-health', async () => (await import('./triggers/live-health.js')).liveHealthTrigger),
   ],
   // @clint:end triggers
 
@@ -269,15 +265,19 @@ cli.configureReactor({
       `${CLI_NAME} attaches to a switchboard: run it from its host (ph run studio), or set VETRA_SWITCHBOARD_URL to a drive address (<switchboard>/d/<slug>).`,
     );
   },
-  remote: async (setup) => ({
-    documentModels: studioDocumentModels,
-    drive: { name: 'Home', preferredEditor: 'vetra-studio' },
-    subscriptions: {},
-    ...(await studioIdentity(setup)),
-  }),
+  remote: async (setup) => {
+    const { studioIdentity } = await import('./auth/studio-identity.js');
+    return {
+      documentModels: await studioDocumentModels(),
+      drive: { name: 'Home', preferredEditor: 'vetra-studio' },
+      subscriptions: {},
+      ...(await studioIdentity(setup)),
+    };
+  },
 });
 // @clint:end reactor
 
 // @clint:begin mastra
-cli.configureAgent(createAgent);
+// Mastra and the agent definitions load at the first chat or agent run.
+cli.configureAgent(async (ctx) => (await import('./agents/agent.js')).createAgent(ctx));
 // @clint:end mastra

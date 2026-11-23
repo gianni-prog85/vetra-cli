@@ -1,6 +1,6 @@
 import type { PHDocument } from "@powerhousedao/shared/document-model";
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
+import { specGenerateMeta } from "./meta.js";
 import { assertProjectInstalled, projectRoot } from "../../helpers/project.js";
 import {
   runChecks,
@@ -94,23 +94,7 @@ function generateResult(
 }
 
 export const specGenerate = defineCommand({
-  id: "spec-generate",
-  description:
-    "Generate source code from one or all specs in the project (document models, editors, apps, processors, subgraphs).",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .optional()
-      .describe(
-        "Spec to generate — accepts display name, slug, or id (see spec-list). When omitted, generate code for every spec in the Studio drive.",
-      ),
-    skipChecks: z
-      .boolean()
-      .optional()
-      .describe(
-        "Skip the post-generation typecheck and lint over generated files. Defaults to false.",
-      ),
-  }),
+  ...specGenerateMeta,
   execute: async (input, context) => {
     const { workdir, runProcess, log } = context;
     const base = await projectRoot(workdir);

@@ -25,14 +25,7 @@
 import { randomUUID } from "node:crypto";
 import type { LifecycleHook } from "@powerhousedao/clint";
 import { capReason, readCheckResults, type ObservedCheck } from "../product/check-results.js";
-import {
-  IN_PROGRESS,
-  activeChange,
-  dispatchProduct,
-  getProductDoc,
-  productActions,
-  type ProductContext,
-} from "../product/product-doc.js";
+import type { ProductContext } from "../product/product-doc.js";
 
 export const RECORDED_TOOLS = new Set(["spec-generate", "reactor-project-check"]);
 
@@ -62,6 +55,9 @@ export async function recordCheckRun(
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const record = async () => {
+      // The product model loads with the first recorded run, not with the Cli.
+      const { IN_PROGRESS, activeChange, dispatchProduct, getProductDoc, productActions } =
+        await import("../product/product-doc.js");
       const product = await getProductDoc(ctx);
       const change = product ? activeChange(product.state) : null;
       if (!change || !IN_PROGRESS.includes(change.status)) return;

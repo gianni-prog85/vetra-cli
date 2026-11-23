@@ -1,21 +1,45 @@
-import { specCreate } from "./create.js";
-import { specDelete } from "./delete.js";
-import { specExtract } from "./extract.js";
-import { specGenerate } from "./generate.js";
-import { specGet } from "./get.js";
-import { specList } from "./list.js";
-import { specSchema } from "./schema.js";
-import { specSchemaList } from "./schema-list.js";
-import { specUpdate } from "./update.js";
+import { lazyCommand } from "../../lazy.js";
+import {
+  specCreateMeta,
+  specDeleteMeta,
+  specExtractMeta,
+  specGenerateMeta,
+  specGetMeta,
+  specListMeta,
+  specSchemaListMeta,
+  specSchemaMeta,
+  specUpdateMeta,
+} from "./meta.js";
 
 export const specCommands = [
-  specList,
-  specGet,
-  specCreate,
-  specUpdate,
-  specDelete,
-  specExtract,
-  specGenerate,
-  specSchemaList,
-  specSchema,
+  lazyCommand(specListMeta, async () => (await import("./list.js")).specList),
+  lazyCommand(specGetMeta, async () => (await import("./get.js")).specGet),
+  lazyCommand(
+    specCreateMeta,
+    async () => (await import("./create.js")).specCreate,
+  ),
+  lazyCommand(
+    specUpdateMeta,
+    async () => (await import("./update.js")).specUpdate,
+  ),
+  lazyCommand(
+    specDeleteMeta,
+    async () => (await import("./delete.js")).specDelete,
+  ),
+  lazyCommand(
+    specExtractMeta,
+    async () => (await import("./extract.js")).specExtract,
+  ),
+  lazyCommand(
+    specGenerateMeta,
+    async () => (await import("./generate.js")).specGenerate,
+  ),
+  lazyCommand(
+    specSchemaListMeta,
+    async () => (await import("./schema-list.js")).specSchemaList,
+  ),
+  lazyCommand(
+    specSchemaMeta,
+    async () => (await import("./schema.js")).specSchema,
+  ),
 ];

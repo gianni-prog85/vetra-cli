@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
+import { deployEnvironmentWaitMeta } from "./meta.js";
 import { findMyEnvironment } from "../../cloud/environments-read.js";
 import { loadEnvironmentState } from "../../cloud/environments-write.js";
 import {
@@ -23,24 +23,7 @@ const POLL_INTERVAL_MS = 5000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const deployEnvironmentWait = defineCommand({
-  id: "deploy-environment-wait",
-  description:
-    "Wait for a Vetra Cloud environment to finish deploying. Polls every 5s and blocks until the status settles (READY, or a failure such as DEPLOYMENT_FAILED) or the timeout elapses — call this once after approving changes instead of polling deploy-environment-get in a loop. If it's still deploying at the timeout it returns the current status; call it again to keep waiting. Requires Renown authorization (check with whoami).",
-  inputSchema: z.object({
-    name: z
-      .string()
-      .default("")
-      .describe(
-        "Environment to wait on — accepts id, name, or subdomain (see deploy-environment-list).",
-      ),
-    timeout: z
-      .number()
-      .int()
-      .min(5)
-      .max(300)
-      .default(30)
-      .describe("Max seconds to block while polling (default 30, max 300). Polls every 5s."),
-  }),
+  ...deployEnvironmentWaitMeta,
   execute: async (input, { workdir, config }) => {
     const ctx = { workdir, config };
     let env = await resolveEnvironment(ctx, input.name);

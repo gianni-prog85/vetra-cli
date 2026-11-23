@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   CLOUD_BASE_DOMAIN,
   type EnvironmentSummary,
@@ -11,23 +10,7 @@ import {
   type ReadContext,
 } from "../../cloud/environments-read.js";
 
-/** Comma-separated string or array → array of service types. */
-export const serviceListSchema = z.preprocess(
-  (v) =>
-    typeof v === "string"
-      ? v.split(",").map((s) => s.trim()).filter(Boolean)
-      : v,
-  z.array(z.enum(["CONNECT", "SWITCHBOARD", "FUSION"])),
-);
-
-/** Comma-separated string or array → array of package specs. */
-export const packageListSchema = z.preprocess(
-  (v) =>
-    typeof v === "string"
-      ? v.split(",").map((s) => s.trim()).filter(Boolean)
-      : v,
-  z.array(z.string()),
-);
+export { packageListSchema, serviceListSchema } from "./meta.js";
 
 /** "name@version" → { name, version }. A leading "@" (scoped pkg) is preserved;
  * only the version separator is split off. */

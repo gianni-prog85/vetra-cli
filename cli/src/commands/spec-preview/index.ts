@@ -1,17 +1,41 @@
-import { specPreviewCreate } from "./create.js";
-import { specPreviewCreateDrive } from "./create-drive.js";
-import { specPreviewDelete } from "./delete.js";
-import { specPreviewGet } from "./get.js";
-import { specPreviewList } from "./list.js";
-import { specPreviewShow } from "./show.js";
-import { specPreviewUpdate } from "./update.js";
+import { lazyCommand } from "../../lazy.js";
+import {
+  specPreviewCreateDriveMeta,
+  specPreviewCreateMeta,
+  specPreviewDeleteMeta,
+  specPreviewGetMeta,
+  specPreviewListMeta,
+  specPreviewShowMeta,
+  specPreviewUpdateMeta,
+} from "./meta.js";
 
 export const specPreviewCommands = [
-  specPreviewList,
-  specPreviewGet,
-  specPreviewCreate,
-  specPreviewCreateDrive,
-  specPreviewUpdate,
-  specPreviewDelete,
-  specPreviewShow,
+  lazyCommand(
+    specPreviewListMeta,
+    async () => (await import("./list.js")).specPreviewList,
+  ),
+  lazyCommand(
+    specPreviewGetMeta,
+    async () => (await import("./get.js")).specPreviewGet,
+  ),
+  lazyCommand(
+    specPreviewCreateMeta,
+    async () => (await import("./create.js")).specPreviewCreate,
+  ),
+  lazyCommand(
+    specPreviewCreateDriveMeta,
+    async () => (await import("./create-drive.js")).specPreviewCreateDrive,
+  ),
+  lazyCommand(
+    specPreviewUpdateMeta,
+    async () => (await import("./update.js")).specPreviewUpdate,
+  ),
+  lazyCommand(
+    specPreviewDeleteMeta,
+    async () => (await import("./delete.js")).specPreviewDelete,
+  ),
+  lazyCommand(
+    specPreviewShowMeta,
+    async () => (await import("./show.js")).specPreviewShow,
+  ),
 ];

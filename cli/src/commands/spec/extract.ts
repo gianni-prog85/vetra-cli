@@ -1,6 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
-import { z } from "zod";
 import { defineCommand } from "../../framework.js";
 import { projectRoot } from "../../helpers/project.js";
 import { requireSpecDrive } from "../../helpers/embedded-drive.js";
@@ -17,13 +16,7 @@ import { DOCUMENT_MODEL_TYPE } from "./document-model.js";
 import { listDriveSpecs, specDriveOf, type SpecDrive } from "./drive-specs.js";
 import { createSpecDocument } from "./registry.js";
 import { slugify } from "./_helpers.js";
-
-const typeSchema = z
-  .enum(["all", "document-model", "editor", "app", "processor", "subgraph"])
-  .default("all")
-  .describe(
-    'Which modules to extract. "all" (default) covers every type; or pick one.',
-  );
+import { specExtractMeta } from "./meta.js";
 
 type Outcome = "created" | "updated" | "unchanged" | "left to inspection";
 
@@ -102,12 +95,7 @@ async function writeExtracted(
 }
 
 export const specExtract = defineCommand({
-  id: "spec-extract",
-  description:
-    "Extract specs by reverse-engineering existing package source into the Studio drive.",
-  inputSchema: z.object({
-    type: typeSchema,
-  }),
+  ...specExtractMeta,
   execute: async (input, context) => {
     const { workdir } = context;
     const embedded = await requireSpecDrive(context);
