@@ -73,10 +73,19 @@ The Cli runs three ways, all through clint's Cli runner (`runCli`):
 - the `vetra` bin (`bin/vetra.mjs`) over the built `./cli`;
 - `pnpm dev` (`tsx cli/src/main.ts --workdir ../vetra-test`) from source.
 
-The bin and `pnpm dev` read the drive address from `VETRA_SWITCHBOARD_URL`
-(`<switchboard>/d/<slug>`). Without one, commands that need no reactor still
+The bin and `pnpm dev` take the drive address from `studioDriveUrl`
+(`cli/src/running-studio.ts`): `VETRA_SWITCHBOARD_URL`
+(`<switchboard>/d/<slug>`) when set, else, for a run with a command, the
+`studio` drive of the Studio that runs for the command's project. That
+Studio is found through its run record (`findRunningInstance` of
+`@powerhousedao/host-core/instance`, which reads records and loads no
+runner): the instance is the Studio host plus the data folder
+(`PH_USER_DATA_DIR`, else the folder `--workdir` or the current folder
+names), so a `vetra spec-list` in a project reaches that project's Studio,
+on whatever port it took. With neither, commands that need no reactor still
 run, and anything that asks for the reactor fails with the message in
-`configureReactor.create`. Agent conversation logs live under
+`configureReactor.create`, which names `ph vetra`. The shell (no command)
+attaches by the variable only. Agent conversation logs live under
 `<workdir>/.ph/vetra/logs/<agent>/`.
 
 Internally:
@@ -136,7 +145,15 @@ Ports: 8090 Connect (the Studio's address), 8091 the switchboard, an OS
 port for the vetra local API (named in `studio.config.json`, see "vetra
 local API"). Neither runner sets `strictPort`, so a taken port moves to the
 next free one and the outputs carry the real one: a second Studio on the
-same machine gets its own.
+same machine (another project, so another data folder) gets its own. The
+four numbers (8090 to 8093) are preferences; every reader takes an address
+from the run record or from an output token, none from the number.
+
+**One instance per host and data folder.** A run is keyed by its host and
+its data folder (`instanceKey` in host-core). A second `ph vetra` in a
+project whose Studio runs starts nothing: it prints the running instance
+(pid, data folder, addresses, record path) and ends with code 0. Two
+projects run a Studio each, side by side.
 
 Stores: `${userData}/.ph/vetra/reactor-storage` and
 `${userData}/.ph/vetra/read-storage` (PGlite), the switchboard's identity in
@@ -573,7 +590,7 @@ The API surfaces two kinds of state:
 
 - **Project runtime state** — projection of the service manager.
   Source of truth remains clint's service state,
-  `~/.ph/vetra/services/reactor-project/<instance>.json` (instances
+  `<data folder>/.ph/vetra/services/reactor-project/<instance>.json` (instances
   keyed by a hash of the project path); the API is a fanout. `/resolve`
   is a per-target slice; the planned `/projects` endpoints would
   expose the full list.
@@ -743,7 +760,10 @@ the runtime.
 It starts with the Cli (`triggers/preview-run.ts`, not awaited) unless the
 config says `previewRun: false` (env `VETRA_PREVIEW_RUN=0`), and on request
 through the `reactor-project-start` tool or `POST /start`; every start is
-idempotent. Ready once the run record is live; stopped through its stdin
+idempotent. `reactor-project-start` is the command clint adds for the
+service (the package defines none): the service manager returns the
+instance that is up instead of starting a second. Ready once the run record
+is live; stopped through its stdin
 (the compound shuts its members down; its tree is killed only after 30 s),
 by the service manager when the Cli ends. Ports are the hosts' data; a
 taken port moves to the next free one.
@@ -923,8 +943,11 @@ The `spec-*` commands (`spec-list`, `spec-get`, `spec-create`,
 `spec-update`, `spec-extract`, `spec-generate`, `spec-delete`) read and
 write the Home drive and nothing else: `helpers/embedded-drive.ts` →
 `requireSpecDrive(ctx)` always resolves the reactor (a one-shot run
-attaches through `VETRA_SWITCHBOARD_URL`) and refuses a run with no drive
-to reach. The node and relationship writes are in
+attaches to the project's running Studio, or through
+`VETRA_SWITCHBOARD_URL`) and refuses a run with no drive to reach.
+`preview-models` in a one-shot run holds no service instance: it trusts the
+inspector's report while the Preview's run record is live
+(`previewModels` in `helpers/preview-inspector.ts`). The node and relationship writes are in
 `helpers/spec-drive-sync.ts` (one drive write at a time per process).
 `getEmbeddedDrive(ctx)` is for optional writes: it gates on `ctx.folders`
 (wired once the reactor is attached with a personal drive, absent in
@@ -936,8 +959,11 @@ in the drive (the product document, chat sessions) use
 
 - `reactor-project` — the Preview run (see "reactor-project service").
   Persistent state at
-  `~/.ph/vetra/services/reactor-project/<instance>.json` (clint's user
-  store; read by `reactor-project-ps` and projected over the local API); the
+  `<data folder>/.ph/vetra/services/reactor-project/<instance>.json` (under
+  the project, so two projects never list each other's; read by
+  `reactor-project-ps` and projected over the local API). State an earlier
+  version left in `~/.ph/vetra/services/` is not read: clint reports it once
+  and leaves it in place. The
   run's own record is
   `<project>/.ph/run/@powerhousedao/vetra-cli/preview.json`.
 
@@ -1083,6 +1109,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │   ├── cli.ts             ← defineCli + configureReactor (remote)
 │   │   ├── framework.ts       ← config + secrets schemas, document registry
 │   │   ├── lazy.ts            ← lazyCommand / lazyTrigger (start path)
+│   │   ├── running-studio.ts  ← the project's running Studio, from its run record
 │   │   ├── constants.ts       ← default PH version
 │   │   ├── agents/agent.ts    ← Mastra agent factory
 │   │   ├── preview-server/    ← vetra local API (resolve/start/events)
@@ -1109,7 +1136,7 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
                                  local API's preview-trusted-keys.json,
                                  codegen.lock, launch.json, product-drive.json,
                                  upgrade-existing.json
-~/.ph/vetra/services/          ← clint's service state (reactor-project)
+<project>/.ph/vetra/services/  ← clint's service state (reactor-project)
 ```
 
 Nothing the Cli writes on its own account lands at `.ph/` root, where a

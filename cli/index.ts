@@ -8,3 +8,4 @@ import "./src/version-banner.js";
 
 export { cli } from "./src/cli.js";
 export { ensureModelAuth } from "./src/setup-auth.js";
+export { runningStudio, studioDriveUrl } from "./src/running-studio.js";

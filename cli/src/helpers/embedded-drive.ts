@@ -42,16 +42,17 @@ export async function getEmbeddedDrive(
 
 /**
  * The Studio drive the `spec-*` commands read and write. Specifications live
- * in the drive only, so a one-shot run attaches too (`VETRA_SWITCHBOARD_URL`)
- * and a run with no drive to reach is refused.
+ * in the drive only, so a one-shot run attaches too (to the project's running
+ * Studio, or `VETRA_SWITCHBOARD_URL`) and a run with no drive to reach is
+ * refused.
  */
 export async function requireSpecDrive(
   ctx: Pick<RunningReactorCtx, "reactor">,
 ): Promise<EmbeddedDrive> {
   const lead = "Specifications are kept in the Studio drive, and none can be reached";
   const hint =
-    "Run this from Studio (ph run studio), or set VETRA_SWITCHBOARD_URL to " +
-    "the drive address (<switchboard>/d/<slug>).";
+    "Start Studio in this project (ph vetra) and run this again, or set " +
+    "VETRA_SWITCHBOARD_URL to the drive address (<switchboard>/d/<slug>).";
   let reactor: Awaited<ReturnType<NonNullable<RunningReactorCtx["reactor"]>>>;
   try {
     reactor = await ctx.reactor?.();

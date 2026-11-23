@@ -255,14 +255,15 @@ export const cli = defineCli({
 });
 
 // @clint:begin reactor
-// The Cli attaches to a running switchboard: a host runner (or the bin, with
-// VETRA_SWITCHBOARD_URL) hands it the drive address and the reactor holds
+// The Cli attaches to a running switchboard: a host runner (or the bin, from
+// the project's running Studio or VETRA_SWITCHBOARD_URL) hands it the drive
+// address and the reactor holds
 // `remote`, built at attach: a cloud Studio adds the agent's Renown identity
 // (auth/studio-identity.ts), a local one writes unsigned.
 cli.configureReactor({
   create: async () => {
     throw new Error(
-      `${CLI_NAME} attaches to a switchboard: run it from its host (ph run studio), or set VETRA_SWITCHBOARD_URL to a drive address (<switchboard>/d/<slug>).`,
+      `${CLI_NAME} attaches to a switchboard: start Studio in this project (ph vetra) and run this again, or set VETRA_SWITCHBOARD_URL to a drive address (<switchboard>/d/<slug>).`,
     );
   },
   remote: async (setup) => {

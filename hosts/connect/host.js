@@ -10,6 +10,8 @@ export default /** @satisfies {PHHost} */ ({
 
   runner: {
     module: "@powerhousedao/ph-cli/runners/connect",
+    // Not strict: taken (a Studio of another project), the next free port;
+    // the run record names the real one.
     port: 8090,
     // `build` writes the Studio SPA here; `serve` serves it. This package's
     // build, also when another project runs the package's Studio (the

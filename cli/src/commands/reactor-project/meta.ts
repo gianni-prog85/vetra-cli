@@ -101,12 +101,6 @@ requires auth and the agent isn't authorized, the result is reported as
   }),
 };
 
-export const reactorProjectStartMeta = {
-  id: "reactor-project-start",
-  description: "Start the Preview run of the project (idempotent)",
-  inputSchema: z.object({}),
-};
-
 export const previewModelsMeta = {
   id: "preview-models",
   description:

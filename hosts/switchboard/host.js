@@ -13,6 +13,8 @@ export default /** @satisfies {PHHost} */ ({
 
   runner: {
     module: "@powerhousedao/ph-cli/runners/switchboard",
+    // Not strict: taken (a Studio of another project), the next free port;
+    // the run record names the real one, and every reader takes it from there.
     port: 8091,
     // A declared composition: MCP for agents, attachments for chat files.
     // No workflows.

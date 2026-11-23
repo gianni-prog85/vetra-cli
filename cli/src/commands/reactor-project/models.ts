@@ -10,10 +10,8 @@ import { projectRoot } from "../../helpers/project.js";
 export const previewModelsCommand = defineCommand({
   ...previewModelsMeta,
   execute: async ({ full }, context) => {
-    const services = context.services;
-    if (!services) throw new Error("No services configured");
     const projectPath = await projectRoot(context.workdir);
-    const models = previewModels(services, projectPath, { full: full ?? false });
+    const models = previewModels(context.services, projectPath, { full: full ?? false });
     return { text: formatPreviewModels(models), data: models };
   },
 });

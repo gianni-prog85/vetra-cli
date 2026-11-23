@@ -6,12 +6,14 @@
  * `hosts/preview-switchboard`) writes the loaded document model modules to
  * `.ph/vetra/preview/inspector.json` when its reactor is ready and again on
  * every package reload, and removes the file when it stops. The Cli reads the
- * file; it is trusted only while the Preview run's service instance is ready
- * (a hard kill leaves the file behind).
+ * file; it is trusted only while the Preview run is up: its service instance
+ * is ready, or its run record is live (a hard kill leaves the file behind).
  */
 import fs from "node:fs";
 import type { ServiceInstanceStatus, ServiceManager } from "@powerhousedao/clint";
+import { runningInstance } from "@powerhousedao/host-core/instance";
 import { z } from "zod";
+import { PREVIEW_HOST } from "../services/reactor-project.js";
 import { studioPath } from "./studio-paths.js";
 
 /** The report version this Cli reads. */
@@ -140,15 +142,29 @@ function previewInstance(
   );
 }
 
-/** What the Preview run of `projectPath` has loaded. */
+/** The Preview run of `projectPath` is live, by its run record. */
+function previewRuns(projectPath: string): boolean {
+  try {
+    return runningInstance(projectPath, PREVIEW_HOST) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What the Preview run of `projectPath` has loaded. The Cli that holds the
+ * run knows its state; any other process (a one-shot command beside the
+ * Studio) reads the run's record, which is live once the run is ready.
+ */
 export function previewModels(
-  services: Pick<ServiceManager, "list">,
+  services: Pick<ServiceManager, "list"> | undefined,
   projectPath: string,
   options: { full?: boolean } = {},
 ): PreviewModels {
-  const instance = previewInstance(services, projectPath);
-  if (!instance) return { kind: "not-running" };
-  if (instance.status !== "ready") return { kind: "starting" };
+  const instance = services && previewInstance(services, projectPath);
+  if (instance?.status !== "ready" && !previewRuns(projectPath)) {
+    return instance ? { kind: "starting" } : { kind: "not-running" };
+  }
   const report = readInspectorReport(projectPath);
   if (!report) return { kind: "starting" };
   const types = modelTypesOf(report, options);

@@ -5,7 +5,6 @@ import {
   reactorProjectCheckMeta,
   reactorProjectPublishMeta,
   reactorProjectPublishStatusMeta,
-  reactorProjectStartMeta,
 } from "./meta.js";
 
 // No init: Studio runs inside one project and creates none (`ph init` does).
@@ -27,10 +26,8 @@ export const reactorProjectCommands = [
     async () =>
       (await import("./publish-status.js")).reactorProjectPublishStatus,
   ),
-  lazyCommand(
-    reactorProjectStartMeta,
-    async () => (await import("./start.js")).reactorProjectStart,
-  ),
+  // `reactor-project-start`, `-stop`, `-ps` and `-restart` are the service's
+  // own commands (clint adds them): a start on a run that is up returns it.
   lazyCommand(
     previewModelsMeta,
     async () => (await import("./models.js")).previewModelsCommand,
