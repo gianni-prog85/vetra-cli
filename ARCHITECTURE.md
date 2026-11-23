@@ -84,7 +84,7 @@ Internally:
 - The **agent**, the **reactor client** and the **vetra local API** run
   inside the vetra node process. The documents live on the switchboard.
 - The **routine** runs registered **triggers** on a poll loop in the
-  same process (`chatSessionWatchTrigger`, spec-sync triggers).
+  same process (`chatSessionWatchTrigger`, the runtime spec sync).
 - The **switchboard** and **Connect** (serving this package's Studio) are
   hosts of their own (B2). **reactor-project** sessions run as child
   processes managed by clint's service manager: previews, one per active
@@ -258,10 +258,10 @@ identity. The runner attaches with clint's `attachDefaultReactor`: a
 `GraphQLReactorClient` on the switchboard, `personalDriveId` = the `Home`
 drive. `create` only throws: vetra builds no in-process reactor.
 
-The Home drive holds: chat session documents, spec documents
-(mirrored from the reactor-project filesystems by the spec-sync
-triggers), and any other domain content the studio surfaces. A spec
-document the sync or the explorer adds goes in the folder
+The Home drive holds: chat session documents, spec documents, and any
+other domain content the studio surfaces. Spec documents live in the drive
+only: no `specs/` folder of a project is read or written. A spec
+document a `spec-*` command, the runtime sync or the explorer adds goes in the folder
 `@powerhousedao/vetra/drive-layout` gives its type (`specify/document-models`,
 `ideate/features`, …), made on first use; documents already in the drive
 are not moved, and chat sessions stay at the root.
@@ -704,11 +704,12 @@ reported state. A change no action expresses (an earlier version, the
 version numbers, a refused action) replaces the document under a new id. A
 type gone from the report loses its document.
 
-The sync writes the drive only. The documents it made are listed in
+The sync writes the drive only. The documents it keeps are listed in
 `<project>/.ph/vetra/runtime-specs.json` (type → document id,
-`helpers/runtime-spec-record.ts`), each before it exists, and `spec-sync`
-skips listed documents: no file under `specs/`, so no generation. A type
-that already has a document from a `specs/` file is left to the file flow.
+`helpers/runtime-spec-record.ts`), each before it exists. A reported type
+that already has an unlisted model document (the agent's) adopts it: the
+document is listed, then brought to the report. `spec-extract all` and a
+`spec-generate` without a name leave listed documents alone.
 The other spec kinds (editor, app, subgraph, processor) are not derived from
 the runtime.
 
@@ -795,24 +796,21 @@ imported. One file is named differently:
 
 The spec-driven generation runs in the Cli's process: no `ph generate` child.
 
-- `run.ts` is the entry. `generateFromSpecFile(kind, specFile, projectDir)`
-  does what `ph generate <kind> --document <file>` does for `document-model`,
-  `editor`, `app`, `processor` and `subgraph`; `extractSpecFiles(kind | "all",
-  projectDir)` does what `ph generate <kind> --extract` does and resolves to
-  the spec files it wrote.
-- `spec-generate` calls the first once per spec, `spec-extract` the second.
+- `run.ts` is the entry. `generateFromSpec(kind, document, projectDir)`
+  generates the code of one specification document (`document-model`,
+  `editor`, `app`, `processor`, `subgraph`); `extractSpecDocuments(kind |
+  "all", projectDir)` returns the documents the project's code describes.
+  Neither touches a file of specifications.
+- `spec-generate` calls the first once per drive document, `spec-extract`
+  the second and writes the result to the drive.
   Both hold the project's codegen lock. Processor and subgraph generation
   still run the project's package manager for the dependencies they add.
 - `codegen/`, `file-builders/`, `name-builders/`, `templates/`, `utils/` are
-  the engine; `spec/` reads and writes the `.phd` specs (`spec/spec.ts` is the
-  barrel the spec commands and triggers import) and maps a spec to engine
+  the engine; `spec/` holds the spec type registry (`spec/spec.ts` is the
+  barrel the spec commands import) and maps a spec to engine
   arguments. The spec document models themselves stay in
   `@powerhousedao/vetra`.
 - Its suites are in `cli/tests/generation/` and run in `pnpm test`.
-- `pnpm run parity:generation` (`cli/tests/generation/parity/run-parity.ts`)
-  generates one fixture project twice, with the linked monorepo's built
-  `ph-cli generate` and with the engine, and compares the two trees after
-  each kind, then the extracted specs. It exits 1 on any difference.
 
 ### Renown identity (agent authorization)
 
@@ -880,41 +878,6 @@ Registered in `cli.ts`. Run as part of clint's routine loop.
 
 - `chatSessionWatchTrigger` (clint-common) — watches chat-session
   documents for new user messages and forwards them to the agent.
-- `specSyncTrigger` — drive → filesystem mirror for spec documents: each
-  doc is written to the project's `<workdir>/specs/<subdir>/`, wherever it
-  is filed in the Home drive. On an existing repository (Sektar) that is
-  project content, on purpose: spec documents in the drive change the
-  project's tree.
-- `specFsSyncTrigger` — filesystem → drive (chokidar-based), the
-  **external-change detector**: hand-edited `.phd`, `git pull`,
-  codegen writes. Watches the workdir itself and `<workdir>/specs/` only
-  (nothing else of the project's tree), so a `specs/` folder created after
-  startup is picked up automatically (no `poll()` reconcile step). For each
-  `.phd` under `specs/<known-subdir>/` it materializes a document the
-  switchboard lacks (empty, the file's id and type), executes the content
-  actions whose ids the switchboard does not hold (`client.execute`, one
-  call per scope; there is no load API over the wire), and attaches the doc
-  at the Home drive's root with an ADD_FILE node and a `child`
-  relationship (idempotent; no folders). The shared
-  push/remove logic lives in `helpers/spec-drive-sync.ts`
-  (`applyFsChangesToReactor`, `removeSpecFromDrive`, one sync at a time
-  per process); the `spec-*` write commands call it directly (see
-  below), so for command-originated changes this watcher only observes a
-  convergent no-op. The switchboard's store persists, so a spec deleted
-  while the Cli was down stays in the drive.
-
-The `spec-*` write commands (`spec-create`, `spec-update`,
-`spec-extract`, `spec-delete`) write the filesystem `specs/`
-unconditionally — codegen's source of truth — and, when a reactor is
-already running, **also push the change into the Home drive
-synchronously** via the same `spec-drive-sync.ts` helpers. The
-running-reactor signal is `helpers/embedded-drive.ts` →
-`getEmbeddedDrive(ctx)`: it gates on `ctx.folders` (wired once the
-reactor is attached with a personal drive, absent in one-shot CLI) so a standalone
-`vetra spec-create` never attaches just to write a spec. When
-present, `ctx.reactor()` returns the attached reactor. Lookups by type
-in the drive (the product document, chat sessions) use
-`findInDrive` there: `client.find({ type, parentId })` over every page.
 - `driveLayoutTrigger` — on its first poll with a drive to reach, adds
   the package drive layout's folders the Home drive lacks
   (`ensureDriveLayout`). Once per session; it moves no document, and a
@@ -927,6 +890,19 @@ in the drive (the product document, chat sessions) use
   server).
 - `previewRunTrigger` — starts the Preview run at Cli start (see
   "reactor-project service"); no work items.
+
+The `spec-*` commands (`spec-list`, `spec-get`, `spec-create`,
+`spec-update`, `spec-extract`, `spec-generate`, `spec-delete`) read and
+write the Home drive and nothing else: `helpers/embedded-drive.ts` →
+`requireSpecDrive(ctx)` always resolves the reactor (a one-shot run
+attaches through `VETRA_SWITCHBOARD_URL`) and refuses a run with no drive
+to reach. The node and relationship writes are in
+`helpers/spec-drive-sync.ts` (one drive write at a time per process).
+`getEmbeddedDrive(ctx)` is for optional writes: it gates on `ctx.folders`
+(wired once the reactor is attached with a personal drive, absent in
+one-shot CLI), so a one-shot run never attaches for them. Lookups by type
+in the drive (the product document, chat sessions) use
+`findInDrive` there: `client.find({ type, parentId })` over every page.
 
 ### Services
 
@@ -958,7 +934,7 @@ the Cli runner (`runCli`):
    writes `studio.config.json` naming it, and subscribes to the framework
    event-bus for `service:*` events.
    The other triggers (`chatSessionWatchTrigger`,
-   `specSyncTrigger`, `specFsSyncTrigger`) begin polling.
+   `driveLayoutTrigger`, `runtimeSpecSyncTrigger`) begin polling.
    `studioUrlTrigger` prints `Vetra Studio: <url>/d/<drive id>` (non-TTY)
    or opens it in the browser: `<url>` is the ready Connect member's
    `endpoints.connect` (`http://127.0.0.1:8090/`). Connect does not
@@ -1004,13 +980,13 @@ What happens when the agent previews an in-progress document model.
     │
     ▼
   spec-create / spec-update
-    ├─→ specs/*.phd  (filesystem, codegen source of truth)
-    │       │ also feeds reactor-project tree (project source)
-    │       ↓ (the Preview run, Vite HMR)
-    │   reactor-project picks up new document model (codegen)
-    └─→ Studio drive  (direct, synchronous when the reactor is attached;
-                          specFsSyncTrigger is the fallback for
-                          external edits)
+    └─→ Studio drive  (the spec document, the only copy)
+    │
+    ▼
+  spec-generate
+    └─→ reactor-project tree (project source)
+            ↓ (the Preview run, Vite HMR)
+        reactor-project picks up new document model
     │
     ▼
   spec-preview-create({ projectId, specSlug })
@@ -1086,8 +1062,6 @@ vetra-cli/                     ← package root, @powerhousedao/vetra-cli
 │   │   │   └── reactor-project.ts
 │   │   └── triggers/
 │   │       ├── preview-server.ts   ← hosts the local API
-│   │       ├── spec-sync.ts
-│   │       ├── spec-fs-sync.ts
 │   │       ├── drive-layout.ts     ← the Home drive's layout folders
 │   │       └── runtime-spec-sync.ts ← model specs from the Preview's report
 │   ├── tests/                 ← vitest project `cli` (the app's tests: `app`)

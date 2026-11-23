@@ -1,6 +1,6 @@
 /**
- * In-process entry of the generation engine: what `ph generate <kind>
- * --document <file>` and `ph generate <kind> --extract` do, as functions.
+ * In-process entry of the generation engine: generate the code of a
+ * specification document, and extract the documents a project's code describes.
  */
 import type {
   DocumentModelDocument,
@@ -13,7 +13,6 @@ import type { SubgraphModuleDocument } from "@powerhousedao/vetra/document-model
 import {
   detectFeatures,
   installAddedDependencies,
-  loadDocumentModel,
   modelGeneration,
   setGraphqlCodegenSilent,
   syncFeatureDependencies,
@@ -32,8 +31,6 @@ import {
   generateSubgraphFromDocument,
 } from "./spec/generate-from-document.js";
 import { extractDocumentModelDocuments } from "./spec/schema-first/extract-document-models.js";
-import { getDocument } from "./spec/spec-api.js";
-import { saveSpec } from "./spec/specs.js";
 import {
   findSubgraphNameConflict,
   lintSubgraphTypes,
@@ -90,25 +87,6 @@ async function installFeatures(
     log,
     warn,
   });
-}
-
-/** `ph generate <kind> --document <documentPath>` in `projectDir`. */
-export async function generateFromSpecFile(
-  kind: GenerationKind,
-  documentPath: string,
-  projectDir: string,
-  options: GenerationOptions = {},
-): Promise<void> {
-  if (kind === "document-model" && !documentPath.endsWith(".phd")) {
-    const state = await loadDocumentModel(documentPath);
-    return generateFromSpec(
-      kind,
-      { state: { global: state } } as unknown as SpecSource,
-      projectDir,
-      options,
-    );
-  }
-  return generateFromSpec(kind, await getDocument(documentPath), projectDir, options);
 }
 
 /** The state of a specification document; all generation reads. */
@@ -192,20 +170,4 @@ export function extractSpecDocuments(
     case "subgraph":
       return extractSubgraphDocuments(project);
   }
-}
-
-/** `ph generate <kind> --extract` in `projectDir`; resolves to the spec files written. */
-export async function extractSpecFiles(
-  kind: GenerationKind | "all",
-  projectDir: string,
-  onWritten?: (path: string) => void,
-): Promise<string[]> {
-  const docs = extractSpecDocuments(kind, projectDir);
-  const written: string[] = [];
-  for (const doc of docs) {
-    const path = await saveSpec(doc, projectDir);
-    written.push(path);
-    onWritten?.(path);
-  }
-  return written;
 }

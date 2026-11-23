@@ -23,8 +23,6 @@ import { reactorProjectCommands } from './commands/reactor-project/index.js';
 import { projectHostCommands } from './commands/project-hosts/index.js';
 import { productCommands } from './commands/product/index.js';
 import { reactorProject } from './services/reactor-project.js';
-import { specSyncTrigger } from './triggers/spec-sync.js';
-import { specFsSyncTrigger } from './triggers/spec-fs-sync.js';
 import { driveLayoutTrigger } from './triggers/drive-layout.js';
 import { previewServerTrigger } from './triggers/preview-server.js';
 import { previewRunTrigger } from './triggers/preview-run.js';
@@ -82,8 +80,6 @@ export const cli = defineCli({
   triggers: [
     // Files from chat messages go to the Cli's folder, not the project's tree.
     createChatSessionWatchTrigger({ downloadsDir: STUDIO_FILES.downloads }),
-    specSyncTrigger,
-    specFsSyncTrigger,
     driveLayoutTrigger,
     previewServerTrigger,
     previewRunTrigger,

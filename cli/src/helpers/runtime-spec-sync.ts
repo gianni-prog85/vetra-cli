@@ -148,7 +148,7 @@ export function syncRuntimeSpecs(args: RuntimeSpecSyncArgs): Promise<RuntimeSpec
         signaturePolicy: mode,
       });
       const id = doc.header.id;
-      // Listed before it exists: spec-sync must never see it unlisted.
+      // Listed before it exists: it is never seen unlisted.
       record[documentType] = id;
       writeRuntimeSpecRecord(workdir, record);
       await client.create(doc);

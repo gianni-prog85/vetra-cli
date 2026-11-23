@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
 import { z } from "zod";
-import { requireOption, unknownValueError } from "../../helpers/cli-errors.js";
+import { unknownValueError } from "../../helpers/cli-errors.js";
 import { suggestNames } from "../../helpers/suggestions.js";
 import { applyJsonPath, encodeValue, type OutputFormat } from "./projection.js";
 import {
@@ -14,12 +13,7 @@ import {
   parseSdl,
   referencedTypeNames,
 } from "./document-model.js";
-import {
-  getSpecSchema,
-  listSpecTypes,
-  loadSpecDocument,
-  specDir,
-} from "./registry.js";
+import { getSpecSchema, listSpecTypes } from "./registry.js";
 
 export { suggestNames };
 
@@ -65,53 +59,6 @@ export function renderProjected(
 }
 
 /**
- * Walk every registered spec subdir and yield each `.phd` file's path plus
- * its `basename` (the part before the first dot, which equals
- * `kebabCase(header.name)` for any file produced by `saveSpec`). Cheap — no
- * file is opened. Callers decide which entries to load.
- */
-async function* iterateSpecFiles(
-  workdir: string,
-): AsyncGenerator<{ path: string; basename: string }> {
-  for (const documentType of listSpecTypes()) {
-    const dir = specDir(workdir, documentType);
-    const isDir = await stat(dir).then(
-      (s) => s.isDirectory(),
-      () => false,
-    );
-    if (!isDir) continue;
-    for (const entry of await readdir(dir)) {
-      if (!entry.endsWith(".phd")) continue;
-      yield {
-        path: join(dir, entry),
-        basename: entry.split(".")[0] ?? entry,
-      };
-    }
-  }
-}
-
-/**
- * Walk every registered spec subdir and return `{ doc, path }` pairs by
- * loading each `.phd`. Mirrors upstream `getDocuments` but keeps the on-disk
- * path — `specPath(workdir, documentType, name)` can disagree with the real
- * file when two docs share a kebab-name (different extensions). Callers like
- * `spec-delete` need the real path so a stale one doesn't remove the wrong
- * file.
- *
- * Use sparingly — it loads every doc into memory. For single-spec lookups,
- * prefer `findByName` which short-circuits via `iterateSpecFiles`.
- */
-export async function getDocumentsWithPaths(
-  workdir: string,
-): Promise<{ doc: PHDocument; path: string }[]> {
-  const out: { doc: PHDocument; path: string }[] = [];
-  for await (const file of iterateSpecFiles(workdir)) {
-    out.push({ doc: await loadSpecDocument(file.path), path: file.path });
-  }
-  return out;
-}
-
-/**
  * Convert a display name to a URL-safe kebab-case slug. Used by `spec-create`
  * to populate `header.slug` so the doc has a short, stable handle alongside
  * its name and id.
@@ -123,101 +70,6 @@ export function slugify(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-/**
- * Resolve a spec by display name, slug, or id (in that priority order).
- * Throws if not found or ambiguous. Also returns the on-disk path, needed
- * by callers that delete the file directly.
- */
-/* Match priority for `findByName`: name → slug → id. First non-empty match
- * set wins so a name collision with a slug doesn't surface as ambiguity.
- * Empty slugs (legacy docs) are skipped so a caller passing `""` can't match. */
-const MATCH_STRATEGIES: Array<
-  (header: PHDocument["header"], query: string) => boolean
-> = [
-  (h, q) => h.name === q,
-  (h, q) => !!h.slug && h.slug === q,
-  (h, q) => h.id === q,
-];
-
-export async function findByName(
-  workdir: string,
-  name: string,
-): Promise<{ doc: PHDocument; path: string }> {
-  if (!name) {
-    /* Missing-name path needs the full list to build the hint. */
-    const entries = await getDocumentsWithPaths(workdir);
-    const names = entries
-      .map((e) => e.doc.header.name)
-      .filter((n): n is string => typeof n === "string" && n.length > 0);
-    const hint =
-      names.length > 0
-        ? `Available specs: ${names.join(", ")}`
-        : "No specs found in this project.";
-    requireOption(name, "name", hint);
-  }
-
-  /* Fast path: every file produced by `saveSpec` is named
-   * `${kebabCase(header.name)}.<ext>.phd`, so the basename equals
-   * `slugify(header.name)` (or sometimes the raw query itself for slug-typed
-   * queries). Match the filename without opening any file, then load only
-   * those candidates. The slow path covers id-typed queries and the rare
-   * filename/header drift case. */
-  const slug = slugify(name);
-  const candidates: { doc: PHDocument; path: string }[] = [];
-  for await (const file of iterateSpecFiles(workdir)) {
-    if (file.basename === slug || file.basename === name) {
-      candidates.push({ doc: await loadSpecDocument(file.path), path: file.path });
-    }
-  }
-  for (const matches of MATCH_STRATEGIES.map((pred) =>
-    candidates.filter((c) => pred(c.doc.header, name)),
-  )) {
-    if (matches.length === 1) return matches[0];
-    if (matches.length > 1) {
-      throw new Error(
-        `Multiple specs match "${name}" — name/slug/id must be unique.`,
-      );
-    }
-  }
-
-  /* Slow path: filename didn't help — load everything for id-based matching
-   * and to build the not-found suggestion pool. Skip files already loaded in
-   * the fast pass so we don't pay the deserialization twice. */
-  const loadedPaths = new Set(candidates.map((c) => c.path));
-  const entries: { doc: PHDocument; path: string }[] = [...candidates];
-  for await (const file of iterateSpecFiles(workdir)) {
-    if (loadedPaths.has(file.path)) continue;
-    entries.push({ doc: await loadSpecDocument(file.path), path: file.path });
-  }
-  for (const matches of MATCH_STRATEGIES.map((pred) =>
-    entries.filter((e) => pred(e.doc.header, name)),
-  )) {
-    if (matches.length === 1) return matches[0];
-    if (matches.length > 1) {
-      throw new Error(
-        `Multiple specs match "${name}" — name/slug/id must be unique.`,
-      );
-    }
-  }
-  /* Dedupe pool so a doc whose name and slug coincide doesn't surface twice.
-   * Dedupe is case-insensitive so `workout` (slug) and `Workout` (name) don't
-   * both appear — keep the form we saw first (name wins, since it's added
-   * before slug). */
-  const seen = new Map<string, string>();
-  for (const e of entries) {
-    for (const s of [e.doc.header.name, e.doc.header.slug]) {
-      if (typeof s !== "string" || s.length === 0) continue;
-      const key = s.toLowerCase();
-      if (!seen.has(key)) seen.set(key, s);
-    }
-  }
-  throw unknownValueError({
-    subject: "spec",
-    value: name,
-    candidates: [...seen.values()],
-  });
 }
 
 /**
@@ -979,13 +831,4 @@ function rejectInlineReducerBody(action: ActionInput, modelSlug: string): void {
       );
     }
   }
-}
-
-/** Load a spec by name and return the document — convenience wrapper. */
-export async function loadByName(
-  workdir: string,
-  name: string,
-): Promise<PHDocument> {
-  const { path } = await findByName(workdir, name);
-  return loadSpecDocument(path);
 }

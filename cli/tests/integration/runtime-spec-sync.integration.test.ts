@@ -31,7 +31,6 @@ import {
   operationsByScope,
   type SpecDriveClient,
 } from "../../src/helpers/spec-drive-sync.js";
-import { specSyncTrigger } from "../../src/triggers/spec-sync.js";
 
 type Json = Record<string, any>;
 
@@ -312,24 +311,5 @@ describe("runtime → drive model specification sync", () => {
     expect(result.adopted).toEqual([]);
     expect(readRuntimeSpecRecord(workdir)["sektar/contact"]).toBeUndefined();
     expect((await modelNodes()).map((n) => n.id)).toContain(agentId);
-  });
-
-  it("never reaches the project's specs/ through spec-sync", async () => {
-    await sync([reported(invoice()), reported(contact())]);
-    const logs: string[] = [];
-    const ctx = {
-      state: { pending: 1 },
-      reactor: async () => reactor,
-      context: {
-        workdir,
-        log: { debug: (m: string) => logs.push(m), warn: (m: string) => logs.push(m) },
-      },
-    };
-
-    await specSyncTrigger.poll(ctx as never);
-
-    const entries = await fs.readdir(workdir);
-    expect(entries).toEqual([".ph"]);
-    expect(logs.filter((l) => l.includes("wrote"))).toEqual([]);
   });
 });

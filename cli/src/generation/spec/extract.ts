@@ -5,8 +5,7 @@
  * `extract*` reads the project's existing code/files and produces the
  * `powerhouse/*` documents that would have produced that code. Intended as a
  * one-shot migration step toward the documents-as-source-of-truth model: run
- * extraction, save the documents into `specs/`, and from then on regenerate
- * from the specs.
+ * extraction, keep the documents, and from then on regenerate from them.
  */
 import {
   generateId,

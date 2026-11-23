@@ -1,5 +1,3 @@
-import { mkdir, readdir, rename, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
 import {
   getDocumentModels as getBuiltinModels,
   getDocumentModelSchema as getBuiltinSchema,
@@ -7,7 +5,6 @@ import {
   listSpecDocumentTypes as listBuiltinTypes,
 } from "../../generation/spec/spec.js";
 import { withSignaturePolicy } from "document-model";
-import { baseLoadFromFile, baseSaveToFile } from "document-model/node";
 import type { PHDocument } from "@powerhousedao/shared/document-model";
 import { documentModels as vetraAppModels } from "../../vetra-app-models.js";
 import {
@@ -22,8 +19,8 @@ import {
  * types (document-model, editor, app, processor, subgraph) and resolves every
  * spec operation through it. vetra-app ships its own domain document models
  * (Feature, Audience Sheet, …) as `DocumentModelModule`s. This module merges
- * those into the builder set so the spec tools can CRUD instances of them in a
- * reactor-project's `specs/` tree. Codegen exposes no registration hook, so the
+ * those into the builder set so the spec tools can CRUD instances of them in
+ * the Studio drive. Codegen exposes no registration hook, so the
  * spec operations are reimplemented here over a unified entry resolver. */
 
 type DocumentModelInfo = {
@@ -54,7 +51,6 @@ type ActionsModule = Record<string, (input?: unknown) => Record<string, unknown>
 
 type SpecEntry = {
   documentType: string;
-  subdir: string;
   reducer: (doc: PHDocument, action: unknown) => PHDocument;
   utils: { fileExtension: string };
   actions: ActionsModule;
@@ -64,13 +60,10 @@ type SpecEntry = {
 
 export type ActionInput = { type: string; input?: unknown; scope?: string };
 
-const SPECS_DIRNAME = "specs";
-
 /* Entries derived from vetra-app's document model modules. Each module exposes
  * the same surface a codegen `SpecEntry` needs: a reducer, action creators,
  * utils (createDocument + fileExtension), and the model definition at
- * `documentModel.global`. Subdir is the id's last segment so it never collides
- * with a builder subdir. */
+ * `documentModel.global`. */
 const vetraAppEntries: Map<string, SpecEntry> = new Map(
   (vetraAppModels as unknown as ReadonlyArray<{
     reducer: SpecEntry["reducer"];
@@ -81,7 +74,6 @@ const vetraAppEntries: Map<string, SpecEntry> = new Map(
     const jsonSpec = mod.documentModel.global;
     const entry: SpecEntry = {
       documentType: jsonSpec.id,
-      subdir: jsonSpec.id.split("/").pop() || kebabCase(jsonSpec.name),
       reducer: mod.reducer,
       utils: { fileExtension: mod.utils.fileExtension },
       actions: mod.actions,
@@ -122,19 +114,13 @@ export function isProductSpecType(documentType: string): boolean {
   return vetraAppEntries.has(documentType);
 }
 
-/** Directory holding specs for a given type: `<projectDir>/specs/<subdir>`. */
-export function specDir(projectDir: string, documentType: string): string {
-  return join(projectDir, SPECS_DIRNAME, resolveSpecEntry(documentType).subdir);
-}
-
-/** Create an in-memory spec document. The caller persists it with `saveSpec`.
+/** Create an in-memory spec document; the caller creates it in the reactor.
  *
- * The signature policy decides the whole write path (Task 5.SIG, X39):
+ * The signature policy (Task 5.SIG, X39):
  * - `legacy` (local Studios and cloud Studios from before 2a): operations are
- *   applied unsigned on disk and mirrored into the embedded drive under the
- *   file's id;
+ *   unsigned;
  * - `v2-required` (a new cloud Studio): the document has a header-derived id
- *   and is created/written through the reactor, so every operation is signed. */
+ *   and every operation is signed. */
 export function createSpecDocument(
   documentType: string,
   opts: {
@@ -151,67 +137,6 @@ export function createSpecDocument(
   return doc;
 }
 
-/** Persist a spec to `<projectDir>/specs/<subdir>/<kebab-name>.<ext>.phd`,
- * atomically (temp sibling + rename) so readers never see a half-written zip. */
-export async function saveSpec(doc: PHDocument, projectDir: string): Promise<string> {
-  const entry = resolveSpecEntry(doc.header.documentType);
-  const dir = join(projectDir, SPECS_DIRNAME, entry.subdir);
-  await mkdir(dir, { recursive: true });
-  const ext = stripLeadingDot(entry.utils.fileExtension);
-  const name = kebabCase(doc.header.name || "untitled");
-  const tmpName = `${name}.tmp-${process.pid}-${saveSpecCounter++}`;
-  const tmpPath = await baseSaveToFile(doc, dir, ext, tmpName);
-  const finalPath = join(dir, basename(tmpPath).replace(tmpName, name));
-  await rename(tmpPath, finalPath);
-  return finalPath;
-}
-let saveSpecCounter = 0;
-
-/** Load a spec from disk. The subdir hints which reducer to try first; falls
- * back to every registered reducer so a moved file still loads. */
-export async function loadSpecDocument(path: string): Promise<PHDocument> {
-  const subdir = pathSubdir(path);
-  const hint = subdir
-    ? listSpecTypes().find((t) => resolveSpecEntry(t).subdir === subdir)
-    : undefined;
-  const order = hint
-    ? [hint, ...listSpecTypes().filter((t) => t !== hint)]
-    : listSpecTypes();
-  let lastError: unknown;
-  for (const documentType of order) {
-    try {
-      return await baseLoadFromFile(path, resolveSpecEntry(documentType).reducer as never);
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw new Error(
-    `Failed to load spec at "${path}": no registered reducer accepted it. Last error: ${String(lastError)}`,
-  );
-}
-
-/** Load every spec under the project's `specs/` tree. Narrow with
- * `documentType` (one type) or `category` (product vs project family). */
-export async function getSpecDocuments(
-  projectDir: string,
-  opts: { documentType?: string; category?: SpecCategory } = {},
-): Promise<PHDocument[]> {
-  const types = opts.documentType
-    ? [opts.documentType]
-    : opts.category
-      ? listSpecTypesByCategory(opts.category)
-      : listSpecTypes();
-  const out: PHDocument[] = [];
-  for (const documentType of types) {
-    const dir = specDir(projectDir, documentType);
-    if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) continue;
-    for (const entry of await readdir(dir)) {
-      if (!entry.endsWith(".phd")) continue;
-      out.push(await loadSpecDocument(join(dir, entry)));
-    }
-  }
-  return out;
-}
 
 export type DuplicateTypeDefinition = { name: string; sites: string[] };
 
@@ -433,24 +358,6 @@ function formatValidationError(failures: ActionValidationFailure[]): Error {
   };
   err.failures = failures;
   return err;
-}
-
-function pathSubdir(filePath: string): string | undefined {
-  const parts = filePath.split(/[/\\]/);
-  const i = parts.lastIndexOf(SPECS_DIRNAME);
-  if (i < 0 || i + 1 >= parts.length) return undefined;
-  return parts[i + 1];
-}
-
-function stripLeadingDot(ext: string): string {
-  return ext.startsWith(".") ? ext.slice(1) : ext;
-}
-
-function kebabCase(s: string): string {
-  return s
-    .replace(/[^A-Za-z0-9]+/g, "-")
-    .toLowerCase()
-    .replace(/^-+|-+$/g, "");
 }
 
 function camelCase(s: string): string {

@@ -1,7 +1,7 @@
 /**
  * Which documents the runtime spec sync made (`runtime-spec-sync.ts`), kept in
  * `.ph/vetra/runtime-specs.json`: document type → document id. A listed
- * document is the runtime's, so `spec-sync` never writes it to `specs/`.
+ * document is the runtime's: inspection keeps it, not `spec-extract all`.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -39,7 +39,7 @@ export function writeRuntimeSpecRecord(workdir: string, record: RuntimeSpecRecor
   fs.renameSync(tmp, file);
 }
 
-/** The ids of the documents the sync made: not the project's to keep on disk. */
+/** The ids of the documents the sync keeps. */
 export function runtimeSpecIds(workdir: string): Set<string> {
   return new Set(Object.values(readRuntimeSpecRecord(workdir)));
 }
